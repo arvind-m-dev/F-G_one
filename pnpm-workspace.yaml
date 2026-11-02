@@ -8,3 +8,9 @@ onlyBuiltDependencies:
   - "@nestjs/core"
   - esbuild
   - "@swc/core"
+# @hookform/resolvers imports zod without declaring it; without this it can resolve the
+# hoisted zod 4 pulled in by the Neon tooling instead of the app's zod 3.
+packageExtensions:
+  "@hookform/resolvers@3":
+    peerDependencies:
+      zod: "*"

@@ -9,3 +9,4 @@ playwright-report
 test-results
 storage/
 *.tsbuildinfo
+.neon
