@@ -80,6 +80,8 @@ docker compose -f docker-compose.yml --profile app up -d --build
 
 > The Dockerfiles and `app` compose profile are provided but have **not yet been build-tested**; Docker was unavailable in the development sandbox. Verify them in CI before relying on them.
 
+**Hosted option:** for a free-tier deployment on Render + Neon, see [DEPLOY_RENDER_NEON.md](DEPLOY_RENDER_NEON.md).
+
 ## Scaling notes
 * The API is stateless except for Socket.IO presence counts. For more than one API instance, add `@socket.io/redis-adapter` and move the online-user registry to Redis, and enable sticky sessions or WebSocket-only transport at the load balancer.
 * Sessions live in Postgres. A cleanup job for expired rows (`DELETE FROM "Session" WHERE "expiresAt" < now()`) runs fine as a daily cron.

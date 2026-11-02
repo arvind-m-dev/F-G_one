@@ -30,7 +30,7 @@ services:
 
   web:
     profiles: [app]
-    build: { context: ., dockerfile: apps/web/Dockerfile }
+    build: { context: ., dockerfile: apps/web/Dockerfile, args: { API_URL: http://api:4000 } }
     environment:
       API_URL: http://api:4000
     depends_on: [api]

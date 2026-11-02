@@ -1,0 +1,51 @@
+# Render Blueprint for FG One: two Docker web services. The database is external (Neon).
+# Setup steps: docs/DEPLOY_RENDER_NEON.md
+#
+# Values marked `sync: false` are asked for when the Blueprint is first created.
+# Keep `region` close to the Neon project's region (Neon: AWS ap-southeast-1 ≈ Render singapore).
+
+services:
+  - type: web
+    name: fg-one-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: DEFAULT_ORG_SLUG
+        value: futurist-global
+      - key: MAIL_FROM
+        value: FG One <no-reply@futuristglobal.com>
+      # Neon *direct* (non-pooled) connection string; `prisma migrate deploy` runs on start.
+      - key: DATABASE_URL
+        sync: false
+      # Public URL of fg-one-web, e.g. https://fg-one-web.onrender.com (no trailing slash).
+      - key: WEB_ORIGIN
+        sync: false
+      # Resend: smtp://resend:RESEND_API_KEY@smtp.resend.com:587
+      - key: SMTP_URL
+        sync: false
+
+  - type: web
+    name: fg-one-web
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Public URL of fg-one-api, e.g. https://fg-one-api.onrender.com. Used at build time
+      # (Next rewrites), so redeploy the web service after changing it.
+      - key: API_URL
+        sync: false

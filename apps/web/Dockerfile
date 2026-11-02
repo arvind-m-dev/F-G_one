@@ -1,6 +1,8 @@
 FROM node:22-alpine AS build
 WORKDIR /repo
 RUN corepack enable
+# next.config rewrites are resolved at build time, so the API target must be known here.
+ARG API_URL
 COPY . .
 RUN pnpm install --frozen-lockfile --filter @fg/web... \
  && pnpm --filter @fg/shared build \
