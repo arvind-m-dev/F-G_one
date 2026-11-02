@@ -200,7 +200,7 @@ describe('chat authorization', () => {
     // only the author edits; channel admin may delete
     await mgr.patch(`/api/messages/${sent.body.id}`).send({ body: 'edited by someone else' }).expect(403);
     await emp.patch(`/api/messages/${sent.body.id}`).send({ body: 'hello team!' }).expect(200);
-    await mgr.post(`/api/messages/${sent.body.id}/reactions`).send({ emoji: '🎉' }).expect(200);
+    await mgr.post(`/api/messages/${sent.body.id}/reactions`).send({ emoji: 'party' }).expect(200);
     const del = await mgr.delete(`/api/messages/${sent.body.id}`).expect(200);
     expect(del.body.deleted).toBe(true);
     expect(del.body.body).toBe('');
@@ -219,6 +219,14 @@ describe('chat authorization', () => {
     expect(s2.body.messages).toHaveLength(0);
   });
 
+  it('reactions only accept the approved icon set', async () => {
+    const emp = await login(app, 'employee@futuristglobal.com');
+    const m = await emp.post(`/api/channels/${fg.general.id}/messages`).send({ body: 'reaction test' }).expect(201);
+    await emp.post(`/api/messages/${m.body.id}/reactions`).send({ emoji: '<script>' }).expect(400);
+    const ok = await emp.post(`/api/messages/${m.body.id}/reactions`).send({ emoji: 'rocket' }).expect(200);
+    expect(ok.body.reactions).toEqual([{ emoji: 'rocket', userIds: [fg.users.employee.id], count: 1 }]);
+  });
+
   it('direct messages are deduplicated per participant set', async () => {
     const emp = await login(app, 'employee@futuristglobal.com');
     const a = await emp.post('/api/dm').send({ userIds: [fg.users.manager.id] }).expect(200);
@@ -229,7 +237,7 @@ describe('chat authorization', () => {
   it('presence status changes never create attendance-like records and validate input', async () => {
     const emp = await login(app, 'employee@futuristglobal.com');
     await emp.put('/api/me/status').send({ presence: 'nap' }).expect(400);
-    const res = await emp.put('/api/me/status').send({ presence: 'lunch', emoji: '🍽️', text: 'Back at 2', expiry: '1h' }).expect(200);
+    const res = await emp.put('/api/me/status').send({ presence: 'lunch', text: 'Back at 2', expiry: '1h' }).expect(200);
     expect(res.body.presence).toBe('lunch');
     expect(new Date(res.body.statusExpiresAt).getTime()).toBeGreaterThan(Date.now());
   });

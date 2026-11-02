@@ -1,75 +1,182 @@
 'use client';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { loginSchema, type LoginInput } from '@fg/shared';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { emailSchema } from '@fg/shared';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
+import { forgetAccount, readRecentAccounts, rememberAccount, type RecentAccount } from '@/lib/recent-accounts';
+import type { Me } from '@/lib/types';
+import { cn, initials } from '@/lib/utils';
 
-function LoginForm() {
+type Step = 'choose' | 'email' | 'password';
+
+function LoginFlow() {
   const router = useRouter();
   const params = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<RecentAccount[]>([]);
+  const [step, setStep] = useState<Step>('email');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
-  const { register, handleSubmit, formState } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const pwRef = useRef<HTMLInputElement>(null);
 
-  const onSubmit = handleSubmit(async (values) => {
+  useEffect(() => {
+    const list = readRecentAccounts();
+    setRecent(list);
+    if (list.length) setStep('choose');
+  }, []);
+  useEffect(() => {
+    if (step === 'password') setTimeout(() => pwRef.current?.focus(), 50);
+  }, [step]);
+
+  const pick = (e: string) => {
+    setEmail(e);
+    setError(null);
+    setStep('password');
+  };
+  const continueWithEmail = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    const parsed = emailSchema.safeParse(email);
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Enter a valid email');
+    pick(parsed.data);
+  };
+  const signIn = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (!password) return setError('Enter your password');
+    setBusy(true);
     setError(null);
     try {
-      await api('/auth/login', { body: values });
+      await api('/auth/login', { body: { email, password } });
+      try {
+        const me = await api<Me>('/auth/me');
+        rememberAccount({ email: me.user.email, name: me.user.name, avatarColor: me.user.avatarColor });
+      } catch {
+        rememberAccount({ email });
+      }
       const next = params.get('next');
-      router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/home');
-      router.refresh();
+      router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/app/home');
     } catch (e) {
       setError(errorMessage(e));
+      setBusy(false);
     }
-  });
+  };
+  const current = recent.find((r) => r.email === email);
 
   return (
-    <>
-      <h2 className="font-display text-2xl font-bold">Welcome back 👋</h2>
-      <p className="mt-1 text-sm text-muted">Sign in with your Futurist Global email.</p>
-      <form onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
-        <Field label="Work email" htmlFor="email" error={formState.errors.email?.message}>
-          <Input id="email" type="email" autoComplete="username" placeholder="you@futuristglobal.com" autoFocus aria-invalid={!!formState.errors.email} {...register('email')} />
-        </Field>
-        <Field label="Password" htmlFor="password" error={formState.errors.password?.message}>
-          <div className="relative">
-            <Input id="password" type={show ? 'text' : 'password'} autoComplete="current-password" className="pr-10" aria-invalid={!!formState.errors.password} {...register('password')} />
-            <button type="button" onClick={() => setShow((s) => !s)} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-muted hover:text-foreground" aria-label={show ? 'Hide password' : 'Show password'}>
-              {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div key={step} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.15 }}>
+        {step === 'choose' && (
+          <>
+            <h1 className="text-xl font-semibold tracking-tight">Choose an account</h1>
+            <p className="mt-1 text-sm text-muted">Accounts recently used on this device.</p>
+            <ul className="mt-6 space-y-1.5" aria-label="Recent accounts">
+              {recent.map((a) => (
+                <li key={a.email} className="group relative">
+                  <button onClick={() => pick(a.email)} className="flex w-full items-center gap-3 rounded-xl border bg-surface px-3 py-2.5 pr-10 text-left transition hover:border-border-strong hover:shadow-sm">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold" style={{ background: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 16%, var(--surface))`, color: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 80%, var(--foreground))` }}>
+                      {initials(a.name ?? a.email)}
+                    </span>
+                    <span className="min-w-0">
+                      {a.name && <span className="block truncate text-sm font-medium">{a.name}</span>}
+                      <span className="block truncate text-[13px] text-muted">{a.email}</span>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      forgetAccount(a.email);
+                      const left = readRecentAccounts();
+                      setRecent(left);
+                      if (!left.length) setStep('email');
+                    }}
+                    className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-md p-1 text-subtle opacity-0 transition group-hover:opacity-100 hover:bg-surface-2 hover:text-foreground focus:opacity-100"
+                    aria-label={`Remove ${a.email} from this device`}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button onClick={() => { setEmail(''); setStep('email'); }} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-muted transition hover:bg-surface-2 hover:text-foreground">
+              <span className="grid size-9 place-items-center rounded-full border border-dashed border-border-strong">
+                <Plus className="size-4" />
+              </span>
+              Use another email
             </button>
-          </div>
-        </Field>
-        <div className="flex justify-end">
-          <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
-            Forgot password?
-          </Link>
-        </div>
-        {error && (
-          <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/8 px-3 py-2 text-sm text-danger">
-            {error}
-          </p>
+          </>
         )}
-        <Button type="submit" variant="gradient" size="lg" className="w-full" loading={formState.isSubmitting}>
-          <LogIn /> Sign in
-        </Button>
-      </form>
-      <p className="mt-8 text-center text-xs text-muted">
-        New to Futurist Global? Your administrator will send you an invitation.
-      </p>
-    </>
+
+        {step === 'email' && (
+          <form onSubmit={continueWithEmail} noValidate>
+            <h1 className="text-xl font-semibold tracking-tight">Sign in to FG One</h1>
+            <p className="mt-1 text-sm text-muted">Use your Futurist Global work email.</p>
+            <div className="mt-6 space-y-4">
+              <Field label="Work email" htmlFor="email" error={error ?? undefined}>
+                <Input id="email" type="email" autoComplete="username" autoFocus placeholder="you@futuristglobal.com" value={email} onChange={(e) => { setEmail(e.target.value); setError(null); }} aria-invalid={!!error} />
+              </Field>
+              <Button type="submit" size="lg" className="w-full">
+                Continue <ArrowRight />
+              </Button>
+            </div>
+            {recent.length > 0 && (
+              <button type="button" onClick={() => setStep('choose')} className="mt-4 text-[13px] text-muted hover:text-foreground">
+                Back to saved accounts
+              </button>
+            )}
+          </form>
+        )}
+
+        {step === 'password' && (
+          <form onSubmit={signIn} noValidate>
+            <button type="button" onClick={() => { setPassword(''); setError(null); setStep(recent.length ? 'choose' : 'email'); }} className="mb-5 inline-flex items-center gap-1.5 rounded-full border bg-surface py-1 pr-3 pl-1 text-[13px] transition hover:border-border-strong">
+              <span className="grid size-6 place-items-center rounded-full bg-surface-2">
+                <ArrowLeft className="size-3.5" />
+              </span>
+              <span className="max-w-[260px] truncate">{current?.name ? `${current.name} · ` : ''}{email}</span>
+            </button>
+            <h1 className="text-xl font-semibold tracking-tight">{current?.name ? `Welcome back, ${current.name.split(' ')[0]}` : 'Enter your password'}</h1>
+            {/* Hidden username field lets password managers pair the credential. */}
+            <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
+            <div className="mt-6 space-y-4">
+              <Field label="Password" htmlFor="password">
+                <div className="relative">
+                  <Input ref={pwRef} id="password" type={show ? 'text' : 'password'} autoComplete="current-password" className="pr-10" value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={!!error} />
+                  <button type="button" onClick={() => setShow((s) => !s)} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-subtle hover:text-foreground" aria-label={show ? 'Hide password' : 'Show password'}>
+                    {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </Field>
+              {error && (
+                <p role="alert" className="rounded-lg bg-rose-500/8 px-3 py-2 text-[13px] text-danger">
+                  {error}
+                </p>
+              )}
+              <Button type="submit" size="lg" className="w-full" loading={busy}>
+                Sign in
+              </Button>
+              <div className="text-center">
+                <Link href={`/forgot-password?email=${encodeURIComponent(email)}`} className="text-[13px] text-muted hover:text-foreground">
+                  Forgot your password?
+                </Link>
+              </div>
+            </div>
+          </form>
+        )}
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
 export default function LoginPage() {
   return (
     <Suspense>
-      <LoginForm />
+      <LoginFlow />
+      <p className={cn('mt-8 border-t pt-5 text-center text-xs text-subtle')}>No account yet? Your administrator sends an invitation.</p>
     </Suspense>
   );
 }

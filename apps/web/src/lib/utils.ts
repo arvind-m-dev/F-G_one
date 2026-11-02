@@ -25,7 +25,8 @@ export function timeAgo(iso: string | Date | null | undefined) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export const fmtTime = (iso: string | Date) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+export const fmtTime = (iso: string | Date, h24?: boolean) =>
+  new Date(iso).toLocaleTimeString(undefined, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: h24 === undefined ? undefined : !h24 });
 
 export function fmtDayLabel(iso: string | Date) {
   const d = new Date(iso);

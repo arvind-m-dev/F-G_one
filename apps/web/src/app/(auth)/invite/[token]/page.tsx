@@ -22,7 +22,7 @@ export default function InvitePage() {
   if (invite.isError) {
     return (
       <div>
-        <h2 className="font-display text-2xl font-bold">Invitation unavailable</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Invitation unavailable</h2>
         <p className="mt-2 text-sm text-muted">{errorMessage(invite.error)}</p>
         <Link href="/login" className="mt-6 inline-block text-sm font-medium text-primary">Go to sign in</Link>
       </div>
@@ -34,7 +34,7 @@ export default function InvitePage() {
       <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-primary-soft text-primary">
         <PartyPopper className="size-5" />
       </div>
-      <h2 className="font-display text-2xl font-bold">Welcome, {data.firstName}!</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Welcome, {data.firstName}!</h2>
       <p className="mt-1 mb-8 text-sm text-muted">
         Set a password to join <strong className="text-foreground">{data.organization.name}</strong> on FG One as <strong className="text-foreground">{data.email}</strong>.
       </p>
@@ -44,7 +44,7 @@ export default function InvitePage() {
           setError(null);
           try {
             await api('/auth/accept-invitation', { body: { token, password } });
-            router.replace('/home?welcome=1');
+            router.replace('/app/home?welcome=1');
           } catch (e) {
             setError(errorMessage(e));
           }

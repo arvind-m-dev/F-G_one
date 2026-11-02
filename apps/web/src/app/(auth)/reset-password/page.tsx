@@ -19,7 +19,7 @@ function Reset() {
   }
   return (
     <>
-      <h2 className="font-display text-2xl font-bold">Choose a new password</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Choose a new password</h2>
       <p className="mt-1 mb-8 text-sm text-muted">You&apos;ll be signed out of other devices.</p>
       <NewPasswordForm
         submitLabel="Update password"

@@ -1,6 +1,7 @@
 'use client';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { Crown, Hash, Info, LogOut, Lock, Pencil, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { ArrowLeft, Crown, Hash, Info, LogOut, Lock, Pencil, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -187,9 +188,8 @@ function MessageStream({ channel, onReply, parentId }: { channel: ChannelDetails
           return (
             <Fragment key={m.clientId ?? m.id}>
               {newDay && (
-                <div className="sticky top-0 z-[1] my-3 flex items-center gap-3 px-4">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="rounded-full border bg-surface px-3 py-0.5 text-xs font-medium text-muted shadow-sm">{fmtDayLabel(m.createdAt)}</span>
+                <div className="sticky top-0 z-[1] my-4 flex items-center gap-3 px-5">
+                  <span className="rounded-md bg-canvas/90 py-0.5 text-xs font-semibold text-foreground backdrop-blur">{fmtDayLabel(m.createdAt)}</span>
                   <div className="h-px flex-1 bg-border" />
                 </div>
               )}
@@ -199,7 +199,7 @@ function MessageStream({ channel, onReply, parentId }: { channel: ChannelDetails
         })}
       </div>
       <TypingIndicator names={parentId ? [] : typing} />
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-4 sm:px-5">
         {channel.isMember ? (
           <Composer
             channelId={channel.id}
@@ -231,7 +231,7 @@ function JoinBar({ channel }: { channel: ChannelDetails }) {
     onError: (e) => toast.error(errorMessage(e)),
   });
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border bg-surface-2/60 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-xl border bg-surface-2/60 px-4 py-3">
       <p className="text-sm">
         You&apos;re previewing <b>#{channel.name}</b>.
       </p>
@@ -246,7 +246,7 @@ function ChannelIntro({ channel }: { channel: ChannelDetails }) {
   const me = useSession();
   const others = channel.members.filter((m) => m.id !== me.user.id);
   return (
-    <div className="px-5 pt-6 pb-4">
+    <div className="px-5 pt-8 pb-2">
       {channel.type === 'DIRECT' ? (
         <>
           <div className="flex -space-x-2">
@@ -254,13 +254,13 @@ function ChannelIntro({ channel }: { channel: ChannelDetails }) {
               <UserAvatar key={o.id} person={o} size="lg" className="rounded-full ring-4 ring-background" />
             ))}
           </div>
-          <h3 className="mt-3 font-display text-xl font-bold">{others.map((o) => o.name).join(', ') || 'Notes to self'}</h3>
+          <h3 className="mt-3 text-xl font-semibold tracking-tight">{others.map((o) => o.name).join(', ') || 'Notes to self'}</h3>
           <p className="text-sm text-muted">This is the beginning of your direct message history.</p>
         </>
       ) : (
         <>
-          <span className="grid size-14 place-items-center rounded-2xl bg-primary-soft text-primary">{channel.type === 'PRIVATE' ? <Lock className="size-6" /> : <Hash className="size-6" />}</span>
-          <h3 className="mt-3 font-display text-xl font-bold">Welcome to #{channel.name}</h3>
+          <span className="grid size-12 place-items-center rounded-xl border bg-surface text-primary shadow-sm">{channel.type === 'PRIVATE' ? <Lock className="size-6" /> : <Hash className="size-6" />}</span>
+          <h3 className="mt-3 text-xl font-semibold tracking-tight">Welcome to #{channel.name}</h3>
           <p className="text-sm text-muted">{channel.description || 'This is the very beginning of the channel.'}</p>
         </>
       )}
@@ -343,16 +343,16 @@ function DetailsPanel({ channel, onClose }: { channel: ChannelDetails; onClose: 
     mutationFn: () => api(`/channels/${channel.id}/leave`, { method: 'POST' }),
     onSuccess: () => {
       refresh();
-      router.push('/chat');
+      router.push('/app/chat');
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
   const canAdd = channel.isMember && channel.type !== 'DIRECT' && (channel.type === 'PUBLIC' || channel.canManage);
 
   return (
-    <motion.aside initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} className="hidden w-80 shrink-0 flex-col border-l bg-surface xl:flex">
+    <motion.aside initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} className="hidden w-80 shrink-0 flex-col border-l bg-canvas xl:flex">
       <div className="flex h-14 items-center justify-between border-b px-4">
-        <p className="font-display font-semibold">Details</p>
+        <p className="text-sm font-semibold">Details</p>
         <button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Close details">
           <X className="size-4" />
         </button>
@@ -430,10 +430,10 @@ function DetailsPanel({ channel, onClose }: { channel: ChannelDetails; onClose: 
 function ThreadPanel({ channel, parent, onClose }: { channel: ChannelDetails; parent: ChatMessage; onClose: () => void }) {
   const me = useSession();
   return (
-    <motion.aside initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} className="absolute inset-0 z-10 flex flex-col border-l bg-surface lg:static lg:w-96 lg:shrink-0">
+    <motion.aside initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} className="absolute inset-0 z-10 flex flex-col border-l bg-canvas lg:static lg:w-96 lg:shrink-0">
       <div className="flex h-14 items-center justify-between border-b px-4">
         <div>
-          <p className="font-display font-semibold">Thread</p>
+          <p className="text-sm font-semibold">Thread</p>
           <p className="text-xs text-muted">{channel.type === 'DIRECT' ? 'Direct message' : `#${channel.name}`}</p>
         </div>
         <button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Close thread">
@@ -458,7 +458,7 @@ function HeaderTitle({ channel }: { channel: ChannelDetails }) {
       <div className="flex min-w-0 items-center gap-2.5">
         {first && <UserAvatar person={first} size="sm" />}
         <div className="min-w-0">
-          <h1 className="truncate font-display font-semibold">{others.map((o) => o.name).join(', ') || me.user.name}</h1>
+          <h1 className="truncate text-[15px] font-semibold">{others.map((o) => o.name).join(', ') || me.user.name}</h1>
           {first && others.length === 1 && <StatusLine person={live} />}
         </div>
       </div>
@@ -466,7 +466,7 @@ function HeaderTitle({ channel }: { channel: ChannelDetails }) {
   }
   return (
     <div className="min-w-0">
-      <h1 className="flex items-center gap-1.5 font-display font-semibold">
+      <h1 className="flex items-center gap-1.5 text-[15px] font-semibold">
         {channel.type === 'PRIVATE' ? <Lock className="size-4 text-muted" /> : <Hash className="size-4 text-muted" />}
         <span className="truncate">{channel.name}</span>
       </h1>
@@ -485,7 +485,7 @@ export function Conversation({ channelId }: { channelId: string }) {
     return (
       <div className="grid h-full place-items-center p-8 text-center">
         <div>
-          <p className="font-display text-lg font-semibold">Conversation unavailable</p>
+          <p className="text-base font-semibold">Conversation unavailable</p>
           <p className="mt-1 text-sm text-muted">{errorMessage(q.error)}</p>
         </div>
       </div>
@@ -503,8 +503,13 @@ export function Conversation({ channelId }: { channelId: string }) {
   return (
     <div className="relative flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-surface/60 px-4">
-          <HeaderTitle channel={channel} />
+        <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <Link href="/app/chat" className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-2 md:hidden" aria-label="Back to conversations">
+              <ArrowLeft className="size-4" />
+            </Link>
+            <HeaderTitle channel={channel} />
+          </div>
           <div className="flex items-center gap-1">
             <button onClick={() => setDetails((d) => !d)} className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs text-muted transition hover:bg-surface-2" aria-label="Members">
               <div className="flex -space-x-1.5">

@@ -20,6 +20,12 @@ export function SessionProvider({ me, children }: { me: Me; children: React.Reac
     root.style.setProperty('--brand', me.preferences.accent || me.organization.primaryColor);
     root.style.setProperty('--brand-2', me.organization.secondaryColor);
   }, [me.organization.primaryColor, me.organization.secondaryColor, me.preferences.accent]);
+  // Personal font size & density.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.fontSize = me.preferences.fontSize ?? 'md';
+    root.dataset.density = me.preferences.density ?? 'comfortable';
+  }, [me.preferences.fontSize, me.preferences.density]);
   // Personal theme preference, falling back to the company default.
   useEffect(() => {
     const wanted = me.preferences.theme ?? me.organization.settings.branding.defaultTheme;
@@ -51,4 +57,11 @@ export function useUpdatePreferences() {
     qc.setQueryData<Me>(['me'], (old) => (old ? { ...old, preferences: { ...old.preferences, ...patch } } : old));
     await api('/me/preferences', { method: 'PATCH', body: patch });
   };
+}
+
+/** Formats times following the user's 12h/24h preference. */
+export function useClock() {
+  const me = useSession();
+  const h24 = me.preferences.timeFormat === '24h';
+  return { h24, time: (d: string | Date) => new Date(d).toLocaleTimeString(undefined, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !h24 }) };
 }

@@ -29,12 +29,12 @@ describe('StatusPicker', () => {
 
   it('quick-select calls PUT /api/me/status with the preset', async () => {
     renderPicker();
-    await userEvent.click(screen.getByRole('option', { name: /Lunch Break/ }));
+    await userEvent.click(screen.getByRole('option', { name: /Lunch break/ }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     const [url, init] = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(url).toBe('/api/me/status');
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(init.body)).toMatchObject({ presence: 'lunch', emoji: '🍽️' });
+    expect(JSON.parse(init.body)).toMatchObject({ presence: 'lunch', emoji: null, text: null });
   });
 
   it('saves a custom message with expiry', async () => {

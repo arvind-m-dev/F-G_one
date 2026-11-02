@@ -38,25 +38,25 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
 /** Dashboard widgets that exist today. New widgets register here and in the web widget registry. */
 export const WIDGET_KEYS = [
   'welcome',
+  'quickActions',
   'clock',
-  'team',
+  'recentChats',
   'announcements',
+  'team',
   'holidays',
   'celebrations',
-  'recentChats',
-  'quickActions',
   'orgStats',
 ] as const;
 export type WidgetKey = (typeof WIDGET_KEYS)[number];
 
 export const WIDGET_LABELS: Record<WidgetKey, string> = {
-  welcome: 'Welcome & profile',
-  clock: 'Today & working hours',
-  team: 'Team availability',
+  welcome: 'Greeting & status',
+  clock: 'Day timeline',
+  team: 'Team pulse',
   announcements: 'Announcements',
   holidays: 'Upcoming holidays',
-  celebrations: 'Birthdays & anniversaries',
-  recentChats: 'Recent conversations',
+  celebrations: 'Celebrations',
+  recentChats: 'Needs your attention',
   quickActions: 'Quick actions',
   orgStats: 'Company snapshot',
 };
@@ -132,5 +132,9 @@ export const userPreferencesSchema = z.object({
   sidebarCollapsed: z.boolean().optional(),
   chatPanelOpen: z.boolean().optional(),
   dashboardWidgets: z.array(z.enum(WIDGET_KEYS)).optional(),
+  fontSize: z.enum(['sm', 'md', 'lg']).optional(),
+  density: z.enum(['comfortable', 'compact']).optional(),
+  timeFormat: z.enum(['12h', '24h']).optional(),
+  enterToSend: z.boolean().optional(),
 });
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;
