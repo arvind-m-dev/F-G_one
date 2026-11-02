@@ -1,0 +1,136 @@
+import { z } from 'zod';
+
+export const HEX_COLOR = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a 6-digit hex colour like #4f46e5');
+
+export const MODULE_KEYS = [
+  'chat',
+  'attendance',
+  'dailyUpdates',
+  'leave',
+  'holidays',
+  'announcements',
+  'documents',
+  'campaigns',
+  'events',
+  'polls',
+  'tasks',
+  'recognition',
+  'ai',
+] as const;
+export type ModuleKey = (typeof MODULE_KEYS)[number];
+
+export const MODULE_LABELS: Record<ModuleKey, string> = {
+  chat: 'Chat & channels',
+  attendance: 'Attendance',
+  dailyUpdates: 'Daily updates',
+  leave: 'Leave management',
+  holidays: 'Holiday calendar',
+  announcements: 'Announcements',
+  documents: 'Documents',
+  campaigns: 'Campaigns & noticeboard',
+  events: 'Events calendar',
+  polls: 'Polls & surveys',
+  tasks: 'Tasks',
+  recognition: 'Recognition & celebrations',
+  ai: 'Ask FG One (AI)',
+};
+
+/** Dashboard widgets that exist today. New widgets register here and in the web widget registry. */
+export const WIDGET_KEYS = [
+  'welcome',
+  'clock',
+  'team',
+  'announcements',
+  'holidays',
+  'celebrations',
+  'recentChats',
+  'quickActions',
+  'orgStats',
+] as const;
+export type WidgetKey = (typeof WIDGET_KEYS)[number];
+
+export const WIDGET_LABELS: Record<WidgetKey, string> = {
+  welcome: 'Welcome & profile',
+  clock: 'Today & working hours',
+  team: 'Team availability',
+  announcements: 'Announcements',
+  holidays: 'Upcoming holidays',
+  celebrations: 'Birthdays & anniversaries',
+  recentChats: 'Recent conversations',
+  quickActions: 'Quick actions',
+  orgStats: 'Company snapshot',
+};
+
+const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
+
+export const organizationSettingsSchema = z.object({
+  branding: z
+    .object({
+      defaultTheme: z.enum(['light', 'dark', 'system']).default('system'),
+      tagline: z.string().max(120).default('One workspace for everything Futurist Global'),
+    })
+    .default({}),
+  modules: z
+    .object(Object.fromEntries(MODULE_KEYS.map((k) => [k, z.boolean().default(true)])) as Record<ModuleKey, z.ZodDefault<z.ZodBoolean>>)
+    .default({}),
+  dashboard: z
+    .object({
+      defaultWidgets: z.array(z.enum(WIDGET_KEYS)).default([...WIDGET_KEYS]),
+      allowPersonalLayout: z.boolean().default(true),
+    })
+    .default({}),
+  navigation: z
+    .object({
+      sidebarCollapsedByDefault: z.boolean().default(false),
+      showChatInSidebar: z.boolean().default(true),
+    })
+    .default({}),
+  attendance: z
+    .object({
+      workdayStart: time.default('09:30'),
+      workdayEnd: time.default('18:30'),
+      graceMinutes: z.number().int().min(0).max(180).default(15),
+      allowedLocations: z.array(z.enum(['WFO', 'WFH', 'ON_DUTY'])).min(1).default(['WFO', 'WFH', 'ON_DUTY']),
+      workingDays: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5]),
+    })
+    .default({}),
+  leave: z
+    .object({
+      yearStartMonth: z.number().int().min(1).max(12).default(1),
+      allowHalfDay: z.boolean().default(true),
+      requireManagerApproval: z.boolean().default(true),
+    })
+    .default({}),
+  auth: z
+    .object({
+      allowedEmailDomains: z.array(z.string().min(3)).min(1).default(['futuristglobal.com']),
+      selfRegistration: z.boolean().default(false),
+      sessionTtlHours: z.number().int().min(1).max(720).default(168),
+    })
+    .default({}),
+});
+export type OrganizationSettings = z.infer<typeof organizationSettingsSchema>;
+
+export function parseOrganizationSettings(raw: unknown): OrganizationSettings {
+  const parsed = organizationSettingsSchema.safeParse(raw ?? {});
+  return parsed.success ? parsed.data : organizationSettingsSchema.parse({});
+}
+
+export const updateOrganizationSchema = z.object({
+  name: z.string().min(2).max(80).optional(),
+  logoUrl: z.string().url().max(500).nullable().optional(),
+  primaryColor: HEX_COLOR.optional(),
+  secondaryColor: HEX_COLOR.optional(),
+  settings: organizationSettingsSchema.deepPartial().optional(),
+});
+export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
+
+/** Per-user preferences (theme, layout). */
+export const userPreferencesSchema = z.object({
+  theme: z.enum(['light', 'dark', 'system']).optional(),
+  accent: HEX_COLOR.nullable().optional(),
+  sidebarCollapsed: z.boolean().optional(),
+  chatPanelOpen: z.boolean().optional(),
+  dashboardWidgets: z.array(z.enum(WIDGET_KEYS)).optional(),
+});
+export type UserPreferences = z.infer<typeof userPreferencesSchema>;

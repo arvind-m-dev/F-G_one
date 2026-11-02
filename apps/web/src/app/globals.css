@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * FG One design tokens. --brand / --brand-2 are injected at runtime from the
+ * organization's branding (or the user's accent), so white-label themes need no rebuild.
+ */
+:root {
+  --brand: #4f46e5;
+  --brand-2: #0ea5e9;
+
+  --background: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #f1f3f9;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --border: #e3e7ef;
+  --ring: color-mix(in oklab, var(--brand) 55%, transparent);
+  --sidebar: #ffffff;
+  --sidebar-fg: #0f172a;
+
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --primary-soft: color-mix(in oklab, var(--brand) 10%, transparent);
+  --danger: #dc2626;
+  --success: #16a34a;
+  --warning: #d97706;
+
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -4px rgb(15 23 42 / 0.06);
+}
+
+.dark {
+  --background: #0b0e17;
+  --surface: #121725;
+  --surface-2: #1a2032;
+  --foreground: #e6e9f2;
+  --muted: #8b93a7;
+  --border: #242b3d;
+  --sidebar: #0e1220;
+  --sidebar-fg: #e6e9f2;
+  --primary: color-mix(in oklab, var(--brand) 85%, white);
+  --primary-soft: color-mix(in oklab, var(--brand) 22%, transparent);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -8px rgb(0 0 0 / 0.5);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-fg: var(--sidebar-fg);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: var(--shadow-card);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 25%, transparent);
+  }
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted) 40%, transparent) transparent;
+}
+
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, var(--brand), var(--brand-2));
+}
+
+@utility text-brand-gradient {
+  background-image: linear-gradient(135deg, var(--brand), var(--brand-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes wave {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(14deg); }
+  20% { transform: rotate(-8deg); }
+  40% { transform: rotate(-4deg); }
+  50% { transform: rotate(10deg); }
+}

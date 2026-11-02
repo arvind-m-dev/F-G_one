@@ -1,0 +1,355 @@
+// FG One database schema.
+// Multi-tenancy: every company-owned row carries organizationId and every
+// query in the API is scoped by the organization of the authenticated session.
+// See docs/DATABASE.md for the full model map (including later phases).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Tenancy & org structure ─────────────────────────────
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model Organization {
+  id             String             @id @default(cuid())
+  name           String
+  slug           String             @unique
+  status         OrganizationStatus @default(ACTIVE)
+  logoUrl        String?
+  primaryColor   String             @default("#4f46e5")
+  secondaryColor String             @default("#0ea5e9")
+  /// Validated by organizationSettingsSchema in @fg/shared
+  settings       Json               @default("{}")
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  users         User[]
+  departments   Department[]
+  roles         Role[]
+  invitations   Invitation[]
+  auditLogs     AuditLog[]
+  holidays      Holiday[]
+  announcements Announcement[]
+  channels      Channel[]
+  messages      Message[]
+  sessions      Session[]
+}
+
+model Department {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  color          String       @default("#6366f1")
+  headId         String?
+  head           User?        @relation("DepartmentHead", fields: [headId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  members       User[]         @relation("DepartmentMembers")
+  announcements Announcement[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model Role {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  key            String
+  name           String
+  description    String?
+  permissions    String[]
+  /// Higher rank may manage users of lower rank (super_admin=100, employee=10)
+  rank           Int          @default(10)
+  isSystem       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  users User[]
+
+  @@unique([organizationId, key])
+}
+
+// ───────────────────────────── People & identity ─────────────────────────────
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DEACTIVATED
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Company email, stored lower-case; globally unique so login can resolve the tenant.
+  email          String       @unique
+  passwordHash   String?
+  status         UserStatus   @default(INVITED)
+  roleId         String
+  role           Role         @relation(fields: [roleId], references: [id])
+  departmentId   String?
+  department     Department?  @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
+  managerId      String?
+  manager        User?        @relation("Reports", fields: [managerId], references: [id], onDelete: SetNull)
+  reports        User[]       @relation("Reports")
+
+  firstName    String
+  lastName     String
+  displayName  String?
+  designation  String?
+  employeeCode String?
+  phone        String?
+  pronouns     String?
+  bio          String?
+  avatarUrl    String?
+  avatarColor  String    @default("#6366f1")
+  timezone     String    @default("Asia/Kolkata")
+  joinedAt     DateTime? @db.Date
+  birthday     DateTime? @db.Date
+  showBirthday Boolean   @default(true)
+  /// Validated by userPreferencesSchema in @fg/shared
+  preferences  Json      @default("{}")
+
+  // Presence (temporary availability) — never used as an attendance record.
+  presence        String    @default("available")
+  statusEmoji     String?
+  statusText      String?
+  statusExpiresAt DateTime?
+  lastSeenAt      DateTime?
+
+  lastLoginAt   DateTime?
+  failedLogins  Int       @default(0)
+  lockedUntil   DateTime?
+  deactivatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions          Session[]
+  resetTokens       PasswordResetToken[]
+  invitations       Invitation[]         @relation("InvitationUser")
+  sentInvitations   Invitation[]         @relation("InvitationSender")
+  headOfDepartments Department[]         @relation("DepartmentHead")
+  auditLogs         AuditLog[]
+  announcements     Announcement[]
+  channelsCreated   Channel[]
+  memberships       ChannelMember[]
+  messages          Message[]
+  reactions         MessageReaction[]
+
+  @@unique([organizationId, employeeCode])
+  @@index([organizationId, status])
+  @@index([organizationId, departmentId])
+  @@index([managerId])
+}
+
+model Session {
+  id             String       @id @default(cuid())
+  /// sha256 of the opaque cookie token; the raw token is never stored
+  tokenHash      String       @unique
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+  lastSeenAt     DateTime     @default(now())
+  expiresAt      DateTime
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("InvitationUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedById    String?
+  invitedBy      User?        @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorId        String?
+  actor          User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json         @default("{}")
+  ip             String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+}
+
+// ───────────────────────────── Company content (read in Phase 1, managed in Phase 4) ─────────────────────────────
+
+enum HolidayType {
+  MANDATORY
+  OPTIONAL
+}
+
+model Holiday {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  date           DateTime     @db.Date
+  type           HolidayType  @default(MANDATORY)
+  description    String?
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, date, name])
+  @@index([organizationId, date])
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  IMPORTANT
+  CRITICAL
+}
+
+model Announcement {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  authorId       String?
+  author         User?                @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  /// null = company-wide; otherwise only visible to that department
+  departmentId   String?
+  department     Department?          @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  title          String
+  body           String
+  priority       AnnouncementPriority @default(NORMAL)
+  pinned         Boolean              @default(false)
+  publishedAt    DateTime             @default(now())
+  expiresAt      DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([organizationId, publishedAt])
+}
+
+// ───────────────────────────── Messaging ─────────────────────────────
+
+enum ChannelType {
+  PUBLIC
+  PRIVATE
+  DIRECT
+}
+
+enum ChannelMemberRole {
+  ADMIN
+  MEMBER
+}
+
+model Channel {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type           ChannelType
+  /// slug-style name for PUBLIC/PRIVATE; null for DIRECT
+  name           String?
+  description    String?
+  topic          String?
+  /// Sorted participant ids joined by ':' — guarantees one DM per participant set
+  directKey      String?
+  isDefault      Boolean      @default(false)
+  createdById    String?
+  createdBy      User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  archivedAt     DateTime?
+  lastMessageAt  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  members  ChannelMember[]
+  messages Message[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, directKey])
+  @@index([organizationId, type])
+}
+
+model ChannelMember {
+  channelId  String
+  channel    Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       ChannelMemberRole @default(MEMBER)
+  lastReadAt DateTime          @default(now())
+  muted      Boolean           @default(false)
+  joinedAt   DateTime          @default(now())
+
+  @@id([channelId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channelId      String
+  channel        Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId       String?
+  author         User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body           String
+  parentId       String?
+  parent         Message?     @relation("Thread", fields: [parentId], references: [id], onDelete: SetNull)
+  replies        Message[]    @relation("Thread")
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  reactions MessageReaction[]
+
+  @@index([channelId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model MessageReaction {
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@id([messageId, userId, emoji])
+}

@@ -1,0 +1,13 @@
+{
+  "name": "fg-one",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/** dev",
+    "build": "pnpm --filter @fg/shared build && pnpm --filter @fg/api build && pnpm --filter @fg/web build",
+    "test": "pnpm --filter @fg/shared build && pnpm --filter @fg/api test && pnpm --filter @fg/web test",
+    "db:migrate": "pnpm --filter @fg/api prisma:migrate",
+    "db:seed": "pnpm --filter @fg/api db:seed",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

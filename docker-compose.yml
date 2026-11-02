@@ -1,0 +1,40 @@
+# Local infrastructure: `docker compose up -d postgres mailpit`
+# Full stack (production-like): `docker compose --profile app up -d --build`
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fgone
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fgone_dev_pw}
+      POSTGRES_DB: fgone
+    ports: ['5432:5432']
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fgone']
+      interval: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports: ['1025:1025', '8025:8025']
+
+  api:
+    profiles: [app]
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    env_file: apps/api/.env
+    environment:
+      DATABASE_URL: postgresql://fgone:${POSTGRES_PASSWORD:-fgone_dev_pw}@postgres:5432/fgone?schema=public
+      NODE_ENV: production
+    depends_on: { postgres: { condition: service_healthy } }
+    ports: ['4000:4000']
+
+  web:
+    profiles: [app]
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    environment:
+      API_URL: http://api:4000
+    depends_on: [api]
+    ports: ['3000:3000']
+
+volumes:
+  pgdata:
