@@ -8,6 +8,7 @@ import {
   UpdateEmployeeInput,
 } from '@fg/shared';
 import { AuditService } from '../audit/audit.service';
+import { hashPassword } from '../auth/password';
 import type { AuthContext } from '../common/auth-context';
 import { toDateOnly } from '../common/dates';
 import { env } from '../common/env';
@@ -139,13 +140,46 @@ export class EmployeesService {
         employeeCode: input.employeeCode || null,
         joinedAt: toDateOnly(input.joinedAt) ?? null,
         avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-        status: 'INVITED',
+        // The admin hands over a temporary password; the employee chooses their own at first sign-in.
+        status: 'ACTIVE',
+        passwordHash: await hashPassword(input.password),
+        mustChangePassword: true,
       },
       select: employeeSelect,
     });
+    await this.joinDefaultChannels(auth.organizationId, user.id);
     await this.audit.log(auth, 'employee.created', 'user', user.id, { email: user.email, role: user.role.key });
-    const invite = await this.issueInvitation(auth, user.id, input.sendInvite);
-    return { employee: toEmployee(user, { privileged: true }), inviteUrl: invite.url, inviteExpiresAt: invite.expiresAt };
+    return { employee: toEmployee(user, { privileged: true }) };
+  }
+
+  private async joinDefaultChannels(organizationId: string, userId: string) {
+    const defaults = await this.prisma.channel.findMany({ where: { organizationId, isDefault: true }, select: { id: true } });
+    await this.prisma.channelMember.createMany({ data: defaults.map((c) => ({ channelId: c.id, userId })), skipDuplicates: true });
+  }
+
+  /**
+   * Sets a temporary password for an employee (there is no email reset). The admin sees it once to hand over;
+   * the employee must choose their own at next sign-in. Signs them out everywhere and activates invited accounts.
+   */
+  async setPassword(auth: AuthContext, id: string, password: string) {
+    if (id === auth.userId) throw new BadRequestException('To change your own password, use your profile');
+    const target = await this.loadTarget(auth, id);
+    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    if (target.status === 'DEACTIVATED' || target.status === 'ARCHIVED') throw new BadRequestException('Reactivate this account first');
+    const activating = target.status === 'INVITED';
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id },
+        data: { passwordHash: await hashPassword(password), mustChangePassword: true, failedLogins: 0, lockedUntil: null, ...(activating ? { status: 'ACTIVE' } : {}) },
+      }),
+      this.prisma.session.deleteMany({ where: { userId: id } }),
+      this.prisma.passwordResetToken.updateMany({ where: { userId: id, usedAt: null }, data: { usedAt: new Date() } }),
+      this.prisma.invitation.updateMany({ where: { userId: id, acceptedAt: null, revokedAt: null }, data: { revokedAt: new Date() } }),
+    ]);
+    if (activating) await this.joinDefaultChannels(auth.organizationId, id);
+    this.realtime.disconnectUser(id);
+    await this.audit.log(auth, 'employee.password_set', 'user', id, { activated: activating });
+    return this.get(auth, id);
   }
 
   /** Creates a single-use invitation. The link is returned to the (authorized) admin so it can be shared even without SMTP. */

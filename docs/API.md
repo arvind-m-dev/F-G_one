@@ -14,7 +14,7 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 | 🌐 POST | `/auth/mfa/verify` | `{ code }`: a 6-digit authenticator code or a recovery code. Replaces the half session with a new full session (new token). A code is never accepted twice. Five wrong codes discard the half session (401). Each failure is audited as `auth.mfa_failed`. |
 | POST | `/auth/logout` | Deletes the server session and closes its live connections |
 | GET | `/auth/me` | `{ user, permissions, grants, role, preferences, organization{branding, settings} }`. `grants` maps permission → widest scope (e.g. `{"attendance.view":"TEAM"}`). `permissions` are the legacy flat keys derived from it. Also `isSuperAdmin`, `accountType` (`INTERNAL` or `CLIENT`), `mfaEnabled` and `superAdminNeedsMfa` (holds the flag, but the authority is off until two-step verification is on). |
-| 🌐 POST | `/auth/forgot-password` | `{ email }`. Always returns 200 (no enumeration). Limit 5 per 15 min. |
+| 🌐 POST | `/auth/forgot-password` | `{ email }`. Always returns 200 (no enumeration). Limit 5 per 15 min. Not linked from the web app: passwords are reset by an admin. |
 | 🌐 POST | `/auth/reset-password` | `{ token, password }`. Single use, 30-min expiry. Signs out all sessions. |
 | POST | `/auth/change-password` | `{ currentPassword, newPassword }`. Signs out other sessions and closes their live connections. |
 | POST | `/auth/reauth` | `{ password, code? }`. `code` is required when two-step verification is on. Marks the session as recently authenticated. Limit 10 per 15 min. Failures are audited as `auth.reauth_failed`. |
@@ -43,11 +43,12 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 |---|---|---|---|
 | GET | `/employees?q&departmentId&status&page&pageSize` | `employees.read` | Non-admins only see ACTIVE users and no private fields |
 | GET | `/employees/:id` | `employees.read` | Includes manager and direct reports |
-| POST | `/employees` | `employees.manage` | `createEmployeeSchema`. Enforces the domain allow-list and role rank. Returns `{ employee, inviteUrl, inviteExpiresAt }`. |
+| POST | `/employees` | `employees.manage` | `createEmployeeSchema` (includes a temporary `password`). Enforces the domain allow-list and role rank. Creates an ACTIVE account that must change its password at first sign-in. Returns `{ employee }`. |
 | PATCH | `/employees/:id` | `employees.manage` | Rank rules. You can't change your own role. |
 | POST | `/employees/:id/deactivate` | `employees.manage` | Revokes sessions and invitations and disconnects sockets |
 | POST | `/employees/:id/activate` | `employees.manage` | |
-| POST | `/employees/:id/invite` | `employees.manage` | Re-issues the invite and revokes earlier links |
+| POST | `/employees/:id/invite` | `employees.manage` | Re-issues the invite and revokes earlier links (legacy; the admin UI now sets passwords instead) |
+| POST | `/employees/:id/password` | `employees.manage` + recent sign-in | `{ password }`. Sets a temporary password, signs the employee out everywhere, activates an invited account and requires them to choose their own at next sign-in. Rank and Super Admin checks as editing. Not for your own account. Audited `employee.password_set`. |
 
 Admin device controls (Phase 2c), with the same rank and Super Admin authority checks as editing:
 

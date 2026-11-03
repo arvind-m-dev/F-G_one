@@ -110,27 +110,27 @@ test('real-time direct messaging between two employees', async ({ browser }) => 
   await expect(a.getByTestId('message').filter({ hasText: text }).getByRole('button', { name: 'Agree 1' })).toBeVisible();
 });
 
-test('admin portal: invite an employee who activates from the link', async ({ page }) => {
+test('admin portal: add an employee with a temporary password they change at first sign-in', async ({ page }) => {
   await signIn(page, 'admin@futuristglobal.com');
   await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Admin portal' }).click();
   await expect(page.getByRole('heading', { name: /at a glance/ })).toBeVisible();
   await page.goto('/admin/employees?invite=1');
   const email = `e2e.${Date.now()}@futuristglobal.com`;
+  const temp = 'Temp-Pass-2026';
   await page.getByLabel('First name').fill('Eetoo');
   await page.getByLabel('Last name').fill('Tester');
   await page.getByLabel('Work email').fill(email);
-  await page.getByRole('button', { name: 'Create invitation' }).click();
-  await expect(page.getByText('Invitation ready')).toBeVisible();
-  const link = await page.getByLabel('Invitation link').inputValue();
-  expect(link).toMatch(/\/invite\/[\w-]{30,}/);
+  await page.getByLabel('Temporary password').fill(temp);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByLabel('Sign-in message')).toContainText(`Temporary password: ${temp}`);
 
   const fresh = await (await page.context().browser()!.newContext()).newPage();
-  await fresh.goto(link);
-  await expect(fresh.getByText(/Welcome, Eetoo/)).toBeVisible();
-  await fresh.getByLabel('New password').fill('Welcome-Aboard-2026');
-  await fresh.getByLabel('Confirm password').fill('Welcome-Aboard-2026');
-  await fresh.getByRole('button', { name: 'Activate my account' }).click();
-  await expect(fresh).toHaveURL(/\/app\/home/);
+  await signIn(fresh, email, temp);
+  await expect(fresh.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
+  await fresh.getByLabel('Temporary password').fill(temp);
+  await fresh.getByLabel('New password', { exact: true }).fill('Welcome-Aboard-2026');
+  await fresh.getByLabel('Confirm new password').fill('Welcome-Aboard-2026');
+  await fresh.getByRole('button', { name: 'Save and continue' }).click();
   await expect(fresh.getByRole('heading', { name: /Eetoo/ })).toBeVisible();
 });
 

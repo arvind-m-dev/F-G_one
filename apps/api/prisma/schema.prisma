@@ -120,6 +120,8 @@ model User {
   /// Company email, stored lower-case; globally unique so login can resolve the tenant.
   email               String       @unique
   passwordHash        String?
+  /// Set when an admin sets the password; the user must choose their own before using the app
+  mustChangePassword  Boolean      @default(false)
   status              UserStatus   @default(INVITED)
   accountType         AccountType  @default(INTERNAL)
   /// System authority, separate from roles. Changed only through /super-admins endpoints and operator CLIs.

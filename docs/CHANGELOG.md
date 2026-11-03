@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: Admin-managed passwords (no email)
+### Changed
+- Adding an employee sets a temporary password instead of sending an invitation link. The account is active straight away, and the admin gets a ready-to-copy message with the sign-in link, email and password (shown once).
+- "Forgot your password?" tells people to ask HR or their administrator. The email reset is no longer linked from the web app.
+### Added
+- Admins set a new password for an employee from the Employees list ("Set password", requires recent sign-in). It signs them out everywhere and is audited (`employee.password_set`).
+- After signing in with an admin-set password, the employee must choose their own before using the workspace (`User.mustChangePassword`; the session has no permissions until then). The new password must differ from the temporary one.
+
 ## Unreleased: Dashboard day progress, leave calendar bars, loading states (branch `dashboard-day-progress`)
 ### Changed
 - Dashboard "Today" is a progress bar of the workday built from today's attendance: worked time, breaks (with times on hover), the stretch before a late check-in and time left. Falls back to elapsed workday before check-in.

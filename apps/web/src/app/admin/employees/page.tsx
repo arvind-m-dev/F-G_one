@@ -1,19 +1,21 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, MailPlus, MoreHorizontal, Pencil, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users } from 'lucide-react';
+import { KeyRound, MoreHorizontal, Pencil, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { createEmployeeSchema, PERMISSIONS, updateEmployeeSchema, type CreateEmployeeInput, type UpdateEmployeeInput } from '@fg/shared';
+import { createEmployeeSchema, PERMISSIONS, setEmployeePasswordSchema, updateEmployeeSchema, type CreateEmployeeInput, type UpdateEmployeeInput } from '@fg/shared';
+import { HandoverMessage, PasswordInput } from '@/components/admin/password-handover';
 import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { isCancelled, useReauth } from '@/components/security/reauth';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from '@/components/ui/dropdown';
 import { Field, Input, Select } from '@/components/ui/input';
-import { Badge, EmptyState, Skeleton, Switch } from '@/components/ui/misc';
+import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
 import { useDepartments, useEmployeeList, useRoles } from '@/lib/hooks';
@@ -23,27 +25,6 @@ import { useUrlState } from '@/lib/url-state';
 import { cn, timeAgo } from '@/lib/utils';
 
 const statusTone = { ACTIVE: 'success', INVITED: 'warning', SUSPENDED: 'danger', DEACTIVATED: 'muted', ARCHIVED: 'muted' } as const;
-
-function InviteLinkBox({ url, expiresAt }: { url: string; expiresAt: string }) {
-  return (
-    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4">
-      <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Invitation ready</p>
-      <p className="mt-1 text-xs text-muted">If email delivery is configured it has been sent. You can also share this single-use link directly — it expires {new Date(expiresAt).toLocaleDateString()}.</p>
-      <div className="mt-3 flex gap-2">
-        <Input readOnly value={url} className="font-mono text-xs" onFocus={(e) => e.target.select()} aria-label="Invitation link" />
-        <Button
-          variant="outline"
-          onClick={async () => {
-            await navigator.clipboard.writeText(url);
-            toast.success('Invite link copied');
-          }}
-        >
-          <Copy /> Copy
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function PeopleSelects({ register, excludeId }: { register: ReturnType<typeof useForm<CreateEmployeeInput>>['register']; excludeId?: string }) {
   const depts = useDepartments();
@@ -91,11 +72,11 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
   const me = useSession();
   const qc = useQueryClient();
   const roles = useRoles();
-  const [result, setResult] = useState<{ url: string; expiresAt: string; name: string } | null>(null);
+  const [result, setResult] = useState<{ firstName: string; email: string; password: string } | null>(null);
   const defaultRole = roles.data?.roles.find((r) => r.key === 'employee')?.id ?? '';
   const form = useForm<CreateEmployeeInput>({
     resolver: zodResolver(createEmployeeSchema),
-    defaultValues: { email: '', firstName: '', lastName: '', roleId: defaultRole, departmentId: null, managerId: null, designation: '', employeeCode: '', joinedAt: null, sendInvite: true },
+    defaultValues: { email: '', firstName: '', lastName: '', roleId: defaultRole, departmentId: null, managerId: null, designation: '', employeeCode: '', joinedAt: null, password: '' },
   });
   useEffect(() => {
     if (defaultRole && !form.getValues('roleId')) form.setValue('roleId', defaultRole);
@@ -112,16 +93,16 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
   };
 
   return (
-    <Dialog open={open} onOpenChange={close} title="Invite an employee" description={`They'll set their own password. Allowed domains: ${domains.join(', ')}`} className="max-w-2xl">
+    <Dialog open={open} onOpenChange={close} title="Add an employee" description={`Set a temporary password to hand over; they choose their own at first sign-in. Allowed domains: ${domains.join(', ')}`} className="max-w-2xl">
       {result ? (
         <div className="space-y-4">
           <p className="text-sm">
-            <b>{result.name}</b> has been added with status <Badge tone="warning">invited</Badge>
+            <b>{result.firstName}</b>&apos;s account is ready.
           </p>
-          <InviteLinkBox url={result.url} expiresAt={result.expiresAt} />
+          <HandoverMessage firstName={result.firstName} email={result.email} password={result.password} organization={me.organization.name} />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => { setResult(null); form.reset({ ...form.formState.defaultValues, roleId: defaultRole }); }}>
-              <UserPlus /> Invite another
+              <UserPlus /> Add another
             </Button>
             <Button onClick={() => close(false)}>Done</Button>
           </div>
@@ -132,13 +113,13 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
           className="space-y-4"
           onSubmit={form.handleSubmit(async (v) => {
             try {
-              const res = await api<{ employee: Employee; inviteUrl: string; inviteExpiresAt: string }>('/employees', {
+              const res = await api<{ employee: Employee }>('/employees', {
                 body: { ...v, designation: v.designation || null, employeeCode: v.employeeCode || null, joinedAt: v.joinedAt || null },
               });
               void qc.invalidateQueries({ queryKey: ['employees'] });
               void qc.invalidateQueries({ queryKey: ['admin-overview'] });
-              setResult({ url: res.inviteUrl, expiresAt: res.inviteExpiresAt, name: res.employee.name });
-              toast.success(`Invitation created for ${res.employee.email}`);
+              setResult({ firstName: res.employee.firstName, email: res.employee.email, password: v.password });
+              toast.success(`Account created for ${res.employee.email}`);
             } catch (e) {
               toast.error(errorMessage(e));
             }
@@ -167,16 +148,15 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
               <Input id="joinedAt" type="date" {...form.register('joinedAt', { setValueAs: (v) => v || null })} />
             </Field>
           </div>
-          <label className="flex items-center gap-3 rounded-xl bg-surface-2/60 p-3 text-sm">
-            <Switch checked={form.watch('sendInvite')} onCheckedChange={(v) => form.setValue('sendInvite', v)} />
-            Email the invitation now (the link is shown to you either way)
-          </label>
+          <Field label="Temporary password" htmlFor="password" error={err.password?.message} hint="10+ characters with upper, lower case and a number. You'll get a message to send them.">
+            <PasswordInput id="password" {...form.register('password')} onGenerate={(pw) => form.setValue('password', pw, { shouldValidate: true })} />
+          </Field>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => close(false)}>
               Cancel
             </Button>
             <Button type="submit" loading={form.formState.isSubmitting}>
-              <MailPlus /> Create invitation
+              <UserPlus /> Create account
             </Button>
           </div>
         </form>
@@ -212,7 +192,7 @@ function EditDrawer({ employee, onOpenChange }: { employee: Employee | null; onO
           className="space-y-4"
           onSubmit={form.handleSubmit(async (v) => {
             try {
-              const { email: _e, sendInvite: _s, ...rest } = v as CreateEmployeeInput & UpdateEmployeeInput;
+              const { email: _e, password: _p, ...rest } = v as CreateEmployeeInput & UpdateEmployeeInput;
               await api(`/employees/${employee.id}`, {
                 method: 'PATCH',
                 body: { ...rest, designation: rest.designation || null, employeeCode: rest.employeeCode || null, phone: rest.phone || null, joinedAt: rest.joinedAt || null, birthday: rest.birthday || null },
@@ -263,6 +243,64 @@ function EditDrawer({ employee, onOpenChange }: { employee: Employee | null; onO
   );
 }
 
+function SetPasswordDialog({ employee, onOpenChange }: { employee: Employee | null; onOpenChange: (o: boolean) => void }) {
+  const me = useSession();
+  const qc = useQueryClient();
+  const reauth = useReauth();
+  const [done, setDone] = useState<string | null>(null);
+  const form = useForm<{ password: string }>({ resolver: zodResolver(setEmployeePasswordSchema), defaultValues: { password: '' } });
+  const close = (o: boolean) => {
+    onOpenChange(o);
+    if (!o) {
+      setDone(null);
+      form.reset({ password: '' });
+    }
+  };
+  return (
+    <>
+      <Dialog open={!!employee} onOpenChange={close} title={employee ? `Set a password for ${employee.name}` : ''} description="They'll be signed out everywhere and asked to choose their own password when they next sign in.">
+        {employee &&
+          (done ? (
+            <div className="space-y-4">
+              <HandoverMessage firstName={employee.firstName} email={employee.email} password={done} organization={me.organization.name} reset />
+              <div className="flex justify-end">
+                <Button onClick={() => close(false)}>Done</Button>
+              </div>
+            </div>
+          ) : (
+            <form
+              noValidate
+              className="space-y-4"
+              onSubmit={form.handleSubmit(async (v) => {
+                try {
+                  await reauth.run(() => api(`/employees/${employee.id}/password`, { body: v }));
+                  void qc.invalidateQueries({ queryKey: ['employees'] });
+                  setDone(v.password);
+                  toast.success('Password set');
+                } catch (e) {
+                  if (!isCancelled(e)) toast.error(errorMessage(e));
+                }
+              })}
+            >
+              <Field label="New temporary password" htmlFor="set-password" error={form.formState.errors.password?.message} hint="10+ characters with upper, lower case and a number">
+                <PasswordInput id="set-password" autoFocus {...form.register('password')} onGenerate={(pw) => form.setValue('password', pw, { shouldValidate: true })} />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => close(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" loading={form.formState.isSubmitting}>
+                  <KeyRound /> Set password
+                </Button>
+              </div>
+            </form>
+          ))}
+      </Dialog>
+      {reauth.dialog}
+    </>
+  );
+}
+
 function EmployeesAdmin() {
   const can = useCan();
   const me = useSession();
@@ -281,7 +319,7 @@ function EmployeesAdmin() {
   const [inviteOpen, setInviteOpen] = useState(params.get('invite') === '1');
   const [editing, setEditing] = useState<Employee | null>(null);
   const [confirm, setConfirm] = useState<{ e: Employee; action: 'deactivate' | 'activate' } | null>(null);
-  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [settingPassword, setSettingPassword] = useState<Employee | null>(null);
   useEffect(() => {
     if (q === debounced) return;
     const t = setTimeout(() => set({ q, page: null }), 250);
@@ -300,15 +338,6 @@ function EmployeesAdmin() {
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
-  const resend = useMutation({
-    mutationFn: (id: string) => api<{ url: string; expiresAt: string }>(`/employees/${id}/invite`, { method: 'POST' }),
-    onSuccess: (r) => {
-      setLink(r);
-      toast.success('New invitation issued; previous links no longer work');
-    },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
-
   if (!can(PERMISSIONS.EMPLOYEES_MANAGE)) return <Forbidden />;
   const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.pageSize)) : 1;
 
@@ -316,10 +345,10 @@ function EmployeesAdmin() {
     <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
       <PageHeader
         title="Employees"
-        description="Invite, update and manage access for everyone at your company."
+        description="Add, update and manage access for everyone at your company."
         actions={
           <Button variant="gradient" onClick={() => setInviteOpen(true)}>
-            <UserPlus /> Invite employee
+            <UserPlus /> Add employee
           </Button>
         }
       />
@@ -433,9 +462,9 @@ function EmployeesAdmin() {
                         <DropdownItem onSelect={() => setEditing(e)}>
                           <Pencil /> Edit details
                         </DropdownItem>
-                        {e.status === 'INVITED' && (
-                          <DropdownItem onSelect={() => resend.mutate(e.id)}>
-                            <RefreshCw /> Re-issue invitation
+                        {e.id !== me.user.id && e.status !== 'DEACTIVATED' && e.status !== 'ARCHIVED' && (
+                          <DropdownItem onSelect={() => setSettingPassword(e)}>
+                            <KeyRound /> Set password
                           </DropdownItem>
                         )}
                         {e.id !== me.user.id && (
@@ -459,7 +488,7 @@ function EmployeesAdmin() {
               ))}
             </tbody>
           </table>
-          {list.data?.items.length === 0 && <EmptyState icon={<Users />} title="No employees match" description="Adjust the filters or invite someone new." />}
+          {list.data?.items.length === 0 && <EmptyState icon={<Users />} title="No employees match" description="Adjust the filters or add someone new." />}
         </div>
         <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted">
           <span>{list.data ? `${list.data.total} total` : ''}</span>
@@ -492,16 +521,14 @@ function EmployeesAdmin() {
         description={
           confirm?.action === 'deactivate'
             ? 'They will be signed out on every device immediately and will not be able to sign in. Their messages and records are kept.'
-            : 'They will be able to sign in again. Accounts that never set a password return to the invited state.'
+            : 'They will be able to sign in again. Accounts that never had a password stay invited until you set one.'
         }
         confirmLabel={confirm?.action === 'deactivate' ? 'Deactivate' : 'Reactivate'}
         danger={confirm?.action === 'deactivate'}
         loading={toggle.isPending}
         onConfirm={() => confirm && toggle.mutate({ id: confirm.e.id, action: confirm.action })}
       />
-      <Dialog open={!!link} onOpenChange={(o) => !o && setLink(null)} title="New invitation link">
-        {link && <InviteLinkBox url={link.url} expiresAt={link.expiresAt} />}
-      </Dialog>
+      <SetPasswordDialog employee={settingPassword} onOpenChange={(o) => !o && setSettingPassword(null)} />
     </div>
   );
 }

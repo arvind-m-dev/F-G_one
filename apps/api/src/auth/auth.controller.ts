@@ -102,6 +102,7 @@ export class AuthController {
       isSuperAdmin: auth.isSuperAdmin,
       accountType: auth.accountType,
       mfaEnabled: auth.mfaEnabled,
+      mustChangePassword: auth.mustChangePassword,
       superAdminNeedsMfa: auth.superAdminNeedsMfa,
       preferences: prefs.preferences,
       organization: {

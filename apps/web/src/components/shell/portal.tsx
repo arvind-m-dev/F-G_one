@@ -1,4 +1,5 @@
 'use client';
+import { ChoosePassword } from '@/components/security/choose-password';
 import { Skeleton } from '@/components/ui/misc';
 import { RealtimeProvider } from '@/lib/realtime';
 import { SessionProvider, useMeQuery } from '@/lib/session';
@@ -26,6 +27,7 @@ export function PortalGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+  if (me.data.mustChangePassword) return <ChoosePassword me={me.data} />;
   return (
     <SessionProvider me={me.data}>
       <RealtimeProvider me={me.data}>{children}</RealtimeProvider>
