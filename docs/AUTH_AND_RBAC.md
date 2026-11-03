@@ -1,6 +1,6 @@
 # Authentication and RBAC: current state (audit, 3 Nov 2026)
 
-This document describes **what is implemented today**. The target design is in `SUPER_ADMIN_ARCHITECTURE.md`.
+This document describes **what is implemented today**. It was updated after Phase 2a. The target design is in `SUPER_ADMIN_ARCHITECTURE.md`.
 
 ## 1. Authentication
 
@@ -21,6 +21,18 @@ This document describes **what is implemented today**. The target design is in `
 **Not implemented:** MFA, email verification separate from invitation acceptance, a session list, self-service "sign out other devices", an admin "revoke sessions" action, recent-reauthentication for sensitive actions, a login history view, and per-attempt failed-login records (only the lock event is audited).
 
 ## 2. Authorization
+
+> **Phase 2a (done):** the permission engine now sits underneath the model described below.
+> * Role grants (`RoleGrant`, permission + scope), extra roles (`UserRole`) and per-user overrides (`UserPermissionOverride`) are resolved **per request** in `AuthService.validateSession` by `resolveGrants` (`packages/shared/src/authz.ts`):
+>   * the union of non-archived roles, with the widest scope per permission
+>   * ALLOW overrides added
+>   * DENY overrides removed last
+>   * extra roles from another tenant ignored
+> * `auth.grants` carries the result. `auth.permissions` (the legacy keys) is derived from it with `legacyFromGrants`, so every existing check works unchanged.
+> * Scoped checks use `apps/api/src/common/authz.ts`: `scopeOf` and `userScopeWhere` (ORG = organization, TEAM = direct reports, OWN = self). Attendance visibility uses it.
+> * `hrUsers` resolves through the same engine (`usersWithLegacyPermission`).
+>
+> The text below describes the legacy layer that still drives route guards.
 
 * **Permission catalogue:** 20 flat strings in `packages/shared/src/permissions.ts`, for example `employees.manage` and `attendance.view_all`. There are no data scopes; scope is encoded in the name (`view_team` versus `view_all`).
 * **Roles:** `Role` (per org) has `key`, `name`, `permissions String[]`, `rank` and `isSystem`. There are four seeded system roles: `super_admin` (rank 100, all permissions), `hr_admin` (75), `manager` (50) and `employee` (10). Each user has **one** role (`User.roleId`).
@@ -47,9 +59,9 @@ There are no update or delete endpoints. It is **not** append-only at the databa
 | Super Admin as a separate authority (1–4 accounts, last one protected) | **Missing.** It is an ordinary role that anyone holding `employees.manage` with rank > 100 could assign. Rank prevents that today, but it is not a separate concept and there is no limit. |
 | MFA, re-auth, session list and revoke, login history | Missing |
 | Secure bootstrap that closes after first use | Partial. `db:bootstrap` creates a Super Admin invite but can be re-run and does not require MFA. |
-| Dynamic roles (create, edit, duplicate, archive, templates) | Missing (the 4 roles are fixed) |
-| Granular actions × modules × **data scopes**, explicit deny, user overrides | Missing (flat strings, no scopes) |
-| Additional roles per user | Missing (one role) |
+| Dynamic roles (create, edit, duplicate, archive, templates) | Data model and enforcement done (Phase 2a). There is no UI or API to edit yet (Phase 4). |
+| Granular actions × modules × **data scopes**, explicit deny, user overrides | Engine done (Phase 2a). The catalogue covers today's modules with ORG and TEAM scopes; other scopes arrive with their modules. |
+| Additional roles per user | Done in the engine (`UserRole`); not yet assignable in the UI |
 | Account types (employee, client, admin), SUSPENDED and ARCHIVED statuses | Missing (`INVITED`, `ACTIVE`, `DEACTIVATED` only) |
 | Clients, projects, tasks, milestones, calendar events | Missing (no models) |
 | Announcement audience targeting (roles, departments, projects, clients) | Partial (category, expiry, acknowledgements; audience is everyone) |

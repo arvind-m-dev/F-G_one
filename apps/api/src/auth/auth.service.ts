@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { parseOrganizationSettings } from '@fg/shared';
+import { legacyFromGrants, parseOrganizationSettings, resolveGrants } from '@fg/shared';
 import { AuditService } from '../audit/audit.service';
 import type { AuthContext } from '../common/auth-context';
 import { env } from '../common/env';
@@ -75,7 +75,16 @@ export class AuthService {
   async validateSession(token: string, ip?: string): Promise<AuthContext | null> {
     const session = await this.prisma.session.findUnique({
       where: { tokenHash: sha256(token) },
-      include: { user: { include: { role: true, organization: { select: { status: true } } } } },
+      include: {
+        user: {
+          include: {
+            role: { include: { grants: true } },
+            extraRoles: { include: { role: { include: { grants: true } } } },
+            permissionOverrides: true,
+            organization: { select: { status: true } },
+          },
+        },
+      },
     });
     if (!session) return null;
     if (session.expiresAt < new Date() || session.user.status !== 'ACTIVE' || session.user.organization.status !== 'ACTIVE') {
@@ -87,6 +96,10 @@ export class AuthService {
     if (Date.now() - session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
       await this.prisma.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
     }
+    const u = session.user;
+    // Extra roles must belong to the same tenant (defence in depth).
+    const roles = [u.role, ...u.extraRoles.map((x) => x.role).filter((r) => r.organizationId === u.organizationId)];
+    const grants = resolveGrants(roles, u.permissionOverrides);
     return {
       sessionId: session.id,
       userId: session.userId,
@@ -94,7 +107,8 @@ export class AuthService {
       email: session.user.email,
       roleKey: session.user.role.key,
       rank: session.user.role.rank,
-      permissions: session.user.role.permissions,
+      permissions: legacyFromGrants(grants),
+      grants,
       ip,
     };
   }

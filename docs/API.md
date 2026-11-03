@@ -12,7 +12,7 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 |---|---|---|
 | 🌐 POST | `/auth/login` | `{ email, password }`. Limit 10/min. Locks for 15 min after 5 failures. Generic error message. |
 | POST | `/auth/logout` | Deletes the server session |
-| GET | `/auth/me` | `{ user, permissions, role, preferences, organization{branding, settings} }` |
+| GET | `/auth/me` | `{ user, permissions, grants, role, preferences, organization{branding, settings} }`. `grants` maps permission → widest scope (e.g. `{"attendance.view":"TEAM"}`). `permissions` are the legacy flat keys derived from it. |
 | 🌐 POST | `/auth/forgot-password` | `{ email }`. Always returns 200 (no enumeration). Limit 5 per 15 min. |
 | 🌐 POST | `/auth/reset-password` | `{ token, password }`. Single use, 30-min expiry. Signs out all sessions. |
 | POST | `/auth/change-password` | `{ currentPassword, newPassword }`. Signs out other sessions. |
@@ -42,7 +42,7 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 |---|---|---|
 | GET | `/departments` | any |
 | POST / PATCH / DELETE | `/departments[/:id]` | `departments.manage` |
-| GET | `/roles` | any (`assignable` flag per role) |
+| GET | `/roles` | any. Each role has `grants[{permission, scope}]`, derived `permissions`, `assignable`, `archivedAt`, `color`, `icon`. The response also carries `catalog` (permission catalogue with supported scopes, labels, help and `sensitive`), `modules` and `scopeLabels`. |
 | 🌐 GET | `/public/branding` | Login-page branding for `DEFAULT_ORG_SLUG` |
 | GET | `/organization` | any |
 | PATCH | `/organization` | `settings.manage`. `{ name?, logoUrl?, primaryColor?, secondaryColor?, settings?: deep-partial }`, deep-merged and re-validated. |

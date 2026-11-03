@@ -39,6 +39,8 @@ export interface Employee extends Person {
 export interface Me {
   user: Employee;
   permissions: string[];
+  /** Effective scoped grants: permission → widest scope (ORG, TEAM, ...). */
+  grants: Record<string, string>;
   role: { key: string; rank: number };
   preferences: UserPreferences;
   organization: {

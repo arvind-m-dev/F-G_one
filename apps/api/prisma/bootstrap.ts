@@ -8,7 +8,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { DEFAULT_ROLE_DEFINITIONS, organizationSettingsSchema } from '@fg/shared';
+import { DEFAULT_ROLE_DEFINITIONS, DEFAULT_ROLE_GRANTS, organizationSettingsSchema } from '@fg/shared';
 
 const need = (k: string) => {
   const v = process.env[k];
@@ -33,8 +33,9 @@ export async function bootstrap(prisma: PrismaClient) {
   for (const r of DEFAULT_ROLE_DEFINITIONS) {
     await prisma.role.upsert({
       where: { organizationId_key: { organizationId: org.id, key: r.key } },
-      update: { permissions: r.permissions, rank: r.rank, isSystem: true },
-      create: { organizationId: org.id, key: r.key, name: r.name, description: r.description, permissions: r.permissions, rank: r.rank, isSystem: true },
+      // Re-running bootstrap restores the system roles' default grants.
+      update: { rank: r.rank, isSystem: true, grants: { deleteMany: {}, create: DEFAULT_ROLE_GRANTS[r.key] } },
+      create: { organizationId: org.id, key: r.key, name: r.name, description: r.description, rank: r.rank, isSystem: true, grants: { create: DEFAULT_ROLE_GRANTS[r.key] } },
     });
   }
   for (const name of ['general', 'announcements']) {

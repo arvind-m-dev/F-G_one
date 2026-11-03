@@ -32,21 +32,22 @@ model Organization {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
-  users         User[]
-  departments   Department[]
-  roles         Role[]
-  invitations   Invitation[]
-  auditLogs     AuditLog[]
-  holidays      Holiday[]
-  announcements Announcement[]
-  channels      Channel[]
-  messages      Message[]
-  sessions      Session[]
-  attendance    AttendanceRecord[]
-  notifications Notification[]
-  leaveTypes    LeaveType[]
-  leaveRequests LeaveRequest[]
-  corrections   AttendanceCorrection[]
+  users               User[]
+  departments         Department[]
+  roles               Role[]
+  invitations         Invitation[]
+  auditLogs           AuditLog[]
+  holidays            Holiday[]
+  announcements       Announcement[]
+  channels            Channel[]
+  messages            Message[]
+  sessions            Session[]
+  attendance          AttendanceRecord[]
+  notifications       Notification[]
+  leaveTypes          LeaveType[]
+  leaveRequests       LeaveRequest[]
+  corrections         AttendanceCorrection[]
+  permissionOverrides UserPermissionOverride[]
 }
 
 model Department {
@@ -75,14 +76,21 @@ model Role {
   key            String
   name           String
   description    String?
+  /// DEPRECATED (Phase 2a): no longer read or written. Grants live in RoleGrant. Dropped in Phase 4.
   permissions    String[]
-  /// Higher rank may manage users of lower rank (super_admin=100, employee=10)
+  /// Higher rank may manage users of lower rank (super_admin=100, employee=10). Replaced by the ceiling rule in Phase 4.
   rank           Int          @default(10)
   isSystem       Boolean      @default(false)
+  color          String?
+  icon           String?
+  templateKey    String?
+  archivedAt     DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  users User[]
+  users      User[]
+  grants     RoleGrant[]
+  extraUsers UserRole[]
 
   @@unique([organizationId, key])
 }
@@ -142,25 +150,27 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  sessions          Session[]
-  resetTokens       PasswordResetToken[]
-  invitations       Invitation[]         @relation("InvitationUser")
-  sentInvitations   Invitation[]         @relation("InvitationSender")
-  headOfDepartments Department[]         @relation("DepartmentHead")
-  auditLogs         AuditLog[]
-  announcements     Announcement[]
-  channelsCreated   Channel[]
-  memberships       ChannelMember[]
-  messages          Message[]
-  reactions         MessageReaction[]
-  attendance        AttendanceRecord[]
-  announcementAcks  AnnouncementAck[]
-  notifications     Notification[]       @relation("NotificationUser")
-  notificationsSent Notification[]       @relation("NotificationActor")
-  leaveRequests     LeaveRequest[]       @relation("LeaveRequester")
-  leaveDecisions    LeaveRequest[]       @relation("LeaveApprover")
-  corrections       AttendanceCorrection[] @relation("CorrectionRequester")
-  correctionReviews AttendanceCorrection[] @relation("CorrectionReviewer")
+  sessions            Session[]
+  resetTokens         PasswordResetToken[]
+  invitations         Invitation[]             @relation("InvitationUser")
+  sentInvitations     Invitation[]             @relation("InvitationSender")
+  headOfDepartments   Department[]             @relation("DepartmentHead")
+  auditLogs           AuditLog[]
+  announcements       Announcement[]
+  channelsCreated     Channel[]
+  memberships         ChannelMember[]
+  messages            Message[]
+  reactions           MessageReaction[]
+  attendance          AttendanceRecord[]
+  announcementAcks    AnnouncementAck[]
+  notifications       Notification[]           @relation("NotificationUser")
+  notificationsSent   Notification[]           @relation("NotificationActor")
+  leaveRequests       LeaveRequest[]           @relation("LeaveRequester")
+  leaveDecisions      LeaveRequest[]           @relation("LeaveApprover")
+  corrections         AttendanceCorrection[]   @relation("CorrectionRequester")
+  correctionReviews   AttendanceCorrection[]   @relation("CorrectionReviewer")
+  extraRoles          UserRole[]
+  permissionOverrides UserPermissionOverride[]
 
   @@unique([organizationId, employeeCode])
   @@index([organizationId, status])
@@ -318,22 +328,22 @@ enum WorkLocation {
 }
 
 model AttendanceRecord {
-  id              String            @id @default(cuid())
+  id              String       @id @default(cuid())
   organizationId  String
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId          String
-  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Calendar day in the organization's time zone
-  date            DateTime          @db.Date
+  date            DateTime     @db.Date
   location        WorkLocation
   remarks         String?
   checkInAt       DateTime
   checkOutAt      DateTime?
   checkOutRemarks String?
   /// Checked in after workday start + grace period
-  late            Boolean           @default(false)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  late            Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   breaks AttendanceBreak[]
 
@@ -556,4 +566,64 @@ model AttendanceCorrection {
 
   @@index([organizationId, status])
   @@index([userId, date])
+}
+
+// ───────────────────────────── Authorization (Phase 2a) ─────────────────────────────
+
+/// Data scope of a grant. Order for "widest wins": CLIENT < OWN < ASSIGNED < PROJECT < TEAM < DEPARTMENT < ORG.
+enum PermissionScope {
+  CLIENT
+  OWN
+  ASSIGNED
+  PROJECT
+  TEAM
+  DEPARTMENT
+  ORG
+}
+
+enum OverrideEffect {
+  ALLOW
+  DENY
+}
+
+/// One permission (from PERMISSION_CATALOG in @fg/shared) granted by a role at a scope.
+model RoleGrant {
+  id         String          @id @default(cuid())
+  roleId     String
+  role       Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission String
+  scope      PermissionScope
+
+  @@unique([roleId, permission])
+}
+
+/// Additional roles on top of the primary User.roleId.
+model UserRole {
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedById String?
+  createdAt    DateTime @default(now())
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+/// Per-user exception. DENY removes the permission whatever the roles say; ALLOW adds it at `scope`.
+model UserPermissionOverride {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission     String
+  effect         OverrideEffect
+  scope          PermissionScope?
+  reason         String?
+  grantedById    String?
+  createdAt      DateTime         @default(now())
+
+  @@unique([userId, permission])
+  @@index([organizationId])
 }

@@ -49,7 +49,7 @@ Actions are view, create, edit, delete, publish, approve, assign, manage, export
 
 ### 2.2 Scopes
 `OWN < ASSIGNED < PROJECT < TEAM < DEPARTMENT < ORG`, plus `CLIENT` for client accounts. The client scope is restricted to the client's projects and to client-visible records only.
-* `TEAM` means the user's direct and indirect reports (from `User.managerId`).
+* `TEAM` means the user's direct reports (from `User.managerId`). Indirect reports may be added later as a separate decision, because it widens existing access.
 * `PROJECT` means projects where the user is a `ProjectMember`.
 * `DEPARTMENT` means the user's department.
 * For each permission, a grant at a wider scope implies the narrower ones.
@@ -84,6 +84,7 @@ The result is computed **per request**, as today, so changes apply immediately w
 5. Clients can never receive internal-only permissions; the API rejects it and so does the UI.
 
 ### 2.6 Enforcement API (NestJS)
+*Implemented in Phase 2a as plain functions in `apps/api/src/common/authz.ts` (`scopeOf`, `userScopeWhere`, `usersWithLegacyPermission`); the rest arrives with the modules that need it.*
 * `@RequirePermission('tasks.view')` on the route. The guard rejects the request when the user has no grant at any scope.
 * `AuthzService.scope(auth, 'tasks.view')` returns a scope or null. `AuthzService.where(auth, 'tasks.view', 'task')` returns a Prisma `where` fragment for that scope. **Every list, search, export and report** query uses it, which is how search and exports respect permissions.
 * `AuthzService.assert(auth, 'tasks.edit', record)` handles single-record checks (ownership, membership, client visibility).

@@ -45,5 +45,6 @@
 | Session auth, invites, reset, lockout, CSRF origin check, rate limiting | ✅ (rate limiting uses the real client IP via `TRUST_PROXY`; verify on Render) |
 | Recent accounts on login (device-local) | ✅ |
 | Organization isolation | ✅ tested |
+| Permission engine (scoped grants, extra roles, ALLOW/DENY overrides, resolved per request) | ✅ backend only; the role editor UI arrives in Phase 4 |
 | Realtime with reconnection | ✅ Socket.IO with automatic reconnect and an indicator in the rail |
 | File storage, email notifications, notification inbox | ⬜ |

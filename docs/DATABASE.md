@@ -51,6 +51,14 @@ Channel 1─* Message 1─* Message (thread replies), 1─* MessageReaction
 
 Migration `…_attendance_announcements_notifications` also adds the new Home widgets to existing organizations' defaults.
 
+## Added (Super Admin Phase 2a: permission engine)
+* `Role` gains `color`, `icon`, `templateKey` and `archivedAt`. `Role.permissions` is **deprecated**: it is no longer read or written and is dropped in Phase 4.
+* `RoleGrant { roleId, permission, scope }` is unique per (role, permission). `permission` is a key from `PERMISSION_CATALOG` in `@fg/shared`.
+* `UserRole { userId, roleId, assignedById }` holds additional roles on top of `User.roleId`.
+* `UserPermissionOverride { organizationId, userId, permission, effect ALLOW|DENY, scope?, reason, grantedById }` is unique per (user, permission).
+* Enums: `PermissionScope` (CLIENT, OWN, ASSIGNED, PROJECT, TEAM, DEPARTMENT, ORG; the declaration order is the widening order) and `OverrideEffect`.
+* Migration `20261103091117_permission_engine` backfills `RoleGrant` from `Role.permissions` using `LEGACY_PERMISSION_MAP`, keeping the widest scope. It was verified on the dev database: 8 of 8 roles round-trip to identical permissions.
+
 ## Planned models (added by later milestones, no changes to existing tables)
 
 | Milestone | Models |

@@ -68,6 +68,7 @@ export class AuthController {
     return {
       user: toEmployee(user, { privileged: true, online: true }),
       permissions: auth.permissions,
+      grants: auth.grants,
       role: { key: auth.roleKey, rank: auth.rank },
       preferences: prefs.preferences,
       organization: {

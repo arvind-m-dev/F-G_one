@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
-import type { Permission } from '@fg/shared';
+import type { GrantMap, Permission } from '@fg/shared';
 
 export interface AuthContext {
   sessionId: string;
@@ -8,7 +8,10 @@ export interface AuthContext {
   email: string;
   roleKey: string;
   rank: number;
+  /** Legacy flat permissions, derived from `grants` (kept for existing @RequirePermissions checks). */
   permissions: string[];
+  /** Effective v2 grants: permission → widest scope. */
+  grants: GrantMap;
   ip?: string;
 }
 

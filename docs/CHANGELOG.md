@@ -3,6 +3,14 @@
 ## Unreleased: Super Admin control panel (branch `super-admin`)
 ### Added (Phase 1, docs only)
 - `AUTH_AND_RBAC.md` (current-state audit), `SUPER_ADMIN_ARCHITECTURE.md` (target design), `SUPER_ADMIN_IMPLEMENTATION_PLAN.md` (phases 2a–8). No code changes.
+### Added (Phase 2a, permission engine)
+- Scoped permission grants per role (`RoleGrant`), additional roles per user (`UserRole`) and per-user ALLOW/DENY overrides. Explicit deny always wins; default deny.
+- Permission catalogue with modules, actions, supported scopes, plain-language help and sensitive flags (`@fg/shared` `authz.ts`).
+- `/auth/me` returns `grants`; `/roles` returns grants and the catalogue.
+### Changed
+- Effective permissions are resolved per request from grants, so changes apply without signing out. Legacy permission checks are derived from grants with identical results for every existing role.
+- Attendance visibility and HR recipient lookup use the new engine.
+- `Role.permissions` column deprecated (no longer read or written).
 
 ## Unreleased: UI redesign (branch `ui-redesign`)
 ### Added (HR round)

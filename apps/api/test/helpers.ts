@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
 import request from 'supertest';
-import { DEFAULT_ROLE_DEFINITIONS, organizationSettingsSchema } from '@fg/shared';
+import { DEFAULT_ROLE_DEFINITIONS, DEFAULT_ROLE_GRANTS, organizationSettingsSchema } from '@fg/shared';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { MailService } from '../src/mail/mail.service';
@@ -22,7 +22,7 @@ export async function makeOrg(prisma: PrismaClient, slug: string, domain: string
   });
   const roles: Record<string, { id: string }> = {};
   for (const r of DEFAULT_ROLE_DEFINITIONS) {
-    roles[r.key] = await prisma.role.create({ data: { organizationId: org.id, key: r.key, name: r.name, permissions: r.permissions, rank: r.rank, isSystem: true } });
+    roles[r.key] = await prisma.role.create({ data: { organizationId: org.id, key: r.key, name: r.name, grants: { create: DEFAULT_ROLE_GRANTS[r.key] }, rank: r.rank, isSystem: true } });
   }
   const passwordHash = await hash(PASSWORD);
   const users: Record<string, { id: string; email: string }> = {};

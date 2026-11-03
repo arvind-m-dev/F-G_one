@@ -8,7 +8,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
-import { DEFAULT_ROLE_DEFINITIONS, organizationSettingsSchema } from '@fg/shared';
+import { DEFAULT_ROLE_DEFINITIONS, DEFAULT_ROLE_GRANTS, organizationSettingsSchema } from '@fg/shared';
 
 const prisma = new PrismaClient();
 
@@ -106,7 +106,7 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     await Promise.all(
       DEFAULT_ROLE_DEFINITIONS.map(async (r) => [
         r.key,
-        await prisma.role.create({ data: { organizationId: org.id, key: r.key, name: r.name, description: r.description, permissions: r.permissions, rank: r.rank, isSystem: true } }),
+        await prisma.role.create({ data: { organizationId: org.id, key: r.key, name: r.name, description: r.description, grants: { create: DEFAULT_ROLE_GRANTS[r.key] }, rank: r.rank, isSystem: true } }),
       ]),
     ),
   );
