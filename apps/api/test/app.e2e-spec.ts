@@ -106,35 +106,52 @@ describe('authentication', () => {
 describe('employee onboarding & RBAC', () => {
   it('employees cannot create or edit employees', async () => {
     const agent = await login(app, 'employee@futuristglobal.com');
-    await agent.post('/api/employees').send({ email: 'x@futuristglobal.com', firstName: 'X', lastName: 'Y', roleId: fg.roles.employee.id }).expect(403);
+    await agent.post('/api/employees').send({ email: 'x@futuristglobal.com', firstName: 'X', lastName: 'Y', roleId: fg.roles.employee.id, password: 'Temp-Pass-2026' }).expect(403);
     await agent.patch(`/api/employees/${fg.users.manager.id}`).send({ firstName: 'Hacked' }).expect(403);
   });
 
-  it('HR invites an employee who activates via the invitation link', async () => {
+  it('HR creates an employee with a temporary password they must change at first sign-in', async () => {
     const hr = await login(app, 'hr_admin@futuristglobal.com');
-    await hr.post('/api/employees').send({ email: 'new@gmail.com', firstName: 'N', lastName: 'J', roleId: fg.roles.employee.id }).expect(400); // domain policy
-    await hr.post('/api/employees').send({ email: 'boss@futuristglobal.com', firstName: 'B', lastName: 'S', roleId: fg.roles.administrator.id }).expect(403); // cannot grant higher role
+    const temp = 'Temp-Pass-2026';
+    await hr.post('/api/employees').send({ email: 'new@gmail.com', firstName: 'N', lastName: 'J', roleId: fg.roles.employee.id, password: temp }).expect(400); // domain policy
+    await hr.post('/api/employees').send({ email: 'boss@futuristglobal.com', firstName: 'B', lastName: 'S', roleId: fg.roles.administrator.id, password: temp }).expect(403); // cannot grant higher role
+    await hr.post('/api/employees').send({ email: 'weak@futuristglobal.com', firstName: 'W', lastName: 'P', roleId: fg.roles.employee.id, password: 'short' }).expect(400); // password policy
 
-    const res = await hr.post('/api/employees').send({ email: 'New.Joiner@futuristglobal.com', firstName: 'New', lastName: 'Joiner', roleId: fg.roles.employee.id, designation: 'Engineer' }).expect(201);
-    expect(res.body.employee.status).toBe('INVITED');
-    const token = res.body.inviteUrl.split('/invite/')[1];
-    await request(app.getHttpServer()).post('/api/auth/login').send({ email: 'new.joiner@futuristglobal.com', password: 'Whatever-123' }).expect(401);
+    const res = await hr.post('/api/employees').send({ email: 'New.Joiner@futuristglobal.com', firstName: 'New', lastName: 'Joiner', roleId: fg.roles.employee.id, designation: 'Engineer', password: temp }).expect(201);
+    expect(res.body.employee.status).toBe('ACTIVE');
+    expect(res.body).not.toHaveProperty('inviteUrl');
 
-    const info = await request(app.getHttpServer()).get(`/api/auth/invitations/${token}`).expect(200);
-    expect(info.body.email).toBe('new.joiner@futuristglobal.com');
-
-    const agent = request.agent(app.getHttpServer());
-    await agent.post('/api/auth/accept-invitation').send({ token, password: 'Joiner-Pass-2026' }).expect(200);
+    const agent = await login(app, 'new.joiner@futuristglobal.com', temp);
     const me = await agent.get('/api/auth/me').expect(200);
-    expect(me.body.user.status).toBe('ACTIVE');
+    expect(me.body.mustChangePassword).toBe(true);
+    expect(me.body.permissions).toEqual([]); // nothing works until they choose their own password
+    await agent.post('/api/auth/change-password').send({ currentPassword: temp, newPassword: temp }).expect(400); // must differ
+    await agent.post('/api/auth/change-password').send({ currentPassword: temp, newPassword: 'Joiner-Pass-2026' }).expect(200);
+    const after = await agent.get('/api/auth/me').expect(200);
+    expect(after.body.mustChangePassword).toBe(false);
+    expect(after.body.permissions.length).toBeGreaterThan(0);
     // auto-joined default channels
     const channels = await agent.get('/api/channels').expect(200);
     expect(channels.body.map((c: { name: string }) => c.name)).toContain('general');
-    // token is single use
-    await request(app.getHttpServer()).post('/api/auth/accept-invitation').send({ token, password: 'Joiner-Pass-2026' }).expect(400);
+  });
 
-    const audit = await prisma.auditLog.findMany({ where: { organizationId: fg.org.id, action: { in: ['employee.created', 'employee.invited', 'auth.invitation_accepted'] } } });
-    expect(audit.length).toBeGreaterThanOrEqual(3);
+  it('admins set a password for an employee: signs them out, forces a change, audited, guarded by rank', async () => {
+    const victim = await login(app, 'employee@futuristglobal.com');
+    const hr = await login(app, 'hr_admin@futuristglobal.com');
+    await hr.post(`/api/employees/${fg.users.super_admin.id}/password`).send({ password: 'Reset-Pass-2026' }).expect(403); // above them
+    await hr.post(`/api/employees/${fg.users.hr_admin.id}/password`).send({ password: 'Reset-Pass-2026' }).expect(400); // self
+    const emp = await login(app, 'employee@futuristglobal.com');
+    await emp.post(`/api/employees/${fg.users.manager.id}/password`).send({ password: 'Reset-Pass-2026' }).expect(403); // no permission
+
+    await hr.post(`/api/employees/${fg.users.employee.id}/password`).send({ password: 'Reset-Pass-2026' }).expect(200);
+    await victim.get('/api/auth/me').expect(401); // signed out everywhere
+    await request(app.getHttpServer()).post('/api/auth/login').send({ email: 'employee@futuristglobal.com', password: PASSWORD }).expect(401);
+    const again = await login(app, 'employee@futuristglobal.com', 'Reset-Pass-2026');
+    expect((await again.get('/api/auth/me').expect(200)).body.mustChangePassword).toBe(true);
+    await again.post('/api/auth/change-password').send({ currentPassword: 'Reset-Pass-2026', newPassword: PASSWORD }).expect(200);
+
+    const audit = await prisma.auditLog.count({ where: { organizationId: fg.org.id, action: 'employee.password_set', entityId: fg.users.employee.id } });
+    expect(audit).toBe(1);
   });
 
   it('deactivation revokes sessions immediately; HR cannot deactivate a super admin', async () => {
@@ -181,7 +198,7 @@ describe('tenant isolation', () => {
     await acme.post(`/api/channels/${fg.general.id}/join`).expect(404);
     await acme.post('/api/dm').send({ userIds: [fg.users.employee.id] }).expect(400);
     // cannot assign a role from another org
-    await acme.post('/api/employees').send({ email: 'z@acme.test', firstName: 'Z', lastName: 'Z', roleId: fg.roles.employee.id }).expect(400);
+    await acme.post('/api/employees').send({ email: 'z@acme.test', firstName: 'Z', lastName: 'Z', roleId: fg.roles.employee.id, password: 'Temp-Pass-2026' }).expect(400);
     const search = await acme.get('/api/search?q=super').expect(200);
     expect(search.body.people.every((p: { id: string }) => p.id !== fg.users.super_admin.id)).toBe(true);
   });

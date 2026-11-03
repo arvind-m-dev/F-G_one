@@ -29,7 +29,7 @@
 | Module | Status |
 |---|---|
 | Overview | ✅ Team composition, invitations waiting (re-issue link), admin activity, conversation activity, roles, holidays, announcements |
-| Employees | ✅ Invite (domain-restricted, copyable link), edit, role and manager, deactivate/reactivate, re-invite |
+| Employees | ✅ Add with a temporary password (domain-restricted) and a copyable sign-in message, set a new password (shown once), edit, role and manager, deactivate/reactivate. Employees choose their own password at first sign-in. |
 | Departments | ✅ CRUD, head, colour |
 | Roles & permissions | 🟡 Read-only matrix. Editing is planned. |
 | System settings | ✅ Branding, modules, home defaults, navigation, attendance and leave policy values, allowed domains, session length |

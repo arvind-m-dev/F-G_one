@@ -23,7 +23,7 @@ Channel 1─* Message 1─* Message (thread replies), 1─* MessageReaction
 | **Organization** | Tenant | `slug` unique, `primaryColor`, `secondaryColor`, `logoUrl`, `settings` JSON (validated by `organizationSettingsSchema`), `status` |
 | **Department** | Org structure | unique `(organizationId, name)`, `headId`, `color` |
 | **Role** | Permission bundle | unique `(organizationId, key)`, `permissions text[]`, `rank`, `isSystem` |
-| **User** | Employee profile & identity | `email` globally unique (resolves the tenant at login), `status INVITED/ACTIVE/DEACTIVATED`, `passwordHash`, `roleId`, `departmentId`, `managerId`, profile fields, `preferences` JSON, **presence** (`presence`, `statusEmoji`, `statusText`, `statusExpiresAt`, kept separate from attendance), lockout (`failedLogins`, `lockedUntil`), unique `(organizationId, employeeCode)` |
+| **User** | Employee profile & identity | `email` globally unique (resolves the tenant at login), `status INVITED/ACTIVE/DEACTIVATED`, `passwordHash`, `mustChangePassword` (set when an admin sets the password; the user has no permissions until they choose their own), `roleId`, `departmentId`, `managerId`, profile fields, `preferences` JSON, **presence** (`presence`, `statusEmoji`, `statusText`, `statusExpiresAt`, kept separate from attendance), lockout (`failedLogins`, `lockedUntil`), unique `(organizationId, employeeCode)` |
 | **Session** | Server-side session | `tokenHash` unique, `expiresAt`, `ip`, `userAgent`, `organizationId` |
 | **Invitation** | Onboarding | `tokenHash` unique, `expiresAt` (7 days), `acceptedAt`, `revokedAt` |
 | **PasswordResetToken** | Reset flow | `tokenHash` unique, `expiresAt` (30 min), `usedAt` |

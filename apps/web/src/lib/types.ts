@@ -49,6 +49,8 @@ export interface Me {
   accountType: 'INTERNAL' | 'CLIENT';
   /** Two-step verification is on for this account. */
   mfaEnabled: boolean;
+  /** Signed in with an admin-set password; must choose their own before using the app. */
+  mustChangePassword: boolean;
   /** Holds the Super Admin flag, but the authority stays off until two-step verification is on. */
   superAdminNeedsMfa: boolean;
   preferences: UserPreferences;

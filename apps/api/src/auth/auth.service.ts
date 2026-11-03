@@ -141,7 +141,7 @@ export class AuthService {
     const mfaEnabled = !!(u.mfaEnabledAt && u.mfaSecretEnc);
     // Super Admin authority is dormant until two-step verification is on.
     const isSuperAdmin = u.accountType === 'INTERNAL' && u.isSuperAdmin && mfaEnabled;
-    const grants = session.mfaPending ? {} : resolveGrants(roles, u.permissionOverrides, { isSuperAdmin, accountType: u.accountType });
+    const grants = session.mfaPending || u.mustChangePassword ? {} : resolveGrants(roles, u.permissionOverrides, { isSuperAdmin, accountType: u.accountType });
     return {
       sessionId: session.id,
       userId: session.userId,
@@ -155,6 +155,7 @@ export class AuthService {
       accountType: u.accountType,
       mfaPending: session.mfaPending,
       mfaEnabled,
+      mustChangePassword: u.mustChangePassword,
       superAdminNeedsMfa: u.accountType === 'INTERNAL' && u.isSuperAdmin && !mfaEnabled,
       authenticatedAt: session.authenticatedAt,
       ip,
@@ -207,8 +208,9 @@ export class AuthService {
     if (!user.passwordHash || !(await verifyPassword(user.passwordHash, current))) {
       throw new BadRequestException('Current password is incorrect');
     }
+    if (current === next) throw new BadRequestException('Choose a password different from your current one');
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next) } }),
+      this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next), mustChangePassword: false } }),
       this.prisma.session.deleteMany({ where: { userId: user.id, NOT: { id: auth.sessionId } } }),
     ]);
     await this.audit.log(auth, 'auth.password_changed', 'user', user.id);

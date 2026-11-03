@@ -192,7 +192,7 @@ function LoginFlow() {
                 Sign in
               </Button>
               <div className="text-center">
-                <Link href={`/forgot-password?email=${encodeURIComponent(email)}`} className="text-[13px] text-muted hover:text-foreground">
+                <Link href="/forgot-password" className="text-[13px] text-muted hover:text-foreground">
                   Forgot your password?
                 </Link>
               </div>

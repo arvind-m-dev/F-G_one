@@ -18,6 +18,8 @@ export interface AuthContext {
   /** Password accepted, second step still owed (only MFA verify and sign out are allowed). */
   mfaPending: boolean;
   mfaEnabled: boolean;
+  /** Signed in with a password an admin set; no permissions until they choose their own. */
+  mustChangePassword: boolean;
   /** Super Admin flag is set but authority is dormant until two-step verification is on. */
   superAdminNeedsMfa: boolean;
   /** Last time the user proved who they are (sign-in or re-authentication). */

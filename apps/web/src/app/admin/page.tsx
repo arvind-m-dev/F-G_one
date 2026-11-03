@@ -120,7 +120,7 @@ export default function AdminOverview() {
             {can(PERMISSIONS.EMPLOYEES_MANAGE) && (
               <Link href="/admin/employees?invite=1">
                 <Button>
-                  <UserPlus /> Invite employee
+                  <UserPlus /> Add employee
                 </Button>
               </Link>
             )}

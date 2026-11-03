@@ -55,9 +55,12 @@ export const createEmployeeSchema = z.object({
   designation: optionalText(80),
   employeeCode: optionalText(30),
   joinedAt: optionalDate,
-  sendInvite: z.boolean().default(true),
+  /** Temporary password set by the admin; the employee must change it at first sign-in. */
+  password: passwordSchema,
 });
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
+
+export const setEmployeePasswordSchema = z.object({ password: passwordSchema });
 
 export const updateEmployeeSchema = z.object({
   firstName: name.optional(),

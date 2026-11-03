@@ -115,7 +115,7 @@ function QuickActionsWidget({ actions }: WidgetProps) {
       </Button>
       {can(PERMISSIONS.EMPLOYEES_MANAGE) && (
         <Button variant="outline" onClick={() => router.push('/admin/employees?invite=1')}>
-          <UserPlus /> Invite employee
+          <UserPlus /> Add employee
         </Button>
       )}
       <Button variant="ghost" onClick={actions.search} className="hidden sm:inline-flex">

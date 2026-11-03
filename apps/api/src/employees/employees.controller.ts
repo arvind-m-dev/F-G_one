@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { createEmployeeSchema, listEmployeesQuerySchema, PERMISSIONS, updateEmployeeSchema } from '@fg/shared';
+import { createEmployeeSchema, listEmployeesQuerySchema, PERMISSIONS, setEmployeePasswordSchema, updateEmployeeSchema } from '@fg/shared';
 import { z } from 'zod';
 import { Auth, AuthContext, RequirePermissions, RequireRecentAuth } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
@@ -52,6 +52,15 @@ export class EmployeesController {
   @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
   invite(@Auth() auth: AuthContext, @Param('id') id: string) {
     return this.employees.issueInvitation(auth, id, true);
+  }
+
+  /** Sets a temporary password the admin hands over; the employee must change it at next sign-in. */
+  @Post(':id/password')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  @RequireRecentAuth()
+  setPassword(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(setEmployeePasswordSchema)) body: z.infer<typeof setEmployeePasswordSchema>) {
+    return this.employees.setPassword(auth, id, body.password);
   }
 
   /** Devices the employee is signed in on. */
