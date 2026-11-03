@@ -246,7 +246,57 @@ export default function SettingsPage() {
                 <Switch checked={s.attendance.breaksEnabled} onCheckedChange={(v) => patch('attendance', { breaksEnabled: v })} />
               </label>
             </div>
-            <p className="text-xs text-muted">Employees check in from Home or Attendance. Someone checking in after the start time plus the grace period is marked late.</p>
+            <div className="space-y-4 border-t pt-5">
+              <div>
+                <p className="text-sm font-medium">Checking in</p>
+                <p className="text-xs text-muted">What happens when someone opens FG One on a working day without having checked in.</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="When someone opens FG One" htmlFor="att-mode" hint={s.attendance.checkInMode === 'auto' ? 'Checks in from 2 hours before the workday starts until it ends. Not on days off or full-day leave.' : undefined}>
+                  <Select id="att-mode" value={s.attendance.checkInMode} onChange={(e) => patch('attendance', { checkInMode: e.target.value as OrganizationSettings['attendance']['checkInMode'] })}>
+                    <option value="manual">Do nothing (people check in themselves)</option>
+                    <option value="prompt">Show a reminder to check in</option>
+                    <option value="auto">Check them in automatically</option>
+                  </Select>
+                </Field>
+                {s.attendance.checkInMode === 'auto' && (
+                  <Field label="Location for automatic check-in" htmlFor="att-auto-loc">
+                    <Select id="att-auto-loc" value={s.attendance.autoCheckInLocation} onChange={(e) => patch('attendance', { autoCheckInLocation: e.target.value as OrganizationSettings['attendance']['autoCheckInLocation'] })}>
+                      {([['WFO', 'Office'], ['WFH', 'Home'], ['ON_DUTY', 'Client site']] as const)
+                        .filter(([k]) => s.attendance.allowedLocations.includes(k))
+                        .map(([k, label]) => (
+                          <option key={k} value={k}>{label}</option>
+                        ))}
+                    </Select>
+                  </Field>
+                )}
+              </div>
+              <label className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm">
+                <span>
+                  <span className="block font-medium">Allow checking in more than once a day</span>
+                  <span className="text-xs text-muted">For split shifts. Time between checking out and checking in again isn&apos;t counted as work.</span>
+                </span>
+                <Switch checked={s.attendance.multipleSessions} onCheckedChange={(v) => patch('attendance', { multipleSessions: v })} />
+              </label>
+            </div>
+            <div className="space-y-4 border-t pt-5">
+              <div>
+                <p className="text-sm font-medium">Automatic check-out</p>
+                <p className="text-xs text-muted">Closes shifts people forget to end. Set a rule to 0 to turn it off. If several rules are on, the first one reached applies. People are notified and can check in again or request a correction.</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Hours after the workday ends" htmlFor="att-ao-end" hint="Not used for shifts that start after the workday ends.">
+                  <Input id="att-ao-end" type="number" min={0} max={12} value={s.attendance.autoCheckOut.afterWorkdayEndHours} onChange={(e) => patch('attendance', { autoCheckOut: { ...s.attendance.autoCheckOut, afterWorkdayEndHours: Number(e.target.value) } })} />
+                </Field>
+                <Field label="Longest shift (hours)" htmlFor="att-ao-max" hint="Works for night shifts too.">
+                  <Input id="att-ao-max" type="number" min={0} max={24} value={s.attendance.autoCheckOut.maxShiftHours} onChange={(e) => patch('attendance', { autoCheckOut: { ...s.attendance.autoCheckOut, maxShiftHours: Number(e.target.value) } })} />
+                </Field>
+                <Field label="Minutes with no activity" htmlFor="att-ao-idle" hint="Only if people work inside FG One all day. Breaks don't count.">
+                  <Input id="att-ao-idle" type="number" min={0} max={480} value={s.attendance.autoCheckOut.idleMinutes} onChange={(e) => patch('attendance', { autoCheckOut: { ...s.attendance.autoCheckOut, idleMinutes: Number(e.target.value) } })} />
+                </Field>
+              </div>
+            </div>
+            <p className="text-xs text-muted">Employees check in from Home or Attendance. Someone checking in after the start time plus the grace period is marked late. Night shifts can check out after midnight; the shift counts for the day it started.</p>
           </Tabs.Content>
 
           <Tabs.Content value="leave" className="divide-y outline-none">
@@ -262,6 +312,9 @@ export default function SettingsPage() {
             </Row>
             <Row title="Require manager approval" description="When off, requests route straight to HR.">
               <Switch checked={s.leave.requireManagerApproval} onCheckedChange={(v) => patch('leave', { requireManagerApproval: v })} />
+            </Row>
+            <Row title="Count weekends and holidays inside a leave" description="Also called the sandwich rule. Friday to Monday then uses 4 days instead of 2. Days off at the very start or end are never counted.">
+              <Switch checked={s.leave.countDaysOffInside} onCheckedChange={(v) => patch('leave', { countDaysOffInside: v })} />
             </Row>
           </Tabs.Content>
 

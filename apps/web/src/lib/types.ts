@@ -148,15 +148,34 @@ export interface AttendanceRecord {
   checkOutAt: string | null;
   checkOutRemarks: string | null;
   late: boolean;
+  autoCheckedIn: boolean;
+  /** Set when the system closed the shift. */
+  autoCheckOutReason: 'workday_end' | 'max_shift' | 'idle' | null;
   state: 'working' | 'on_break' | 'checked_out';
-  breaks: { id: string; startAt: string; endAt: string | null }[];
+  /** BREAK = a break; AWAY = time between checking out and checking in again. */
+  breaks: { id: string; kind: 'BREAK' | 'AWAY'; startAt: string; endAt: string | null }[];
   breakMinutes: number;
+  awayMinutes: number;
   workedMinutes: number;
+  /** Worked on a weekly day off or a holiday (history, board and today only). */
+  dayOff?: boolean;
 }
 export interface AttendanceToday {
   date: string;
   isWorkingDay: boolean;
-  policy: { workdayStart: string; workdayEnd: string; graceMinutes: number; timezone: string; allowedLocations: ('WFO' | 'WFH' | 'ON_DUTY')[]; breaksEnabled: boolean };
+  /** On approved full-day leave today. */
+  onLeave: boolean;
+  policy: {
+    workdayStart: string;
+    workdayEnd: string;
+    graceMinutes: number;
+    timezone: string;
+    allowedLocations: ('WFO' | 'WFH' | 'ON_DUTY')[];
+    breaksEnabled: boolean;
+    multipleSessions: boolean;
+    checkInMode: 'manual' | 'prompt' | 'auto';
+    autoCheckOut: { afterWorkdayEndHours: number; maxShiftHours: number; idleMinutes: number };
+  };
   record: AttendanceRecord | null;
 }
 export interface AttendanceHistory {
@@ -164,12 +183,13 @@ export interface AttendanceHistory {
   to: string;
   timezone: string;
   items: AttendanceRecord[];
-  summary: { daysPresent: number; late: number; office: number; home: number; clientSite: number; workedMinutes: number };
+  summary: { daysPresent: number; late: number; autoCheckedOut: number; dayOffWorked: number; office: number; home: number; clientSite: number; workedMinutes: number };
 }
 export interface AttendanceBoard {
   date: string;
   timezone: string;
   isToday: boolean;
+  isWorkingDay: boolean;
   totals: { employees: number; checkedIn: number; office: number; home: number; clientSite: number; onBreak: number; checkedOut: number; notCheckedIn: number; late: number; onLeave: number };
   rows: { person: Person; record: AttendanceRecord | null; leave: { type: string; color: string; halfDay: boolean } | null }[];
 }

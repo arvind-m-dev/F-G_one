@@ -11,7 +11,7 @@ import {
   Megaphone,
   Building2,
   ChartNoAxesCombined,
-  ChevronsUpDown,
+  ChevronDown,
   House,
   KeyRound,
   LogOut,
@@ -35,15 +35,16 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { AttendanceAssist } from '@/components/attendance/attendance-assist';
 import { BrandMark } from '@/components/brand-mark';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { clearPersistedCache } from '@/components/providers';
 import { NotificationInbox } from '@/components/notifications/inbox';
 import { PresenceIcon } from '@/components/presence';
 import { StatusPicker } from '@/components/status-picker';
-import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Popover, PopoverContent, PopoverTrigger } from '@/components/ui/dropdown';
+import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger, Popover, PopoverAnchor, PopoverContent } from '@/components/ui/dropdown';
 import { Kbd, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api } from '@/lib/api';
@@ -153,23 +154,55 @@ function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: bo
   return collapsed ? <Tooltip content={item.label}>{link}</Tooltip> : link;
 }
 
-function Rail({ portal, collapsed, onToggle, onNavigate, onSearch }: { portal: Portal; collapsed: boolean; onToggle?: () => void; onNavigate?: () => void; onSearch: () => void }) {
-  const me = useSession();
-  const can = useCan();
-  const router = useRouter();
-  const qc = useQueryClient();
-  const groups = useNav(portal);
-  const { connected } = useRealtime();
+const iconBtn = 'relative grid size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]';
+
+function ThemeMenu() {
   const { theme, setTheme } = useTheme();
   const savePrefs = useUpdatePreferences();
-  const [statusOpen, setStatusOpen] = useState(false);
-  const live = useLivePerson({ ...me.user, online: true });
-  const isAdmin = ADMIN_PERMS.some((p) => can(p));
-
   const changeTheme = (t: 'light' | 'dark' | 'system') => {
     setTheme(t);
     void savePrefs({ theme: t });
   };
+  return (
+    <DropdownMenu>
+      <Tooltip content="Theme">
+        <DropdownTrigger asChild>
+          <button className={iconBtn} aria-label="Theme">
+            <Sun className="size-[17px] dark:hidden" strokeWidth={1.8} />
+            <Moon className="hidden size-[17px] dark:block" strokeWidth={1.8} />
+          </button>
+        </DropdownTrigger>
+      </Tooltip>
+      <DropdownContent align="end" className="min-w-40">
+        {(
+          [
+            ['light', Sun, 'Light'],
+            ['dark', Moon, 'Dark'],
+            ['system', Monitor, 'System'],
+          ] as const
+        ).map(([v, Icon, label]) => (
+          <DropdownItem key={v} onSelect={() => changeTheme(v)}>
+            <Icon /> {label}
+            {theme === v && <span className="ml-auto text-primary">●</span>}
+          </DropdownItem>
+        ))}
+      </DropdownContent>
+    </DropdownMenu>
+  );
+}
+
+/** Avatar menu: who you are, your status, profile, preferences, portal switch and sign out. */
+function UserMenu({ portal }: { portal: Portal }) {
+  const me = useSession();
+  const can = useCan();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const live = useLivePerson({ ...me.user, online: true });
+  const [statusOpen, setStatusOpen] = useState(false);
+  // "Set status" opens the status popover once the menu has finished closing, so focus return doesn't dismiss it.
+  const wantsStatus = useRef(false);
+  const isAdmin = ADMIN_PERMS.some((p) => can(p));
+
   const logout = async () => {
     try {
       await api('/auth/logout', { method: 'POST' });
@@ -182,82 +215,143 @@ function Rail({ portal, collapsed, onToggle, onNavigate, onSearch }: { portal: P
   };
 
   return (
-    <nav aria-label={portal === 'admin' ? 'Admin portal' : 'Workspace'} className="flex h-full flex-col px-2.5 py-3">
-      {/* Workspace switcher */}
+    <Popover open={statusOpen} onOpenChange={setStatusOpen}>
       <DropdownMenu>
-        <DropdownTrigger asChild>
-          <button className={cn('flex h-10 items-center gap-2.5 rounded-lg px-1.5 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/[0.05]', collapsed && 'justify-center px-0')} aria-label="Workspace menu">
-            <BrandMark name={me.organization.name} logoUrl={me.organization.logoUrl} size={28} />
-            {!collapsed && (
-              <>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] leading-tight font-semibold">{me.organization.name}</span>
-                  <span className="block truncate text-[11px] text-muted">{portal === 'admin' ? 'Admin portal' : 'FG One'}</span>
-                </span>
-                <ChevronsUpDown className="size-3.5 text-subtle" />
-              </>
-            )}
-          </button>
-        </DropdownTrigger>
-        <DropdownContent align="start" className="w-60">
-          <DropdownLabel>{me.organization.name}</DropdownLabel>
+        <PopoverAnchor asChild>
+          <DropdownTrigger asChild>
+            <button className="flex h-9 items-center gap-2 rounded-full p-0.5 transition hover:bg-black/[0.04] lg:pr-2 dark:hover:bg-white/[0.05]" aria-label="Your account">
+              <UserAvatar person={me.user} size="sm" />
+              <span className="hidden max-w-28 truncate text-[13px] font-medium lg:block">{me.user.firstName}</span>
+              <ChevronDown className="hidden size-3.5 text-subtle lg:block" />
+            </button>
+          </DropdownTrigger>
+        </PopoverAnchor>
+        <DropdownContent
+          align="end"
+          className="w-64"
+          onCloseAutoFocus={(e) => {
+            if (!wantsStatus.current) return;
+            e.preventDefault();
+            wantsStatus.current = false;
+            setStatusOpen(true);
+          }}
+        >
+          <div className="flex items-center gap-2.5 px-2.5 py-2">
+            <UserAvatar person={me.user} />
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold">{me.user.name}</p>
+              <p className="truncate text-xs text-muted">{me.user.email}</p>
+              <p className="mt-0.5 truncate text-xs text-muted">
+                Role: <span className="font-medium text-foreground">{me.user.role.name}</span>
+                {me.isSuperAdmin && <span className="text-primary"> · Super Admin</span>}
+              </p>
+            </div>
+          </div>
+          <DropdownItem onSelect={() => (wantsStatus.current = true)}>
+            <PresenceIcon presence={live.presence} />
+            <span className="truncate">{live.statusText || presenceMeta(live.presence).label}</span>
+            <span className="ml-auto text-xs text-subtle">Change</span>
+          </DropdownItem>
+          <DropdownSeparator />
+          <DropdownItem onSelect={() => router.push('/app/profile')}>
+            <UserRound /> My profile
+          </DropdownItem>
+          <DropdownItem onSelect={() => router.push('/app/settings')}>
+            <Settings /> Preferences
+          </DropdownItem>
           {portal === 'admin' ? (
             <DropdownItem onSelect={() => router.push('/app/home')}>
-              <ArrowLeftRight /> Switch to workspace
+              <ArrowLeftRight /> Back to workspace
             </DropdownItem>
           ) : (
             isAdmin && (
               <DropdownItem onSelect={() => router.push('/admin')}>
-                <ShieldCheck /> Open admin portal
+                <ShieldCheck /> Admin portal
               </DropdownItem>
             )
           )}
-          <DropdownItem onSelect={() => router.push('/app/settings')}>
-            <Settings /> Preferences
-          </DropdownItem>
           <DropdownSeparator />
           <DropdownItem danger onSelect={logout}>
             <LogOut /> Sign out
           </DropdownItem>
         </DropdownContent>
       </DropdownMenu>
+      <PopoverContent align="end">
+        <StatusPicker current={live} userId={me.user.id} onDone={() => setStatusOpen(false)} />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
-      {/* Search */}
+function NotificationsButton({ side }: { side?: 'right' | 'bottom' }) {
+  return (
+    <NotificationInbox
+      side={side}
+      trigger={(unread) => (
+        <button className={iconBtn} aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}>
+          <Bell className="size-[17px]" strokeWidth={1.8} />
+          {unread > 0 && <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white tabular-nums">{unread > 99 ? '99+' : unread}</span>}
+        </button>
+      )}
+    />
+  );
+}
+
+/** Desktop top bar: search, portal switch, notifications, theme and the account menu. */
+function TopBar({ portal, onSearch }: { portal: Portal; onSearch: () => void }) {
+  const can = useCan();
+  const isAdmin = ADMIN_PERMS.some((p) => can(p));
+  const switchLink = portal === 'admin' ? { href: '/app/home', label: 'Back to workspace', icon: ArrowLeftRight } : isAdmin ? { href: '/admin', label: 'Admin portal', icon: ShieldCheck } : null;
+  return (
+    <header className="hidden h-12 shrink-0 items-center gap-3 pl-1 md:flex">
       <button
         onClick={onSearch}
-        className={cn('mt-3 flex h-8 items-center gap-2 rounded-lg border border-black/[0.06] bg-canvas/70 px-2 text-[13px] text-subtle shadow-sm transition hover:text-muted dark:border-white/[0.06] dark:bg-white/[0.03]', collapsed && 'w-10 justify-center px-0')}
+        className="flex h-8 w-full max-w-sm items-center gap-2 rounded-lg border border-black/[0.06] bg-canvas/70 px-2.5 text-[13px] text-subtle shadow-sm transition hover:text-muted dark:border-white/[0.06] dark:bg-white/[0.03]"
         aria-label="Search (Ctrl+K)"
       >
         <Search className="size-4" />
-        {!collapsed && (
-          <>
-            <span>Search</span>
-            <span className="ml-auto flex gap-0.5">
-              <Kbd>⌘</Kbd>
-              <Kbd>K</Kbd>
-            </span>
-          </>
-        )}
+        <span>Search people, channels and pages</span>
+        <span className="ml-auto flex gap-0.5">
+          <Kbd>⌘</Kbd>
+          <Kbd>K</Kbd>
+        </span>
       </button>
-      <NotificationInbox
-        trigger={(unread) => {
-          const btn = (
-            <button
-              className={cn('relative mt-1 flex h-8 items-center gap-2.5 rounded-lg px-2 text-[13px] font-medium text-muted transition hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]', collapsed && 'w-10 justify-center px-0')}
-              aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}
-            >
-              <Bell className="size-[17px]" strokeWidth={1.8} />
-              {!collapsed && <span>Notifications</span>}
-              {unread > 0 && (
-                <span className={cn('grid place-items-center rounded-full bg-danger text-[10px] font-semibold text-white tabular-nums', collapsed ? 'absolute top-0.5 right-0.5 size-4' : 'ml-auto h-[18px] min-w-[18px] px-1')}>
-                  {unread > 99 ? '99+' : unread}
-                </span>
-              )}
-            </button>
-          );
-          return collapsed ? <span><Tooltip content="Notifications">{btn}</Tooltip></span> : btn;
-        }}
-      />
+      <div className="ml-auto flex items-center gap-1">
+        {switchLink && (
+          <Link href={switchLink.href} className="mr-1 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-muted transition hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]">
+            <switchLink.icon className="size-4" strokeWidth={1.8} />
+            <span className="hidden lg:inline">{switchLink.label}</span>
+          </Link>
+        )}
+        <Tooltip content="Notifications">
+          <span>
+            <NotificationsButton side="bottom" />
+          </span>
+        </Tooltip>
+        <ThemeMenu />
+        <div className="mx-1.5 h-5 w-px bg-border-strong" />
+        <UserMenu portal={portal} />
+      </div>
+    </header>
+  );
+}
+
+function Rail({ portal, collapsed, onToggle, onNavigate }: { portal: Portal; collapsed: boolean; onToggle?: () => void; onNavigate?: () => void }) {
+  const me = useSession();
+  const groups = useNav(portal);
+  const { connected } = useRealtime();
+
+  return (
+    <nav aria-label={portal === 'admin' ? 'Admin portal' : 'Workspace'} className="flex h-full flex-col px-2.5 py-3">
+      <Link href={portal === 'admin' ? '/admin' : '/app/home'} onClick={onNavigate} className={cn('flex h-10 items-center gap-2.5 rounded-lg px-1.5', collapsed && 'justify-center px-0')} aria-label={`${me.organization.name} home`}>
+        <BrandMark name={me.organization.name} logoUrl={me.organization.logoUrl} size={28} />
+        {!collapsed && (
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] leading-tight font-semibold">{me.organization.name}</span>
+            <span className="block truncate text-[11px] text-muted">{portal === 'admin' ? 'Admin portal' : 'FG One'}</span>
+          </span>
+        )}
+      </Link>
 
       <div className="scrollbar-thin mt-4 flex-1 space-y-5 overflow-x-hidden overflow-y-auto">
         {groups.map((g, i) => (
@@ -274,54 +368,8 @@ function Rail({ portal, collapsed, onToggle, onNavigate, onSearch }: { portal: P
       </div>
 
       <div className="space-y-0.5 pt-3">
-        {portal === 'app' && isAdmin && <NavLink item={{ href: '/admin', label: 'Admin portal', icon: ShieldCheck }} collapsed={collapsed} onNavigate={onNavigate} />}
-        {portal === 'admin' && <NavLink item={{ href: '/app/home', label: 'Back to workspace', icon: ArrowLeftRight }} collapsed={collapsed} onNavigate={onNavigate} />}
         <NavLink item={{ href: '/app/settings', label: 'Settings', icon: Settings }} collapsed={collapsed} onNavigate={onNavigate} />
-
-        <div className={cn('flex items-center gap-1 pt-2', collapsed && 'flex-col')}>
-          <Popover open={statusOpen} onOpenChange={setStatusOpen}>
-            <PopoverTrigger asChild>
-              <button className={cn('flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 text-left transition hover:bg-black/[0.04] dark:hover:bg-white/[0.05]', collapsed && 'flex-none')} aria-label="Set your status">
-                <UserAvatar person={me.user} size="sm" />
-                {!collapsed && (
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium">{me.user.firstName}</span>
-                    <span className="flex items-center gap-1 truncate text-[11px] text-muted">
-                      <PresenceIcon presence={live.presence} className="size-3" />
-                      <span className="truncate">{live.statusText || presenceMeta(live.presence).label}</span>
-                    </span>
-                  </span>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent side="top" align="start">
-              <StatusPicker current={live} userId={me.user.id} onDone={() => setStatusOpen(false)} />
-            </PopoverContent>
-          </Popover>
-          <DropdownMenu>
-            <DropdownTrigger asChild>
-              <button className="grid size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]" aria-label="Theme">
-                <Sun className="size-4 dark:hidden" />
-                <Moon className="hidden size-4 dark:block" />
-              </button>
-            </DropdownTrigger>
-            <DropdownContent align="start" side="top" className="min-w-40">
-              {(
-                [
-                  ['light', Sun, 'Light'],
-                  ['dark', Moon, 'Dark'],
-                  ['system', Monitor, 'System'],
-                ] as const
-              ).map(([v, Icon, label]) => (
-                <DropdownItem key={v} onSelect={() => changeTheme(v)}>
-                  <Icon /> {label}
-                  {theme === v && <span className="ml-auto text-primary">●</span>}
-                </DropdownItem>
-              ))}
-            </DropdownContent>
-          </DropdownMenu>
-        </div>
-        <div className={cn('flex items-center justify-between px-1 pt-1', collapsed && 'flex-col gap-2')}>
+        <div className={cn('flex items-center justify-between px-1 pt-2', collapsed && 'flex-col gap-2')}>
           <span className="flex items-center gap-1.5 text-[11px] text-subtle" title={connected ? 'Live updates connected' : 'Reconnecting…'}>
             <span className={cn('size-1.5 rounded-full', connected ? 'bg-emerald-500' : 'animate-pulse bg-amber-400')} />
             {!collapsed && (connected ? 'Live' : 'Reconnecting')}
@@ -389,7 +437,7 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
   return (
     <div className="flex h-dvh overflow-hidden bg-chrome">
       <motion.aside animate={{ width: collapsed || narrow ? 64 : 232 }} transition={{ type: 'spring', stiffness: 420, damping: 40 }} className="relative hidden shrink-0 md:block">
-        <Rail portal={portal} collapsed={collapsed || narrow} onToggle={narrow ? undefined : toggle} onSearch={() => setSearch(true)} />
+        <Rail portal={portal} collapsed={collapsed || narrow} onToggle={narrow ? undefined : toggle} />
       </motion.aside>
 
       <AnimatePresence>
@@ -397,33 +445,28 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
           <>
             <motion.div className="fixed inset-0 z-40 bg-[#0b0d11]/45 md:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDrawer(false)} />
             <motion.aside className="fixed inset-y-0 left-0 z-50 w-72 bg-chrome shadow-lg md:hidden" initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} transition={{ type: 'spring', stiffness: 400, damping: 38 }}>
-              <Rail portal={portal} collapsed={false} onNavigate={() => setDrawer(false)} onSearch={() => { setDrawer(false); setSearch(true); }} />
+              <Rail portal={portal} collapsed={false} onNavigate={() => setDrawer(false)} />
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      <div className="flex min-w-0 flex-1 flex-col md:py-2 md:pr-2">
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b bg-canvas px-3 md:hidden">
+      <div className="flex min-w-0 flex-1 flex-col md:pr-2 md:pb-2">
+        <TopBar portal={portal} onSearch={() => setSearch(true)} />
+        <div className="flex h-12 shrink-0 items-center gap-1 border-b bg-canvas px-3 md:hidden">
           <button onClick={() => setDrawer(true)} className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label="Open navigation">
             <Menu className="size-5" />
           </button>
           <BrandMark name={me.organization.name} logoUrl={me.organization.logoUrl} size={24} />
           <span className="truncate text-sm font-semibold">{portal === 'admin' ? 'Admin' : me.organization.name}</span>
           <span className="ml-auto" />
-          <NotificationInbox
-            side="bottom"
-            trigger={(unread) => (
-              <button className="relative grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}>
-                <Bell className="size-5" />
-                {unread > 0 && <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">{unread}</span>}
-              </button>
-            )}
-          />
-          <button onClick={() => setSearch(true)} className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label="Search">
-            <Search className="size-5" />
+          <button onClick={() => setSearch(true)} className={iconBtn} aria-label="Search">
+            <Search className="size-[17px]" strokeWidth={1.8} />
           </button>
+          <NotificationsButton side="bottom" />
+          <UserMenu portal={portal} />
         </div>
+        {portal === 'app' && <AttendanceAssist />}
         <main id="main" className={cn('relative min-h-0 flex-1 bg-canvas md:rounded-xl md:shadow-canvas', fullBleed ? 'overflow-hidden' : 'scrollbar-thin overflow-y-auto pb-16 md:pb-0')}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={fullBleed ? '/app/chat' : pathname} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16, ease: 'easeOut' }} className="h-full">

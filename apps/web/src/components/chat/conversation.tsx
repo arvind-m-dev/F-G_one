@@ -1,12 +1,13 @@
 'use client';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import { ArrowLeft, Crown, Hash, Info, LogOut, Lock, Pencil, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { ArrowLeft, Crown, Info, LogOut, Pencil, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { RT, type TypingEvent } from '@fg/shared';
+import { ChannelIcon } from '@/components/chat/channel-icon';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
 import { Field, Input, Textarea } from '@/components/ui/input';
@@ -261,7 +262,7 @@ function ChannelIntro({ channel }: { channel: ChannelDetails }) {
         </>
       ) : (
         <>
-          <span className="grid size-12 place-items-center rounded-xl border bg-surface text-primary shadow-sm">{channel.type === 'PRIVATE' ? <Lock className="size-6" /> : <Hash className="size-6" />}</span>
+          <ChannelIcon channel={channel} size="lg" className="shadow-sm" />
           <h3 className="mt-3 text-xl font-semibold tracking-tight">Welcome to #{channel.name}</h3>
           <p className="text-sm text-muted">{channel.description || 'This is the very beginning of the channel.'}</p>
         </>
@@ -469,7 +470,7 @@ function HeaderTitle({ channel }: { channel: ChannelDetails }) {
   return (
     <div className="min-w-0">
       <h1 className="flex items-center gap-1.5 text-[15px] font-semibold">
-        {channel.type === 'PRIVATE' ? <Lock className="size-4 text-muted" /> : <Hash className="size-4 text-muted" />}
+        <ChannelIcon channel={channel} size="sm" className="mr-1" />
         <span className="truncate">{channel.name}</span>
       </h1>
       {(channel.topic || channel.description) && <p className="truncate text-xs text-muted">{channel.topic || channel.description}</p>}

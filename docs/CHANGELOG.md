@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased: Attendance modes, top bar (branch `top-bar`)
+### Added
+- Desktop top bar with search, admin portal switch, notifications, theme and an account menu (name, email, role, status, profile, preferences, sign out). Sign out is no longer inside the logo menu; the phone header has the same account menu.
+- Attendance settings for admins: what happens on opening FG One without checking in (nothing, reminder, automatic check-in with a chosen location), checking in more than once a day, and automatic check-out by hours after the workday, longest shift or minutes with no activity.
+- Reminder banner "You haven't checked in today" (hide for today), automatic check-in toast, activity heartbeat for the idle rule.
+- "Auto check-in" and "Auto check-out" labels on the board and history; two new CSV columns.
+- Admin portal → Leave → **Record leave**: HR records leave someone already took (any date). It's approved straight away, audited (`leave.recorded`), and the employee and their manager are notified.
+- Leave calendar: thin lines instead of bars (top line in the person's colour, bottom line in the leave type's colour, dashed while pending). Days off are hatched, holidays tinted, off weekdays marked in the header; special working days show as normal days.
+- Attendance on a weekly day off or holiday is labelled "Day-off work" (history, board, today) and counted in the summary (`dayOffWorked`). The board doesn't count anyone as "not checked in" on a day off.
+- Leave requests show how the days add up: total days, working days, weekly days off and holidays by name. New leave setting "Count weekends and holidays inside a leave" (sandwich rule, off by default): days off between the first and last leave day count as leave; days off at the edges never do.
+- `pnpm db:seed-fill`: tops up a partly seeded demo organization (leave types and requests, announcements, a correction, notifications, fixed-date holidays) without deleting anything. Dry run unless `CONFIRM_FILL=<org slug>`.
+### Fixed
+- Night shifts: check-out and breaks after midnight now find the shift that started yesterday instead of failing with "Check in first".
+- The Home greeting, clock and day progress update on the minute and as soon as you return to the tab.
+- A leave request from someone nobody else can approve (the only admin, with no manager) is approved automatically instead of waiting forever.
+- Request time off shows a message instead of an empty list when no leave types are set up.
+
 ## Unreleased: Favicon and link previews (branch `brand-meta`)
 ### Added
 - New favicon (`icon.svg`, a drawn "F." mark on the brand gradient) and an iOS home-screen icon (`apple-icon`).

@@ -10,7 +10,7 @@ import { PrismaClient } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
 import { DEFAULT_ROLE_DEFINITIONS, DEFAULT_ROLE_GRANTS, organizationSettingsSchema } from '@fg/shared';
 
-const prisma = new PrismaClient();
+export const prisma = new PrismaClient();
 
 const DEPARTMENTS = [
   { name: 'Engineering', color: '#6366f1', description: 'Product engineering and platform' },
@@ -43,7 +43,7 @@ function relDate(daysFromToday: number, year: number) {
   return `${year}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
-const PEOPLE: Person[] = [
+export const PEOPLE: Person[] = [
   { first: 'Aarav', last: 'Mehta', email: 'admin@futuristglobal.com', role: 'administrator', superAdmin: true, dept: 'Management', title: 'Chief Technology Officer', joined: '2019-04-01', color: '#8b5cf6', presence: 'working', statusText: 'Planning Q1 roadmap' },
   { first: 'Priya', last: 'Sharma', email: 'hr@futuristglobal.com', role: 'hr_admin', dept: 'Human Resources', title: 'HR Manager', manager: 'admin@futuristglobal.com', joined: '2020-07-15', birthday: relDate(3, 1991), color: '#ec4899', presence: 'in_office' },
   { first: 'Rohan', last: 'Verma', email: 'manager@futuristglobal.com', role: 'manager', dept: 'Engineering', title: 'Engineering Manager', manager: 'admin@futuristglobal.com', joined: relDate(5, 2021), color: '#0ea5e9', presence: 'meeting', statusText: 'Sprint planning' },
@@ -282,26 +282,46 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     }
   }
 
+  await seedAnnouncements(org.id, users, depts);
+  await seedLeave(org.id, users);
+  await seedCorrection(org.id, users);
+  await seedNotifications(org.id, users);
+
+  return org;
+}
+
+type Ids = Record<string, { id: string }>;
+const DEMO_TZ = 'Asia/Kolkata';
+const ymdIn = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: DEMO_TZ }).format(d);
+
+/* The parts below are also used by seed-fill.ts to top up an existing demo organization. */
+
+export async function seedAnnouncements(organizationId: string, users: Ids, depts: Ids) {
   await prisma.announcement.createMany({
     data: [
-      { organizationId: org.id, authorId: users['admin@futuristglobal.com'].id, title: 'Welcome to FG One', category: 'NEW_FEATURE', body: 'FG One is our new unified workspace for chat, attendance, HR and daily updates. Explore the dashboard, set your status, and say hi in #general!', priority: 'IMPORTANT', pinned: true, publishedAt: new Date(Date.now() - 2 * 86400_000) },
-      { organizationId: org.id, authorId: users['hr@futuristglobal.com'].id, title: 'Health insurance top-up enrolment', category: 'POLICY', requireAck: true, body: 'Open enrolment for the optional family health insurance top-up closes on the 15th. Reach out to HR for plan details.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 86400_000) },
-      { organizationId: org.id, authorId: users['manager@futuristglobal.com'].id, departmentId: depts['Engineering'].id, title: 'Engineering: on-call rotation updated', category: 'TEAM_UPDATE', body: 'The on-call rotation for December is published. Please confirm your slots by Friday.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 6 * 3600_000) },
-      { organizationId: org.id, authorId: users['hr@futuristglobal.com'].id, title: 'Annual townhall — Friday 4 PM', category: 'EVENT', body: 'Join leadership for the annual townhall. Q&A submissions are open until Thursday evening.', priority: 'CRITICAL', publishedAt: new Date(Date.now() - 3 * 3600_000) },
+      { organizationId: organizationId, authorId: users['admin@futuristglobal.com'].id, title: 'Welcome to FG One', category: 'NEW_FEATURE', body: 'FG One is our new unified workspace for chat, attendance, HR and daily updates. Explore the dashboard, set your status, and say hi in #general!', priority: 'IMPORTANT', pinned: true, publishedAt: new Date(Date.now() - 2 * 86400_000) },
+      { organizationId: organizationId, authorId: users['hr@futuristglobal.com'].id, title: 'Health insurance top-up enrolment', category: 'POLICY', requireAck: true, body: 'Open enrolment for the optional family health insurance top-up closes on the 15th. Reach out to HR for plan details.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 86400_000) },
+      { organizationId: organizationId, authorId: users['manager@futuristglobal.com'].id, departmentId: depts['Engineering'].id, title: 'Engineering: on-call rotation updated', category: 'TEAM_UPDATE', body: 'The on-call rotation for December is published. Please confirm your slots by Friday.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 6 * 3600_000) },
+      { organizationId: organizationId, authorId: users['hr@futuristglobal.com'].id, title: 'Annual townhall — Friday 4 PM', category: 'EVENT', body: 'Join leadership for the annual townhall. Q&A submissions are open until Thursday evening.', priority: 'CRITICAL', publishedAt: new Date(Date.now() - 3 * 3600_000) },
     ],
   });
+}
 
-  // ── Leave types and requests ──
-  const lt = Object.fromEntries(
+export async function seedLeaveTypes(organizationId: string) {
+  return Object.fromEntries(
     await Promise.all(
       [
         { code: 'CL', name: 'Casual leave', annualAllowance: 12, color: '#0ea5e9' },
         { code: 'SL', name: 'Sick leave', annualAllowance: 8, color: '#f43f5e' },
         { code: 'EL', name: 'Earned leave', annualAllowance: 15, color: '#10b981' },
         { code: 'UL', name: 'Unpaid leave', annualAllowance: 0, color: '#94a3b8', paid: false },
-      ].map(async (t) => [t.code, await prisma.leaveType.create({ data: { ...t, organizationId: org.id } })]),
+      ].map(async (t) => [t.code, await prisma.leaveType.upsert({ where: { organizationId_code: { organizationId, code: t.code } }, update: {}, create: { ...t, organizationId } })]),
     ),
   );
+}
+
+export async function seedLeave(organizationId: string, users: Ids) {
+  const lt = await seedLeaveTypes(organizationId);
   const d = (offset: number) => ymdIn(new Date(Date.now() + offset * 86400_000));
   // Overlapping, multi-day leaves around today so the team calendar shows who is away together.
   const leaveRows: { email: string; type: string; from: number; to: number; status: 'APPROVED' | 'PENDING' | 'REJECTED'; reason: string }[] = [
@@ -332,27 +352,31 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     const approver = PEOPLE.find((p) => p.email === l.email)?.manager;
     await prisma.leaveRequest.create({
       data: {
-        organizationId: org.id, userId: u.id, typeId: lt[l.type].id, startDate: new Date(`${d(l.from)}T00:00:00Z`), endDate: new Date(`${d(l.to)}T00:00:00Z`), days: workingDaysBetween(l.from, l.to), reason: l.reason, status: l.status,
+        organizationId: organizationId, userId: u.id, typeId: lt[l.type].id, startDate: new Date(`${d(l.from)}T00:00:00Z`), endDate: new Date(`${d(l.to)}T00:00:00Z`), days: workingDaysBetween(l.from, l.to), reason: l.reason, status: l.status,
         approverId: l.status !== 'PENDING' && approver ? users[approver].id : null, decidedAt: l.status !== 'PENDING' ? new Date() : null,
       },
     });
   }
+}
+
+export async function seedCorrection(organizationId: string, users: Ids) {
+  const d = (offset: number) => ymdIn(new Date(Date.now() + offset * 86400_000));
   // A pending attendance correction for the engineering manager to review.
   await prisma.attendanceCorrection.create({
-    data: { organizationId: org.id, userId: users['vikram.rao@futuristglobal.com'].id, date: new Date(`${d(-1)}T00:00:00Z`), checkIn: '09:20', checkOut: '18:40', location: 'WFO', reason: 'Forgot to check out — was in the office until 6:40 PM' },
+    data: { organizationId: organizationId, userId: users['vikram.rao@futuristglobal.com'].id, date: new Date(`${d(-1)}T00:00:00Z`), checkIn: '09:20', checkOut: '18:40', location: 'WFO', reason: 'Forgot to check out — was in the office until 6:40 PM' },
   });
+}
 
+export async function seedNotifications(organizationId: string, users: Ids) {
   // A couple of unread notifications so the inbox isn't empty for the demo employee.
   const emp = users['employee@futuristglobal.com'].id;
-  const general = await prisma.channel.findFirstOrThrow({ where: { organizationId: org.id, name: 'general' } });
+  const general = await prisma.channel.findFirstOrThrow({ where: { organizationId: organizationId, name: 'general' } });
   await prisma.notification.createMany({
     data: [
-      { organizationId: org.id, userId: emp, actorId: users['manager@futuristglobal.com'].id, type: 'mention', title: 'Rohan Verma mentioned you in #general', body: 'Kudos to @Ananya for shipping the new onboarding flow ahead of schedule.', link: `/app/chat/${general.id}`, createdAt: new Date(Date.now() - 40 * 60_000) },
-      { organizationId: org.id, userId: emp, actorId: users['hr@futuristglobal.com'].id, type: 'announcement', title: 'Please read: Health insurance top-up enrolment', body: 'Open enrolment for the optional family health insurance top-up closes on the 15th.', link: '/app/announcements', createdAt: new Date(Date.now() - 86400_000) },
+      { organizationId: organizationId, userId: emp, actorId: users['manager@futuristglobal.com'].id, type: 'mention', title: 'Rohan Verma mentioned you in #general', body: 'Kudos to @Ananya for shipping the new onboarding flow ahead of schedule.', link: `/app/chat/${general.id}`, createdAt: new Date(Date.now() - 40 * 60_000) },
+      { organizationId: organizationId, userId: emp, actorId: users['hr@futuristglobal.com'].id, type: 'announcement', title: 'Please read: Health insurance top-up enrolment', body: 'Open enrolment for the optional family health insurance top-up closes on the 15th.', link: '/app/announcements', createdAt: new Date(Date.now() - 86400_000) },
     ],
   });
-
-  return org;
 }
 
 async function main() {
@@ -366,9 +390,11 @@ async function main() {
   console.log('  Sign in with admin@ / hr@ / manager@ / employee@futuristglobal.com using SEED_PASSWORD.');
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+if (require.main === module) {
+  main()
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

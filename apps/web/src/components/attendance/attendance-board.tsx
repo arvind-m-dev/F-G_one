@@ -174,6 +174,9 @@ export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
                       {Loc && <Loc className="size-3.5 text-primary" />}
                       {r ? LOCATION_LABEL[r.location] : <span className="hidden md:inline">—</span>}
                       {r?.late && <Badge tone="warning" className="ml-1">Late</Badge>}
+                      {r?.dayOff && <Badge tone="success" className="ml-1">Day-off work</Badge>}
+                      {r?.autoCheckedIn && <Badge className="ml-1">Auto check-in</Badge>}
+                      {r?.autoCheckOutReason && <Badge tone="warning" className="ml-1">Auto check-out</Badge>}
                     </span>
                     <span className="tabular-nums md:text-foreground">{r ? <><span className="md:hidden">In </span>{time(r.checkInAt)}</> : <span className="hidden md:inline">—</span>}</span>
                     <span className="tabular-nums md:text-foreground">{r?.checkOutAt ? <><span className="md:hidden">Out </span>{time(r.checkOutAt)}</> : <span className="hidden md:inline">—</span>}</span>

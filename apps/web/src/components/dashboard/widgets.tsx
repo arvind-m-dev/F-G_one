@@ -4,7 +4,7 @@ import { Award, Building2, Cake, Check, CircleCheckBig, Clock, X, CalendarDays, 
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { AttendancePanel, liveWorked } from '@/components/attendance/attendance-panel';
 import { PresenceIcon } from '@/components/presence';
@@ -18,6 +18,7 @@ import { channelLabel, fmtDuration, useAttendanceToday } from '@/lib/hooks';
 import { useLivePeople, useLivePerson } from '@/lib/presence-store';
 import { useCan, useClock, useModule, useSession, useUpdatePreferences } from '@/lib/session';
 import type { ChannelSummary, Person } from '@/lib/types';
+import { useNow } from '@/lib/use-now';
 import { cn, greeting, parseDateOnly, timeAgo } from '@/lib/utils';
 
 export interface DashboardData {
@@ -65,12 +66,7 @@ function WelcomeWidget({ data, actions }: WidgetProps) {
   const me = useSession();
   const { time } = useClock();
   const live = useLivePerson({ ...me.user, online: true });
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  const now = useNow();
   const nextHoliday = data.holidays[0];
   const summary = [
     data.unreadTotal ? `${data.unreadTotal} unread ${data.unreadTotal === 1 ? 'message' : 'messages'}` : 'no unread messages',
@@ -138,12 +134,7 @@ function ClockWidget({ data }: WidgetProps) {
   const { time } = useClock();
   const mod = useModule();
   const att = useAttendanceToday();
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  const now = useNow();
   const ws = minutesOf(data.workday.start);
   const we = minutesOf(data.workday.end);
   const cur = now ? minutesOfDate(now) : ws;
@@ -160,11 +151,13 @@ function ClockWidget({ data }: WidgetProps) {
   const pct = (m: number) => ((Math.min(Math.max(m, from), to) - from) / span) * 100;
 
   const nowMs = now?.getTime() ?? Date.now();
-  const breaks = (rec?.breaks ?? []).map((b) => {
+  const breaks = (rec?.breaks ?? []).filter((b) => b.kind === 'BREAK').map((b) => {
     const s = new Date(b.startAt);
     const e = b.endAt ? new Date(b.endAt) : new Date(nowMs);
     return { id: b.id, s: minutesOfDate(s), e: minutesOfDate(e), start: s, end: b.endAt ? e : null, mins: Math.max(0, Math.round((e.getTime() - s.getTime()) / 60_000)) };
   });
+  // Gaps between checking out and checking in again (split shifts).
+  const away = (rec?.breaks ?? []).filter((b) => b.kind === 'AWAY' && b.endAt).map((b) => ({ id: b.id, s: minutesOfDate(new Date(b.startAt)), e: minutesOfDate(new Date(b.endAt!)), start: b.startAt, end: b.endAt! }));
   const worked = rec ? liveWorked(rec, nowMs) : 0;
   const breakMins = breaks.reduce((n, b) => n + b.mins, 0);
   const left = Math.max(0, we - cur);
@@ -229,6 +222,11 @@ function ClockWidget({ data }: WidgetProps) {
                   transition={{ duration: 0.8, ease: 'easeOut' }}
                 />
               </Tooltip>
+              {away.map((b) => (
+                <Tooltip key={b.id} side="top" content={`Away · ${time(b.start)} – ${time(b.end)}`}>
+                  <span className="absolute inset-y-0 bg-surface-2" style={{ left: `${pct(b.s)}%`, width: `${Math.max(0.8, pct(b.e) - pct(b.s))}%` }} />
+                </Tooltip>
+              ))}
               {breaks.map((b) => (
                 <Tooltip key={b.id} side="top" content={`Break · ${time(b.start)} – ${b.end ? time(b.end) : 'now'} (${fmtDuration(b.mins)})`}>
                   <span

@@ -359,33 +359,47 @@ enum WorkLocation {
 }
 
 model AttendanceRecord {
-  id              String       @id @default(cuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Calendar day in the organization's time zone
-  date            DateTime     @db.Date
-  location        WorkLocation
-  remarks         String?
-  checkInAt       DateTime
-  checkOutAt      DateTime?
-  checkOutRemarks String?
+  date               DateTime     @db.Date
+  location           WorkLocation
+  remarks            String?
+  checkInAt          DateTime
+  checkOutAt         DateTime?
+  checkOutRemarks    String?
   /// Checked in after workday start + grace period
-  late            Boolean      @default(false)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  late               Boolean      @default(false)
+  /// Checked in by the portal (attendance.checkInMode = auto)
+  autoCheckedIn      Boolean      @default(false)
+  /// Set when the shift was closed automatically: workday_end | max_shift | idle
+  autoCheckOutReason String?
+  /// Last activity heartbeat from the portal, for the idle auto check-out rule
+  lastActiveAt       DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   breaks AttendanceBreak[]
 
   @@unique([userId, date])
   @@index([organizationId, date])
+  @@index([organizationId, checkOutAt])
+}
+
+enum AttendanceBreakKind {
+  BREAK
+  AWAY
 }
 
 model AttendanceBreak {
-  id       String           @id @default(cuid())
+  id       String              @id @default(cuid())
   recordId String
-  record   AttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  record   AttendanceRecord    @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  /// BREAK = a break; AWAY = time between check-out and checking in again the same day
+  kind     AttendanceBreakKind @default(BREAK)
   startAt  DateTime
   endAt    DateTime?
 

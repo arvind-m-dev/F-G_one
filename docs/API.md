@@ -99,10 +99,14 @@ Days use the organization's time zone (`settings.attendance.timezone`). Every tr
 
 | Method | Path | Rules |
 |---|---|---|
-| GET | `/attendance/today` | Policy plus today's record (`state`: working / on_break / checked_out) |
-| POST | `/attendance/check-in` | `{ location: WFO\|WFH\|ON_DUTY, remarks? }`. Allowed locations follow policy. Returns 409 if already checked in. |
+| GET | `/attendance/today` | Policy (incl. `multipleSessions`, `checkInMode`, `autoCheckOut`), `isWorkingDay` (holidays and special working days applied), `onLeave` (approved full-day leave) and the current record: an open shift started within 24h (may be yesterday's night shift), else today's record, else a night shift that ended today. Records include `autoCheckedIn`, `autoCheckOutReason` (`workday_end`/`max_shift`/`idle`), `breaks[].kind` (`BREAK`/`AWAY`), `breakMinutes`, `awayMinutes`, `workedMinutes`. |
+| POST | `/attendance/check-in` | `{ location: WFO\|WFH\|ON_DUTY, remarks? }`. Allowed locations follow policy. 409 if already checked in. After checking out today: 409, unless `multipleSessions` is on or the shift was closed automatically; then the day's record reopens and the gap is stored as an `AWAY` interval. |
+| POST | `/attendance/auto-check-in` | `{ checkedIn, today }`. Checks in with `autoCheckInLocation` only when `checkInMode` is `auto`, it's a working day, you're not on full-day leave, it's between 2 hours before workday start and workday end, and you haven't checked in today. |
+| POST | `/attendance/activity` | Activity heartbeat for the idle rule; updates `lastActiveAt` on the open shift at most once a minute. |
 | POST | `/attendance/break/start` · `/break/end` | Only while checked in. Returns 409 for a double start. |
-| POST | `/attendance/check-out` | `{ remarks? }`. Closes any open break. No re-check-in the same day. |
+| POST | `/attendance/check-out` | `{ remarks? }`. Closes any open break. |
+
+**Automatic check-out** (`settings.attendance.autoCheckOut`, each rule off at 0): `afterWorkdayEndHours` (only for sessions that started before the workday ended), `maxShiftHours`, `idleMinutes` (closes at the last activity; not while on a break). Rules measure the current session; the first to fire wins. It runs lazily on attendance reads and every 5 minutes, notifies the person, and marks the record.
 | GET | `/attendance/me?from&to` | History and summary (default last 30 days) |
 | GET | `/attendance/board?date` | `attendance.view_all` (everyone) or `attendance.view_team` (direct reports) |
 | GET | `/attendance/users/:id?from&to` | Same scope rules |
@@ -131,8 +135,9 @@ Working days follow `attendance.workingDays`. Public and company holidays don't 
 | GET | `/leave/types?include=all` | Active types (HR can include hidden ones) |
 | POST / PATCH | `/leave/types[/:id]` | `employees.manage` |
 | GET | `/leave/balances?userId=` | Yours. Managers can see reports, HR anyone. Pending days are held from the balance. |
-| POST | `/leave/preview` | `{ typeId, startDate, endDate, halfDay }` returns `{ days }` |
-| POST | `/leave/requests` | Validates the type, half-day policy, non-working ranges, overlap (409) and balance (400). Notifies the manager, or HR if there is none. |
+| POST | `/leave/preview` | `{ typeId, startDate, endDate, halfDay }` returns `{ days, calendarDays, workingDays, weekends, holidays[{date,name}], sandwichDays }`. `days` is what the request uses: working days, plus days off inside the range when `leave.countDaysOffInside` is on. |
+| POST | `/leave/requests` | Validates the type, half-day policy, non-working ranges, overlap (409) and balance (400). Notifies the manager, or HR if there is none. If nobody else can approve (the only admin, no manager), it is approved automatically. |
+| POST | `/leave/requests/record` | `employees.manage`. `{ userId, typeId, startDate, endDate, halfDay?, reason? }`: records leave for someone else, any date, same checks; created `APPROVED` with you as approver. 400 for yourself, 404 for other tenants. Notifies the employee (link `/app/leave`) and their manager (`/app/leave?tab=team`). Audited `leave.recorded`. |
 | GET | `/leave/requests?scope=mine\|approvals\|all&status=` | `approvals` covers your direct reports (`leave.approve`), or everyone for HR. `all` is HR only. |
 | POST | `/leave/requests/:id/decision` | `{ decision: APPROVED\|REJECTED, note? }`. Manager of the requester or HR, never yourself. 409 if already decided. Audited and notified. |
 | POST | `/leave/requests/:id/cancel` | Your own pending or future approved leave |

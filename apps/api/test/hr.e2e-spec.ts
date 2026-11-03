@@ -161,3 +161,74 @@ describe('attendance corrections', () => {
     expect(await prisma.auditLog.count({ where: { action: 'attendance.corrected' } })).toBe(1);
   });
 });
+
+describe('recording leave on someone’s behalf', () => {
+  const DAY = '2030-02-04'; // a Monday
+
+  it('HR records approved leave for an employee; they and their manager are notified; audited', async () => {
+    const emp = await login(app, 'employee@futuristglobal.com');
+    await emp.post('/api/leave/requests/record').send({ userId: fg.users.manager.id, typeId: casual.id, startDate: DAY, endDate: DAY }).expect(403);
+
+    const hr = await login(app, 'hr_admin@futuristglobal.com');
+    const r = await hr.post('/api/leave/requests/record').send({ userId: fg.users.employee.id, typeId: casual.id, startDate: DAY, endDate: DAY, reason: 'Forgot to apply' }).expect(201);
+    expect(r.body).toMatchObject({ status: 'APPROVED', days: 1 });
+    await hr.post('/api/leave/requests/record').send({ userId: fg.users.employee.id, typeId: casual.id, startDate: DAY, endDate: DAY }).expect(409);
+    await hr.post('/api/leave/requests/record').send({ userId: fg.users.hr_admin.id, typeId: casual.id, startDate: DAY, endDate: DAY }).expect(400);
+    await hr.post('/api/leave/requests/record').send({ userId: other.users.employee.id, typeId: casual.id, startDate: DAY, endDate: DAY }).expect(404);
+    expect(await prisma.auditLog.count({ where: { action: 'leave.recorded' } })).toBe(1);
+
+    await new Promise((res) => setTimeout(res, 300));
+    const mine = await emp.get('/api/notifications').expect(200);
+    expect(mine.body.items.some((n: { title: string; link: string }) => n.title.includes('recorded 1 day of Casual leave for you') && n.link === '/app/leave')).toBe(true);
+    const mgr = await login(app, 'manager@futuristglobal.com');
+    const theirs = await mgr.get('/api/notifications').expect(200);
+    expect(theirs.body.items.some((n: { title: string; link: string }) => n.title.includes('recorded Casual leave for') && n.link === '/app/leave?tab=team')).toBe(true);
+  });
+
+  it('approves leave for the only admin, who has nobody to approve it', async () => {
+    await prisma.user.updateMany({ where: { organizationId: other.org.id, id: { not: other.users.super_admin.id } }, data: { status: 'DEACTIVATED' } });
+    const t = await prisma.leaveType.create({ data: { organizationId: other.org.id, code: 'CL', name: 'Casual leave', annualAllowance: 4 } });
+    const admin = await login(app, 'super_admin@acme.test');
+    const r = await admin.post('/api/leave/requests').send({ typeId: t.id, startDate: DAY, endDate: DAY }).expect(201);
+    expect(r.body.status).toBe('APPROVED');
+  });
+});
+
+describe('working on a day off', () => {
+  it('flags attendance on a weekend or company holiday, and nobody is "not checked in" on a day off', async () => {
+    const at = (d: string) => new Date(`${d}T04:00:00Z`);
+    for (const d of [SAT, TUE, MON]) await prisma.attendanceRecord.create({ data: { organizationId: fg.org.id, userId: fg.users.employee.id, location: 'WFO', date: new Date(`${d}T00:00:00Z`), checkInAt: at(d), checkOutAt: new Date(at(d).getTime() + 4 * 3600_000) } });
+    const emp = await login(app, 'employee@futuristglobal.com');
+    const h = await emp.get(`/api/attendance/me?from=${MON}&to=${SUN}`).expect(200);
+    const byDate = Object.fromEntries(h.body.items.map((i: { date: string; dayOff: boolean }) => [i.date, i.dayOff]));
+    expect(byDate).toEqual({ [SAT]: true, [TUE]: true, [MON]: false }); // TUE is the company holiday created above
+    expect(h.body.summary.dayOffWorked).toBe(2);
+    const hr = await login(app, 'hr_admin@futuristglobal.com');
+    const b = await hr.get(`/api/attendance/board?date=${SUN}`).expect(200);
+    expect(b.body).toMatchObject({ isWorkingDay: false, totals: { notCheckedIn: 0 } });
+  });
+});
+
+describe('leave day breakdown', () => {
+  const NEXT_MON = '2030-01-14';
+  const setSandwich = async (on: boolean) => {
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: fg.org.id } });
+    const s = org.settings as { leave?: Record<string, unknown> };
+    await prisma.organization.update({ where: { id: fg.org.id }, data: { settings: { ...s, leave: { ...(s.leave ?? {}), countDaysOffInside: on } } } });
+  };
+
+  it('splits a range into leave days, weekly days off and holidays; the sandwich rule counts days off inside', async () => {
+    const emp = await login(app, 'employee@futuristglobal.com');
+    // Mon 7 → Mon 14: Tue is the company holiday, Sat/Sun are days off
+    const p = await emp.post('/api/leave/preview').send({ typeId: casual.id, startDate: MON, endDate: NEXT_MON }).expect(200);
+    expect(p.body).toEqual({ days: 5, calendarDays: 8, workingDays: 5, weekends: 2, holidays: [{ date: TUE, name: 'Founders day' }], sandwichDays: 0 });
+
+    await setSandwich(true);
+    const s = await emp.post('/api/leave/preview').send({ typeId: casual.id, startDate: MON, endDate: NEXT_MON }).expect(200);
+    expect(s.body).toMatchObject({ days: 8, sandwichDays: 3 });
+    // Days off at the edges are never counted: Sat → Mon is just Monday
+    const edge = await emp.post('/api/leave/preview').send({ typeId: casual.id, startDate: SAT, endDate: NEXT_MON }).expect(200);
+    expect(edge.body).toMatchObject({ days: 1, sandwichDays: 0 });
+    await setSandwich(false);
+  });
+});

@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 
 export const LOCATION_ICON = { WFO: Building2, WFH: House, ON_DUTY: MapPin } as const;
 export const LOCATION_LABEL = { WFO: 'Office', WFH: 'Home', ON_DUTY: 'Client site' } as const;
+export const AUTO_CHECKOUT_LABEL = { workday_end: 'the workday had ended', max_shift: 'the shift reached its maximum length', idle: 'there was no activity in FG One' } as const;
 
 /** Live minutes since a timestamp (re-renders every 30s). */
 function useNow(active: boolean) {
@@ -37,7 +38,7 @@ export function liveWorked(r: AttendanceRecord, now: number) {
   return Math.max(0, Math.round((end - new Date(r.checkInAt).getTime()) / 60_000 - brk));
 }
 
-/** Visual bar of the day: work segments vs breaks. */
+/** Visual bar of the day: work segments, breaks, and gaps between check-ins. */
 export function DayBar({ r, now }: { r: AttendanceRecord; now: number }) {
   const start = new Date(r.checkInAt).getTime();
   const end = r.checkOutAt ? new Date(r.checkOutAt).getTime() : now;
@@ -47,7 +48,7 @@ export function DayBar({ r, now }: { r: AttendanceRecord; now: number }) {
       {r.breaks.map((b) => {
         const bs = new Date(b.startAt).getTime();
         const be = b.endAt ? new Date(b.endAt).getTime() : now;
-        return <span key={b.id} className="absolute inset-y-0 bg-amber-400" style={{ left: `${((bs - start) / span) * 100}%`, width: `${Math.max(0.8, ((be - bs) / span) * 100)}%` }} />;
+        return <span key={b.id} className={cn('absolute inset-y-0', b.kind === 'AWAY' ? 'bg-surface-2' : 'bg-amber-400')} style={{ left: `${((bs - start) / span) * 100}%`, width: `${Math.max(0.8, ((be - bs) / span) * 100)}%` }} />;
       })}
     </div>
   );
@@ -88,21 +89,34 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
   const allowed = WORK_LOCATIONS.filter((l) => d.policy.allowedLocations.includes(l.key));
   const worked = r ? liveWorked(r, now) : 0;
   const LocIcon = r ? LOCATION_ICON[r.location] : null;
+  // A night shift that started yesterday and has ended: show it, but the next shift is a fresh check-in.
+  const prevShift = r?.state === 'checked_out' && r.date !== d.date;
+  // Checking in again reopens the day: allowed for split shifts, or after the system checked you out.
+  const canCheckInAgain = r?.state === 'checked_out' && !prevShift && (d.policy.multipleSessions || !!r.autoCheckOutReason);
+  const hasAway = !!r?.breaks.some((b) => b.kind === 'AWAY');
 
   const headline = !r
-    ? d.isWorkingDay
-      ? "You haven't checked in yet"
-      : 'Not a working day'
+    ? d.onLeave
+      ? "You're on leave today"
+      : d.isWorkingDay
+        ? "You haven't checked in yet"
+        : 'Not a working day'
     : r.state === 'working'
       ? `Working · ${fmtDuration(worked)}`
       : r.state === 'on_break'
         ? 'On a break'
-        : `Done for today · ${fmtDuration(r.workedMinutes)}`;
+        : `${prevShift ? 'Last shift done' : canCheckInAgain ? 'Checked out' : 'Done for today'} · ${fmtDuration(r.workedMinutes)}`;
   const sub = !r
-    ? `Working hours ${d.policy.workdayStart}–${d.policy.workdayEnd}. Choose where you're working, then check in.`
-    : r.state === 'checked_out'
-      ? `Checked in ${time(r.checkInAt)}, checked out ${time(r.checkOutAt!)}. Breaks ${fmtDuration(r.breakMinutes)}.`
-      : `Checked in at ${time(r.checkInAt)}${r.late ? ' (after the grace period)' : ''}. Breaks so far ${fmtDuration(r.breakMinutes)}.`;
+    ? !d.isWorkingDay && !d.onLeave
+      ? "Today is a day off. If you're working anyway, check in and it's recorded as day-off work."
+      : `Working hours ${d.policy.workdayStart}–${d.policy.workdayEnd}. Choose where you're working, then check in.`
+    : prevShift
+      ? `Your shift from ${time(r.checkInAt)} ended at ${time(r.checkOutAt!)}. Check in when your next shift starts.`
+      : r.state === 'checked_out'
+        ? r.autoCheckOutReason
+          ? `Checked out automatically at ${time(r.checkOutAt!)} because ${AUTO_CHECKOUT_LABEL[r.autoCheckOutReason]}. If you're still working, check in again.`
+          : `Checked in ${time(r.checkInAt)}, checked out ${time(r.checkOutAt!)}. Breaks ${fmtDuration(r.breakMinutes)}.`
+        : `Checked in at ${time(r.checkInAt)}${r.late ? ' (after the grace period)' : ''}. Breaks so far ${fmtDuration(r.breakMinutes)}.`;
 
   return (
     <div className={cn('rounded-xl border bg-surface', compact ? 'p-4' : 'p-5 sm:p-6')}>
@@ -132,6 +146,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
             <span className="flex items-center gap-3">
               <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-primary/80" /> Work</span>
               <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-amber-400" /> Break</span>
+              {hasAway && <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-surface-2 ring-1 ring-border-strong ring-inset" /> Away</span>}
             </span>
             <span>{r.checkOutAt ? time(r.checkOutAt) : 'now'}</span>
           </div>
@@ -140,7 +155,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={r?.state ?? 'none'} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="mt-4">
-          {!r && (
+          {(!r || prevShift) && (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Where are you working today?">
                 {allowed.map((l) => {
@@ -182,7 +197,12 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
               </Button>
             </div>
           )}
-          {r?.state === 'checked_out' && !compact && <p className="text-[13px] text-muted">See your history below. Talk to HR if something needs correcting.</p>}
+          {canCheckInAgain && (
+            <Button size="lg" className="w-full" loading={act.isPending} onClick={() => act.mutate({ path: 'check-in', body: { location: r!.location, remarks: null }, ok: 'Checked in again' })}>
+              <LogIn /> Check in again
+            </Button>
+          )}
+          {r?.state === 'checked_out' && !canCheckInAgain && !prevShift && !compact && <p className="text-[13px] text-muted">See your history below. Talk to HR if something needs correcting.</p>}
           {compact && (
             <Link href="/app/attendance" className="mt-3 inline-block text-xs text-muted hover:text-foreground">
               View attendance history
@@ -195,7 +215,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
         open={confirmOut}
         onOpenChange={setConfirmOut}
         title="Check out for today?"
-        description={`You've worked ${fmtDuration(worked)} today. You can't check in again until tomorrow.`}
+        description={`You've worked ${fmtDuration(worked)} today. ${d.policy.multipleSessions ? 'You can check in again later today.' : "You can't check in again until tomorrow."}`}
         confirmLabel="Check out"
         loading={act.isPending}
         onConfirm={() => act.mutate({ path: 'check-out', body: {}, ok: 'Checked out. Have a good evening.' })}

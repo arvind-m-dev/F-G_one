@@ -21,6 +21,20 @@ export class AttendanceController {
     return this.attendance.checkIn(auth, body.location, body.remarks);
   }
 
+  /** Called by the portal on open; checks in only when the company uses automatic check-in and today qualifies. */
+  @Post('auto-check-in')
+  @HttpCode(200)
+  autoCheckIn(@Auth() auth: AuthContext) {
+    return this.attendance.autoCheckIn(auth);
+  }
+
+  /** Activity heartbeat for the idle auto check-out rule. */
+  @Post('activity')
+  @HttpCode(200)
+  activity(@Auth() auth: AuthContext) {
+    return this.attendance.activity(auth);
+  }
+
   @Post('break/start')
   @HttpCode(200)
   startBreak(@Auth() auth: AuthContext) {

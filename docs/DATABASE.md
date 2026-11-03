@@ -38,8 +38,8 @@ Channel 1─* Message 1─* Message (thread replies), 1─* MessageReaction
 ## Added (features round)
 | Model | Purpose | Key fields / constraints |
 |---|---|---|
-| **AttendanceRecord** | One per user per organization-local day | unique `(userId, date)`, `location WFO/WFH/ON_DUTY`, `checkInAt`, `checkOutAt`, `late`, remarks |
-| **AttendanceBreak** | Breaks within a record | `startAt`, `endAt` (open while on a break) |
+| **AttendanceRecord** | One per user per organization-local day (the day the shift started) | unique `(userId, date)`, `location WFO/WFH/ON_DUTY`, `checkInAt`, `checkOutAt`, `late`, remarks, `autoCheckedIn`, `autoCheckOutReason` (`workday_end`/`max_shift`/`idle`, null if manual), `lastActiveAt` (idle rule); index `(organizationId, checkOutAt)` for the auto check-out sweep |
+| **AttendanceBreak** | Breaks and gaps within a record | `kind BREAK/AWAY` (AWAY = between checking out and checking in again the same day), `startAt`, `endAt` (open while on a break) |
 | **AnnouncementAck** | Read confirmations | PK `(announcementId, userId)` |
 | **Notification** | In-app inbox | `type`, `title`, `body`, `link`, `groupKey` + `count` (merged while unread), `readAt` |
 | Announcement (changed) | | adds `category`, `requireAck` |
@@ -48,6 +48,8 @@ Channel 1─* Message 1─* Message (thread replies), 1─* MessageReaction
 | **LeaveRequest** | Leave | `startDate`, `endDate`, `halfDay`, `days` (working days), `status PENDING/APPROVED/REJECTED/CANCELLED`, `approverId`, `decisionNote` |
 | **AttendanceCorrection** | Fix a day | `date`, `checkIn`/`checkOut` (local HH:MM), `location`, `reason`, `status`, `reviewerId` |
 | HolidayType (changed) | | adds `COMPANY`, `SPECIAL_WORKING_DAY` |
+
+Migration `20261104090000_attendance_modes` adds the auto check-in/out columns and `AttendanceBreak.kind` (existing breaks default to `BREAK`).
 
 Migration `…_attendance_announcements_notifications` also adds the new Home widgets to existing organizations' defaults.
 

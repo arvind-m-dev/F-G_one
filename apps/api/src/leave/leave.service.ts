@@ -1,10 +1,10 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { hasPermission, parseOrganizationSettings, PERMISSIONS, type LeaveRequestInput, type LeaveTypeInput } from '@fg/shared';
+import { hasPermission, parseOrganizationSettings, PERMISSIONS, type LeaveRequestInput, type RecordLeaveInput, type LeaveTypeInput } from '@fg/shared';
 import { AuditService } from '../audit/audit.service';
 import { approversFor, assertCanDecide, deciderScope, hrUsers } from '../common/approvals';
 import type { AuthContext } from '../common/auth-context';
-import { localDate, toDbDate } from '../common/tz';
+import { addDays, localDate, toDbDate } from '../common/tz';
 import { countWorkingDays } from '../common/workdays';
 import { personSelect, toPerson } from '../employees/employee.mapper';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -111,35 +111,71 @@ export class LeaveService {
 
   // ───── requests ─────
   async preview(auth: AuthContext, body: LeaveRequestInput) {
-    const { days } = await countWorkingDays(this.prisma, auth.organizationId, body.startDate, body.endDate);
-    return { days: body.halfDay !== 'NONE' ? (days ? 0.5 : 0) : days };
+    return this.breakdown(auth.organizationId, body, await this.settings(auth.organizationId));
   }
 
-  async create(auth: AuthContext, body: LeaveRequestInput) {
+  /**
+   * How a date range splits into leave days, weekly days off and holidays.
+   * With `countDaysOffInside` (sandwich rule), days off between the first and last leave day also count as leave.
+   */
+  private async breakdown(organizationId: string, body: LeaveRequestInput, s: Awaited<ReturnType<LeaveService['settings']>>) {
+    const { dates } = await countWorkingDays(this.prisma, organizationId, body.startDate, body.endDate);
+    const working = new Set(dates);
+    const offHolidays = await this.prisma.holiday.findMany({
+      where: { organizationId, type: { in: ['MANDATORY', 'COMPANY'] }, date: { gte: toDbDate(body.startDate), lte: toDbDate(body.endDate) } },
+      orderBy: { date: 'asc' },
+    });
+    const holidayName = new Map(offHolidays.map((h) => [ymd(h.date), h.name]));
+    const holidays: { date: string; name: string }[] = [];
+    let calendarDays = 0;
+    let weekends = 0;
+    let sandwichDays = 0;
+    for (let d = body.startDate; d <= body.endDate && calendarDays < 400; d = addDays(d, 1)) {
+      calendarDays++;
+      if (working.has(d)) continue;
+      if (holidayName.has(d)) holidays.push({ date: d, name: holidayName.get(d)! });
+      else weekends++;
+      if (s.leave.countDaysOffInside && body.halfDay === 'NONE' && dates.length > 1 && d > dates[0]! && d < dates[dates.length - 1]!) sandwichDays++;
+    }
+    const days = body.halfDay !== 'NONE' ? (dates.length ? 0.5 : 0) : dates.length + sandwichDays;
+    return { days, calendarDays, workingDays: dates.length, weekends, holidays, sandwichDays };
+  }
+
+  /** Type, half-day, working-day, overlap and balance checks shared by requesting and recording leave. */
+  private async validateLeave(auth: AuthContext, userId: string, body: LeaveRequestInput, self: boolean) {
     const s = await this.settings(auth.organizationId);
     const type = await this.prisma.leaveType.findFirst({ where: { id: body.typeId, organizationId: auth.organizationId, active: true } });
     if (!type) throw new BadRequestException('Choose a valid leave type');
     if (body.halfDay !== 'NONE' && !s.leave.allowHalfDay) throw new BadRequestException('Half-day leave is not enabled');
-    const { days: working } = await countWorkingDays(this.prisma, auth.organizationId, body.startDate, body.endDate);
-    const days = body.halfDay !== 'NONE' ? (working ? 0.5 : 0) : working;
+    const { days } = await this.breakdown(auth.organizationId, body, s);
     if (!days) throw new BadRequestException('Those dates are weekends or holidays — no leave needed');
 
     const overlap = await this.prisma.leaveRequest.findFirst({
-      where: { userId: auth.userId, status: { in: ['PENDING', 'APPROVED'] }, startDate: { lte: toDbDate(body.endDate) }, endDate: { gte: toDbDate(body.startDate) } },
+      where: { userId, status: { in: ['PENDING', 'APPROVED'] }, startDate: { lte: toDbDate(body.endDate) }, endDate: { gte: toDbDate(body.startDate) } },
     });
-    if (overlap) throw new ConflictException('You already have leave requested for some of these dates');
+    if (overlap) throw new ConflictException(self ? 'You already have leave requested for some of these dates' : 'They already have leave on some of these dates');
 
     if (type.annualAllowance > 0) {
-      const bal = (await this.balances(auth, auth.userId)).items.find((b) => b.type.id === type.id);
+      const bal = (await this.balances(auth, userId)).items.find((b) => b.type.id === type.id);
       if (bal && bal.remaining !== null && days > bal.remaining) throw new BadRequestException(`Not enough ${type.name} balance: ${bal.remaining} day(s) left, ${days} requested`);
     }
+    return { s, type, days };
+  }
 
+  async create(auth: AuthContext, body: LeaveRequestInput) {
+    const { s, type, days } = await this.validateLeave(auth, auth.userId, body, true);
+    const approvers = s.leave.requireManagerApproval ? await approversFor(this.prisma, auth.organizationId, auth.userId) : await hrUsers(this.prisma, auth.organizationId, auth.userId);
+    // Nobody else can approve (e.g. the only admin, with no manager): approve it so it doesn't wait forever.
+    const selfApproved = approvers.length === 0;
     const r = await this.prisma.leaveRequest.create({
-      data: { organizationId: auth.organizationId, userId: auth.userId, typeId: type.id, startDate: toDbDate(body.startDate), endDate: toDbDate(body.endDate), halfDay: body.halfDay, days, reason: body.reason || null },
+      data: {
+        organizationId: auth.organizationId, userId: auth.userId, typeId: type.id, startDate: toDbDate(body.startDate), endDate: toDbDate(body.endDate), halfDay: body.halfDay, days, reason: body.reason || null,
+        ...(selfApproved ? { status: 'APPROVED' as const, decidedAt: new Date(), decisionNote: 'Approved automatically: nobody else can approve this request' } : {}),
+      },
       include: requestInclude,
     });
-    await this.audit.log(auth, 'leave.requested', 'leave_request', r.id, { type: type.code, days });
-    const approvers = s.leave.requireManagerApproval ? await approversFor(this.prisma, auth.organizationId, auth.userId) : await hrUsers(this.prisma, auth.organizationId, auth.userId);
+    await this.audit.log(auth, 'leave.requested', 'leave_request', r.id, { type: type.code, days, selfApproved });
+    if (selfApproved) return this.serialize(r, true);
     void this.notifications.notify({
       organizationId: auth.organizationId,
       userIds: approvers,
@@ -149,6 +185,44 @@ export class LeaveService {
       body: `${body.startDate}${body.endDate !== body.startDate ? ` to ${body.endDate}` : ''}${r.reason ? ` · ${r.reason}` : ''}`,
       link: '/app/approvals',
     });
+    return this.serialize(r, true);
+  }
+
+  /** HR records leave for someone (e.g. they forgot to apply). Approved straight away, audited, and the person is told. */
+  async record(auth: AuthContext, body: RecordLeaveInput) {
+    if (body.userId === auth.userId) throw new BadRequestException('Use Request time off for your own leave');
+    const person = await this.prisma.user.findFirst({ where: { id: body.userId, organizationId: auth.organizationId }, select: { id: true, managerId: true } });
+    if (!person) throw new NotFoundException('Employee not found');
+    const { type, days } = await this.validateLeave(auth, person.id, body, false);
+    const actor = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { firstName: true, lastName: true } });
+    const r = await this.prisma.leaveRequest.create({
+      data: {
+        organizationId: auth.organizationId, userId: person.id, typeId: type.id, startDate: toDbDate(body.startDate), endDate: toDbDate(body.endDate), halfDay: body.halfDay, days, reason: body.reason || null,
+        status: 'APPROVED', approverId: auth.userId, decidedAt: new Date(), decisionNote: `Recorded by ${actor.firstName} ${actor.lastName}`,
+      },
+      include: requestInclude,
+    });
+    await this.audit.log(auth, 'leave.recorded', 'leave_request', r.id, { userId: person.id, type: type.code, days });
+    const dates = `${body.startDate}${body.endDate !== body.startDate ? ` to ${body.endDate}` : ''}`;
+    void this.notifications.notify({
+      organizationId: auth.organizationId,
+      userIds: [person.id],
+      actorId: auth.userId,
+      type: 'leave',
+      title: `${actor.firstName} ${actor.lastName} recorded ${days} day${days === 1 ? '' : 's'} of ${type.name} for you`,
+      body: dates,
+      link: '/app/leave',
+    });
+    if (person.managerId && person.managerId !== auth.userId)
+      void this.notifications.notify({
+        organizationId: auth.organizationId,
+        userIds: [person.managerId],
+        actorId: auth.userId,
+        type: 'leave',
+        title: `${actor.firstName} ${actor.lastName} recorded ${type.name} for ${r.user.firstName} ${r.user.lastName}`,
+        body: dates,
+        link: '/app/leave?tab=team',
+      });
     return this.serialize(r, true);
   }
 
