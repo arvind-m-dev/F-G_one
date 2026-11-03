@@ -16,7 +16,7 @@ import { useCan, useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
 /** Modules that ship in the current milestone; the rest can be pre-configured now. */
-const LIVE_MODULES = new Set(['chat', 'holidays', 'announcements', 'recognition']);
+const LIVE_MODULES = new Set(['chat', 'holidays', 'announcements', 'recognition', 'attendance']);
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -230,7 +230,23 @@ export default function SettingsPage() {
                 })}
               </div>
             </div>
-            <p className="text-xs text-muted">Working hours already drive the dashboard clock. Check-in/check-out uses these rules from the Attendance milestone.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Time zone for attendance" htmlFor="att-tz" hint="Defines the attendance day and when someone counts as late.">
+                <Select id="att-tz" value={s.attendance.timezone} onChange={(e) => patch('attendance', { timezone: e.target.value })}>
+                  {[...new Set([s.attendance.timezone, 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles', 'Australia/Sydney', 'UTC'])].map((tz) => (
+                    <option key={tz}>{tz}</option>
+                  ))}
+                </Select>
+              </Field>
+              <label className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm sm:mt-6">
+                <span>
+                  <span className="block font-medium">Track breaks</span>
+                  <span className="text-xs text-muted">Show Start/End break buttons.</span>
+                </span>
+                <Switch checked={s.attendance.breaksEnabled} onCheckedChange={(v) => patch('attendance', { breaksEnabled: v })} />
+              </label>
+            </div>
+            <p className="text-xs text-muted">Employees check in from Home or Attendance. Someone checking in after the start time plus the grace period is marked late.</p>
           </Tabs.Content>
 
           <Tabs.Content value="leave" className="divide-y outline-none">

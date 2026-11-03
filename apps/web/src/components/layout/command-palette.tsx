@@ -2,7 +2,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { Hash, House, Lock, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, UserCircle2, Users } from 'lucide-react';
+import { Clock, Hash, House, LogIn, Megaphone, Lock, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, UserCircle2, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -139,6 +139,15 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   </Command.Item>
                   <Command.Item onSelect={() => go('/app/people')} className={itemCls}>
                     <Users /> Directory
+                  </Command.Item>
+                  <Command.Item onSelect={() => go('/app/attendance')} className={itemCls}>
+                    <LogIn /> Check in or out
+                  </Command.Item>
+                  <Command.Item onSelect={() => go('/app/attendance?range=30')} className={itemCls}>
+                    <Clock /> My attendance history
+                  </Command.Item>
+                  <Command.Item onSelect={() => go('/app/announcements')} className={itemCls}>
+                    <Megaphone /> Announcements
                   </Command.Item>
                   <Command.Item onSelect={() => go('/app/profile')} className={itemCls}>
                     <UserCircle2 /> My profile

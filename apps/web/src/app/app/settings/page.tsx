@@ -150,6 +150,26 @@ export default function SettingsPage() {
         </Row>
       </Section>
 
+      <section id="notifications" className="mb-10 scroll-mt-6">
+        <h2 className="mb-1 text-[13px] font-semibold text-muted">Notifications</h2>
+        <div className="divide-y border-y">
+          {([
+            ['dm', 'Direct messages', 'When someone messages you directly. Several messages in one chat are grouped.'],
+            ['mentions', 'Mentions', 'When someone writes @your-name in a channel.'],
+            ['threads', 'Replies to your messages', 'When someone replies to you in a thread.'],
+            ['announcements', 'Announcements', 'When a new announcement is published for you.'],
+          ] as const).map(([k, title, description]) => (
+            <Row key={k} title={title} description={description}>
+              <Switch
+                checked={p.notifications?.[k] !== false}
+                onCheckedChange={(v) => set({ notifications: { ...p.notifications, [k]: v } })}
+                aria-label={title}
+              />
+            </Row>
+          ))}
+        </div>
+      </section>
+
       <Section title="Date & time">
         <Row title="Time format">
           <Segmented
@@ -179,7 +199,13 @@ export default function SettingsPage() {
           </Link>
         </Row>
       </Section>
-      <p className="text-xs text-subtle">Notification and link-preview preferences arrive with those features.</p>
+      <Section title="Help">
+        <Row title="Getting started checklist" description="Show the step-by-step checklist on Home again.">
+          <button onClick={() => set({ onboardingDismissed: false })} className="text-sm font-medium text-primary hover:underline">
+            Show on Home
+          </button>
+        </Row>
+      </Section>
     </div>
   );
 }

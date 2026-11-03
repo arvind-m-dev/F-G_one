@@ -17,6 +17,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { employeeSelect, toEmployee } from '../employees/employee.mapper';
 import { AuthService, ClientMeta } from './auth.service';
 
+/** Sign-in attempts per minute per client IP (raise only for local end-to-end test runs). */
+const LOGIN_LIMIT = Number(process.env.LOGIN_RATE_LIMIT_PER_MIN ?? 10) || 10;
+
 const meta = (req: Request): ClientMeta => ({ ip: req.ip, userAgent: req.headers['user-agent'] });
 
 function setSessionCookie(res: Response, token: string, expiresAt: Date) {
@@ -39,7 +42,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: LOGIN_LIMIT, ttl: 60_000 } })
   async login(@Body(new ZodPipe(loginSchema)) body: z.infer<typeof loginSchema>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const { token, expiresAt } = await this.auth.login(body.email, body.password, meta(req));
     setSessionCookie(res, token, expiresAt);

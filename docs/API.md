@@ -56,6 +56,38 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 | GET | `/audit-logs?q&entityType&page` | `audit.read` |
 | 🌐 GET | `/health` | DB connectivity |
 
+## Attendance
+Days use the organization's time zone (`settings.attendance.timezone`). Every transition is validated on the server.
+
+| Method | Path | Rules |
+|---|---|---|
+| GET | `/attendance/today` | Policy plus today's record (`state`: working / on_break / checked_out) |
+| POST | `/attendance/check-in` | `{ location: WFO\|WFH\|ON_DUTY, remarks? }`. Allowed locations follow policy. Returns 409 if already checked in. |
+| POST | `/attendance/break/start` · `/break/end` | Only while checked in. Returns 409 for a double start. |
+| POST | `/attendance/check-out` | `{ remarks? }`. Closes any open break. No re-check-in the same day. |
+| GET | `/attendance/me?from&to` | History and summary (default last 30 days) |
+| GET | `/attendance/board?date` | `attendance.view_all` (everyone) or `attendance.view_team` (direct reports) |
+| GET | `/attendance/users/:id?from&to` | Same scope rules |
+| GET | `/attendance/export?from&to` | CSV download. Formula-injection safe. Audited. |
+
+## Announcements
+| Method | Path | Rules |
+|---|---|---|
+| GET | `/announcements?category&q&include` | Company-wide plus your department. Managers can pass `include=all`, which adds expired ones. |
+| GET | `/announcements/:id` | Includes `acknowledgedAt`, `ackCount`, `audience` |
+| POST | `/announcements/:id/ack` | Idempotent |
+| GET | `/announcements/:id/acks` | `announcements.manage`: confirmed and pending lists |
+| POST / PATCH / DELETE | `/announcements[/:id]` | `announcements.manage`. Publishing notifies the audience. Audited. |
+
+## Notifications
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/notifications?filter=all\|unread\|mentions` | Includes `unread` total |
+| GET | `/notifications/unread-count` | |
+| POST | `/notifications/read` | `{ ids? , all? }`. Only your own. |
+
+Created for DMs (grouped per conversation while unread), `@firstname` mentions of channel members, thread replies to the original author, and announcements. Each type can be turned off in `preferences.notifications`.
+
 ## Chat
 | Method | Path | Rules |
 |---|---|---|
@@ -72,6 +104,7 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 | GET | `/channels/:id/messages?before&limit&parentId` | Cursor pagination (newest first per page) |
 | POST | `/channels/:id/messages` | `{ body, parentId?, clientId? }`. Members only. |
 | POST | `/channels/:id/read` | Marks the channel read |
+| GET | `/messages/:id` | Members only (used to reopen a thread from a link) |
 | PATCH | `/messages/:id` | Author only |
 | DELETE | `/messages/:id` | Author or channel admin (audited). Soft delete. |
 | POST | `/messages/:id/reactions` | `{ emoji }` toggle |
@@ -86,6 +119,9 @@ The session cookie is authenticated at handshake. The server assigns rooms: `org
 | `message:new` / `message:updated` | `ChatMessage` |
 | `channel:updated` / `channel:removed` | `{ channelId }` |
 | `typing` | `{ channelId, userId, name, typing }` |
+| `notification:new` | `{ id, type, title, body, link }`, to that user only |
+| `attendance:changed` | `{ userId }` |
+| `announcements:changed` | `{}` |
 
 | Event (client → server) | Payload |
 |---|---|

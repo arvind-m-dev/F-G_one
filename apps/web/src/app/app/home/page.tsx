@@ -17,6 +17,7 @@ import { Skeleton, Switch } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
 import { useLivePerson } from '@/lib/presence-store';
 import { useSession, useUpdatePreferences } from '@/lib/session';
+import { usePageTitle } from '@/lib/use-title';
 import { cn } from '@/lib/utils';
 
 function SortableRow({ id, visible, onToggle }: { id: WidgetKey; visible: boolean; onToggle: (v: boolean) => void }) {
@@ -93,6 +94,7 @@ function Home() {
   const [newMsg, setNewMsg] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const live = useLivePerson({ ...me.user, online: true });
+  usePageTitle('Home', dash.data?.unreadTotal ?? 0);
 
   const allowedKey = me.organization.settings.dashboard.defaultWidgets.join(',');
   const personalKey = me.organization.settings.dashboard.allowPersonalLayout ? me.preferences.dashboardWidgets?.join(',') : undefined;
@@ -119,7 +121,7 @@ function Home() {
     <div className="relative min-h-full">
       <div className="bg-aurora pointer-events-none absolute inset-x-0 top-0 h-72" />
       <div className="relative mx-auto max-w-[1180px] px-6 pt-10 pb-16 sm:px-10">
-        {dash.isLoading ? (
+        {dash.isPending ? (
           <div className="space-y-8">
             <Skeleton className="h-4 w-48" />
             <Skeleton className="h-10 w-96 max-w-full" />

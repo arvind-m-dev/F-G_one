@@ -3,7 +3,7 @@ import { PageHeader as CanvasHeader } from '@/components/shell/page';
 
 /** Admin pages share the canvas header with an "Admin" eyebrow. */
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: React.ReactNode }) {
-  return <CanvasHeader eyebrow="Admin portal" title={title} description={description} actions={actions} className="px-0 pt-0 sm:px-0" />;
+  return <CanvasHeader breadcrumbs={[{ label: 'Admin portal', href: '/admin' }, { label: title }]} documentTitle={`${title} · Admin`} title={title} description={description} actions={actions} className="px-0 pt-0 sm:px-0" />;
 }
 
 export function Forbidden() {

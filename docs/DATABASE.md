@@ -35,11 +35,22 @@ Channel 1─* Message 1─* Message (thread replies), 1─* MessageReaction
 | **Message** | Chat message | `parentId` (threads), `editedAt`, `deletedAt`; index `(channelId, createdAt)` |
 | **MessageReaction** | Emoji reactions | PK `(messageId, userId, emoji)` |
 
+## Added (features round)
+| Model | Purpose | Key fields / constraints |
+|---|---|---|
+| **AttendanceRecord** | One per user per organization-local day | unique `(userId, date)`, `location WFO/WFH/ON_DUTY`, `checkInAt`, `checkOutAt`, `late`, remarks |
+| **AttendanceBreak** | Breaks within a record | `startAt`, `endAt` (open while on a break) |
+| **AnnouncementAck** | Read confirmations | PK `(announcementId, userId)` |
+| **Notification** | In-app inbox | `type`, `title`, `body`, `link`, `groupKey` + `count` (merged while unread), `readAt` |
+| Announcement (changed) | | adds `category`, `requireAck` |
+
+Migration `…_attendance_announcements_notifications` also adds the new Home widgets to existing organizations' defaults.
+
 ## Planned models (added by later milestones, no changes to existing tables)
 
 | Milestone | Models |
 |---|---|
-| M2 Attendance | `AttendanceRecord(orgId, userId, date, checkInAt, checkOutAt, location WFO/WFH/ON_DUTY, remarks, source)` unique `(userId, date)`; `AttendanceCorrection(status, reason, reviewerId)`; `DailyUpdate(orgId, userId, date, completed, inProgress, blockers, tomorrow, notes)` unique `(userId, date)`; `DailyUpdateComment` |
+| M2 Attendance | ~~AttendanceRecord~~ (done); `AttendanceCorrection(status, reason, reviewerId)`; `DailyUpdate(orgId, userId, date, completed, inProgress, blockers, tomorrow, notes)` unique `(userId, date)`; `DailyUpdateComment` |
 | M3 Files & notifications | `FileObject(orgId, ownerId, storageKey, mime, size, sha256, scanStatus)`; `MessageAttachment`; `PinnedMessage`; `Notification(orgId, userId, type, payload, readAt)`; `NotificationPreference`; `SavedItem` |
 | M4 HRMS | `LeaveType`, `LeavePolicy`, `LeaveBalance(userId, typeId, year, allotted, used)`, `LeaveRequest(status, approverId, halfDay)`; `AnnouncementAck`; `Document(categoryId, visibility, fileId)`, `DocumentCategory`, `DocumentPermission`; `Campaign(kind BANNER/HIRING/EVENT…, startsAt, endsAt, targetDepartmentIds, imageFileId)`, `CampaignImpression` and `CampaignClick` (aggregated daily, no per-user tracking unless consented); `Recognition`, `Event`, `Poll`, `PollOption`, `PollVote` |
 | M5 AI | `AiProviderConfig(orgId, provider, model, encryptedKey, enabled)`, `AiUsage(orgId, userId, feature, inputTokens, outputTokens, costMicros, latencyMs, status)`, `AiSummary(scope INDIVIDUAL/DEPARTMENT/WEEKLY/COMPANY, status DRAFT/APPROVED/PUBLISHED, content, reviewerId)`, `DocumentChunk(embedding vector)` (pgvector) |

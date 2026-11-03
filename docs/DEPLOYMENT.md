@@ -30,6 +30,7 @@ https://one.futuristglobal.com/socket.io/* → api:4000   (WebSocket upgrade ena
 | `SESSION_COOKIE_NAME` | | Default `fg_session` |
 | `COOKIE_SECURE` | prod ✅ | `true` behind HTTPS |
 | `TRUST_PROXY` | | Proxy hops whose `X-Forwarded-For` is trusted for client IPs. Default 1 (local); 2 on Render. Check `/api/health` → `clientIp`. |
+| `LOGIN_RATE_LIMIT_PER_MIN` | | Sign-in attempts per minute per IP (default 10). Raise only for local e2e runs. |
 | `SMTP_URL` | prod ✅ | e.g. `smtp://user:pass@smtp.office365.com:587`. When empty, emails are logged to the console (dev only). |
 | `MAIL_FROM` | | Sender address |
 | `SEED_PASSWORD` | dev | Password for seeded demo users |

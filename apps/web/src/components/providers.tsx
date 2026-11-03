@@ -1,32 +1,78 @@
 'use client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { ThemeProvider } from 'next-themes';
 import { useState } from 'react';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/misc';
 import { ApiError } from '@/lib/api';
 
+/** Bump to invalidate every cached payload after a breaking API change. */
+const CACHE_BUSTER = 'fg-2026-11-03';
+/** Query keys that are safe to restore after a reload (no search results, no secrets). */
+const PERSISTED = new Set(['me', 'dashboard', 'channels', 'channel', 'messages', 'departments', 'roles', 'attendance-today', 'announcements', 'notifications']);
+
+function makeClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        gcTime: 24 * 3600_000,
+        refetchOnWindowFocus: true,
+        retry: (count, err) => !(err instanceof ApiError && [401, 403, 404].includes(err.status)) && count < 2,
+      },
+    },
+  });
+}
+
+/**
+ * The query cache is persisted to sessionStorage (this tab only) so a page refresh shows the
+ * last data instantly while fresh data loads in the background. It's cleared on sign-out.
+ */
+const persister =
+  typeof window !== 'undefined'
+    ? createSyncStoragePersister({
+        storage: (() => {
+          try {
+            return window.sessionStorage;
+          } catch {
+            return undefined;
+          }
+        })(),
+        key: 'fg.cache',
+        throttleTime: 1000,
+      })
+    : undefined;
+
+export function clearPersistedCache() {
+  try {
+    window.sessionStorage.removeItem('fg.cache');
+  } catch {
+    /* ignore */
+  }
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [client] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            refetchOnWindowFocus: true,
-            retry: (count, err) => !(err instanceof ApiError && [401, 403, 404].includes(err.status)) && count < 2,
-          },
-        },
-      }),
-  );
+  const [client] = useState(makeClient);
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <QueryClientProvider client={client}>
+      <PersistQueryClientProvider
+        client={client}
+        // Show restored data instantly, then refresh everything in the background.
+        onSuccess={() => void client.invalidateQueries()}
+        persistOptions={{
+          persister: persister!,
+          buster: CACHE_BUSTER,
+          maxAge: 12 * 3600_000,
+          dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' && PERSISTED.has(String(q.queryKey[0])) },
+        }}
+      >
         <TooltipProvider>
           {children}
           <Toaster richColors closeButton position="bottom-right" toastOptions={{ className: 'font-sans' }} />
         </TooltipProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ThemeProvider>
   );
 }

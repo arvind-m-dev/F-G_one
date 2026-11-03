@@ -110,7 +110,7 @@ export default function DepartmentsPage() {
           </Button>
         }
       />
-      {depts.isLoading ? (
+      {depts.isPending ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40" />)}</div>
       ) : depts.data?.length === 0 ? (
         <EmptyState icon={<Building2 />} title="No departments yet" />

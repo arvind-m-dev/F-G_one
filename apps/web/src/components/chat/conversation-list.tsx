@@ -50,7 +50,7 @@ export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; on
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search channels" className="pl-9" aria-label="Search channels" autoFocus />
       </div>
       <ul className="divide-y rounded-xl border">
-        {browse.isLoading && <li className="p-4"><Skeleton className="h-10" /></li>}
+        {browse.isPending && <li className="p-4"><Skeleton className="h-10" /></li>}
         {list.map((c) => (
           <li key={c.id} className="flex items-center gap-3 px-3 py-2.5">
             <Hash className="size-4 text-subtle" />
@@ -174,7 +174,7 @@ export function ConversationList() {
         </div>
       </div>
       <div className="scrollbar-thin flex-1 overflow-y-auto px-2 pb-20 md:pb-4">
-        {channels.isLoading &&
+        {channels.isPending &&
           Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="flex gap-2.5 px-2 py-2">
               <Skeleton className="size-8 rounded-lg" />

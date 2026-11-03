@@ -1,6 +1,15 @@
 # Changelog
 
 ## Unreleased: UI redesign (branch `ui-redesign`)
+### Added (features round)
+- Attendance: check-in/break/check-out with server-validated transitions, work location and notes, history with summaries, team board for managers, admin board with filters and CSV export. Times use the organization's time zone.
+- Announcements: editorial feed, categories, read confirmations; admin publishing with targeting, pinning, expiry and confirmation tracking.
+- Notifications: inbox with grouping, filters, read state, per-type preferences, live toasts.
+- Getting started checklist, "?" help hints, friendly 404 and error pages.
+- Refresh resilience: session cache restore, URL-kept state (filters, tabs, open threads), breadcrumbs, browser tab titles, re-sync on reconnect.
+- Responsive: icon-only rail on tablets, five mobile tabs, card layouts for admin tables on phones.
+- Configurable `LOGIN_RATE_LIMIT_PER_MIN` (default 10).
+
 ### Added
 - Employee portal at `/app` and Admin portal at `/admin`, with a workspace switcher between them. Old routes redirect.
 - Two-step sign-in with device-local recent accounts (choose, use another, remove).

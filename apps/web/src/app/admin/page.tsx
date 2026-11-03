@@ -50,7 +50,7 @@ function PendingInvites() {
       <SectionTitle icon={<MailPlus />} action={<Link href="/admin/employees" className="text-xs text-muted hover:text-foreground">All employees</Link>}>
         Waiting to join
       </SectionTitle>
-      {list.isLoading ? (
+      {list.isPending ? (
         <Skeleton className="h-24" />
       ) : items.length === 0 ? (
         <p className="text-sm text-muted">Everyone you invited has joined.</p>

@@ -19,6 +19,7 @@ import { api, errorMessage } from '@/lib/api';
 import { useDepartments, useEmployeeList, useRoles } from '@/lib/hooks';
 import { useCan, useSession } from '@/lib/session';
 import type { Employee } from '@/lib/types';
+import { useUrlState } from '@/lib/url-state';
 import { cn, timeAgo } from '@/lib/utils';
 
 const statusTone = { ACTIVE: 'success', INVITED: 'warning', DEACTIVATED: 'muted' } as const;
@@ -268,21 +269,24 @@ function EmployeesAdmin() {
   const qc = useQueryClient();
   const router = useRouter();
   const params = useSearchParams();
-  const [q, setQ] = useState('');
-  const [debounced, setDebounced] = useState('');
-  const [status, setStatus] = useState('ALL');
-  const [dept, setDept] = useState('');
-  const [page, setPage] = useState(1);
+  const [get, set] = useUrlState({ q: '', status: 'ALL', dept: '', page: '1' });
+  const [q, setQ] = useState(get('q'));
+  const debounced = get('q');
+  const status = get('status');
+  const dept = get('dept');
+  const page = Number(get('page')) || 1;
+  const setStatus = (v: string) => set({ status: v, page: null });
+  const setDept = (v: string) => set({ dept: v, page: null });
+  const setPage = (v: number | ((p: number) => number)) => set({ page: String(typeof v === 'function' ? v(page) : v) });
   const [inviteOpen, setInviteOpen] = useState(params.get('invite') === '1');
   const [editing, setEditing] = useState<Employee | null>(null);
   const [confirm, setConfirm] = useState<{ e: Employee; action: 'deactivate' | 'activate' } | null>(null);
   const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
   useEffect(() => {
-    const t = setTimeout(() => {
-      setDebounced(q);
-      setPage(1);
-    }, 250);
+    if (q === debounced) return;
+    const t = setTimeout(() => set({ q, page: null }), 250);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
   const depts = useDepartments();
   const list = useEmployeeList({ q: debounced || undefined, status, departmentId: dept || undefined, page, pageSize: 20 });
@@ -320,7 +324,7 @@ function EmployeesAdmin() {
         }
       />
       <Card className="overflow-hidden">
-        <div className="flex flex-col gap-2 border-b p-3 md:flex-row">
+        <div className="flex flex-col gap-2 border-b p-3 lg:flex-row">
           <div className="relative flex-1">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, email, designation" className="pl-9" aria-label="Search employees" />
@@ -333,7 +337,7 @@ function EmployeesAdmin() {
               </option>
             ))}
           </Select>
-          <div className="flex rounded-lg bg-surface-2 p-0.5 text-sm">
+          <div className="scrollbar-thin flex overflow-x-auto rounded-lg bg-surface-2 p-0.5 text-sm">
             {['ALL', 'ACTIVE', 'INVITED', 'DEACTIVATED'].map((s) => (
               <button key={s} onClick={() => { setStatus(s); setPage(1); }} className={cn('rounded-md px-3 py-1.5 text-xs font-medium capitalize transition', status === s ? 'bg-surface shadow-sm' : 'text-muted hover:text-foreground')}>
                 {s.toLowerCase()}
@@ -341,7 +345,25 @@ function EmployeesAdmin() {
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <ul className="divide-y md:hidden">
+          {list.data?.items.map((e) => (
+            <li key={e.id} className="flex items-center gap-3 px-4 py-3">
+              <UserAvatar person={e} size="md" />
+              <button className="min-w-0 flex-1 text-left" onClick={() => setEditing(e)}>
+                <span className="block truncate text-sm font-medium">{e.name}</span>
+                <span className="block truncate text-xs text-muted">{[e.designation, e.department?.name].filter(Boolean).join(' · ') || e.email}</span>
+                <span className="mt-1 flex flex-wrap gap-1">
+                  <Badge tone={statusTone[e.status]}>{e.status.toLowerCase()}</Badge>
+                  <Badge>{e.role.name}</Badge>
+                </span>
+              </button>
+              <Button variant="ghost" size="icon-sm" aria-label={`Edit ${e.name}`} onClick={() => setEditing(e)}>
+                <Pencil />
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[820px] text-sm">
             <thead className="bg-surface-2/50 text-left text-xs font-semibold tracking-wide text-muted uppercase">
               <tr>
@@ -355,7 +377,7 @@ function EmployeesAdmin() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {list.isLoading &&
+              {list.isPending &&
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
                     <td colSpan={7} className="px-4 py-3">

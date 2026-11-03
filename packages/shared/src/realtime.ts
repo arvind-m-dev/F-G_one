@@ -9,6 +9,9 @@ export const RT = {
   TYPING: 'typing',
   PRESENCE_UPDATED: 'presence:updated',
   ONLINE_SNAPSHOT: 'presence:online',
+  NOTIFICATION_NEW: 'notification:new',
+  ATTENDANCE_CHANGED: 'attendance:changed',
+  ANNOUNCEMENTS_CHANGED: 'announcements:changed',
 } as const;
 
 export interface TypingEvent {

@@ -19,6 +19,7 @@ test('wrong password shows a generic error', async ({ page }) => {
 
 test('recent accounts are remembered on this device only and can be removed', async ({ page }) => {
   await signIn(page, 'employee@futuristglobal.com');
+  await page.goto('about:blank');
   await page.context().clearCookies();
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Choose an account' })).toBeVisible();
@@ -26,6 +27,7 @@ test('recent accounts are remembered on this device only and can be removed', as
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/app\/home/);
+  await page.goto('about:blank');
   await page.context().clearCookies();
   await page.goto('/login');
   await page.getByRole('button', { name: 'Remove employee@futuristglobal.com from this device' }).click({ force: true });
@@ -46,7 +48,13 @@ test('employee home shows live data; admin portal is not available', async ({ pa
 
 test('home layout can be customized and restored', async ({ page }) => {
   await signIn(page, 'employee@futuristglobal.com');
+  // Start from the default layout so the test doesn't depend on earlier runs.
   await page.getByRole('button', { name: 'Customize Home' }).click();
+  await page.getByRole('button', { name: 'Restore default' }).click();
+  await page.getByRole('button', { name: 'Save layout' }).click();
+  await expect(page.getByRole('heading', { name: 'Celebrations' })).toBeVisible();
+  await page.getByRole('button', { name: 'Customize Home' }).click();
+  await expect(page.getByRole('switch', { name: 'Show Celebrations' })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('switch', { name: 'Show Celebrations' }).click();
   await page.getByRole('button', { name: 'Save layout' }).click();
   await expect(page.getByRole('heading', { name: 'Celebrations' })).toHaveCount(0);

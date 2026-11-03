@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import type { AuthContext } from '../common/auth-context';
 import { personSelect, toPerson } from '../employees/employee.mapper';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const messageInclude = {
@@ -20,6 +21,7 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ───────── serialization ─────────
@@ -278,8 +280,47 @@ export class ChatService {
     return { items: rows.slice(0, q.limit).reverse().map((m) => this.toMessage(m)), hasMore };
   }
 
+  /** DM → participants, @name → mentioned members, thread reply → original author. Respects preferences. */
+  private async notifyForMessage(auth: AuthContext, channel: { id: string; type: string; name: string | null }, msg: { id: string; body: string; parentId: string | null }, authorName: string) {
+    const members = await this.prisma.channelMember.findMany({
+      where: { channelId: channel.id },
+      select: { userId: true, user: { select: { firstName: true, lastName: true, displayName: true } } },
+    });
+    const preview = msg.body.slice(0, 160);
+    const where = channel.type === 'DIRECT' ? 'a direct message' : `#${channel.name}`;
+    const link = `/app/chat/${channel.id}${msg.parentId ? `?thread=${msg.parentId}` : ''}`;
+    const notified = new Set<string>([auth.userId]);
+
+    if (channel.type === 'DIRECT' && !msg.parentId) {
+      const ids = members.map((m) => m.userId).filter((id) => !notified.has(id));
+      ids.forEach((id) => notified.add(id));
+      await this.notifications.notify({ organizationId: auth.organizationId, userIds: ids, actorId: auth.userId, type: 'dm', title: `${authorName} sent you a message`, body: preview, link, groupKey: `dm:${channel.id}` });
+    }
+
+    const tokens = new Set((msg.body.match(/@([A-Za-z][\w.-]*)/g) ?? []).map((t) => t.slice(1).toLowerCase()));
+    if (tokens.size) {
+      const mentioned = members
+        .filter((m) => {
+          const u = m.user;
+          const names = [u.firstName, `${u.firstName}.${u.lastName}`, u.displayName?.replace(/\s+/g, '')].filter(Boolean).map((n) => n!.toLowerCase());
+          return names.some((n) => tokens.has(n));
+        })
+        .map((m) => m.userId)
+        .filter((id) => !notified.has(id));
+      mentioned.forEach((id) => notified.add(id));
+      await this.notifications.notify({ organizationId: auth.organizationId, userIds: mentioned, actorId: auth.userId, type: 'mention', title: `${authorName} mentioned you in ${where}`, body: preview, link });
+    }
+
+    if (msg.parentId) {
+      const parent = await this.prisma.message.findUnique({ where: { id: msg.parentId }, select: { authorId: true } });
+      if (parent?.authorId && !notified.has(parent.authorId)) {
+        await this.notifications.notify({ organizationId: auth.organizationId, userIds: [parent.authorId], actorId: auth.userId, type: 'thread', title: `${authorName} replied to your message in ${where}`, body: preview, link, groupKey: `thread:${msg.parentId}` });
+      }
+    }
+  }
+
   async send(auth: AuthContext, channelId: string, input: SendMessageInput) {
-    await this.requireMember(auth, channelId);
+    const { channel } = await this.requireMember(auth, channelId);
     if (input.parentId) {
       const parent = await this.prisma.message.findFirst({ where: { id: input.parentId, channelId } });
       if (!parent) throw new BadRequestException('Original message not found');
@@ -295,6 +336,7 @@ export class ChatService {
     ]);
     const dto = { ...this.toMessage(msg), clientId: input.clientId };
     this.realtime.toChannel(channelId, RT.MESSAGE_NEW, dto);
+    void this.notifyForMessage(auth, channel, msg, dto.author?.name ?? 'Someone');
     if (input.parentId) {
       const parent = await this.prisma.message.findUniqueOrThrow({ where: { id: input.parentId }, include: messageInclude });
       this.realtime.toChannel(channelId, RT.MESSAGE_UPDATED, this.toMessage(parent));
@@ -307,6 +349,14 @@ export class ChatService {
     if (!msg) throw new NotFoundException('Message not found');
     const { membership } = await this.requireMember(auth, msg.channelId);
     return { msg, membership };
+  }
+
+  /** Single message (e.g. to reopen a thread from a link). Membership required. */
+  async getMessage(auth: AuthContext, messageId: string) {
+    const msg = await this.prisma.message.findFirst({ where: { id: messageId, organizationId: auth.organizationId }, include: messageInclude });
+    if (!msg) throw new NotFoundException('Message not found');
+    await this.access(auth, msg.channelId);
+    return this.toMessage(msg);
   }
 
   async edit(auth: AuthContext, messageId: string, body: string) {

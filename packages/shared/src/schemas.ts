@@ -152,3 +152,54 @@ export const editMessageSchema = z.object({ body: z.string().trim().min(1).max(4
 export const channelMembersSchema = z.object({ userIds: z.array(z.string().min(1)).min(1).max(200) });
 
 export const reactionSchema = z.object({ emoji: z.enum(REACTION_KEYS) });
+
+/* ---------------- attendance ---------------- */
+export const WORK_LOCATIONS = [
+  { key: 'WFO', label: 'Office', description: 'Working from the office' },
+  { key: 'WFH', label: 'Home', description: 'Working from home' },
+  { key: 'ON_DUTY', label: 'Client site', description: 'On duty or at a client location' },
+] as const;
+export type WorkLocationKey = (typeof WORK_LOCATIONS)[number]['key'];
+
+export const checkInSchema = z.object({
+  location: z.enum(['WFO', 'WFH', 'ON_DUTY']),
+  remarks: z.string().trim().max(200).nullable().optional(),
+});
+export type CheckInInput = z.infer<typeof checkInSchema>;
+
+export const checkOutSchema = z.object({ remarks: z.string().trim().max(200).nullable().optional() });
+
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+export const attendanceRangeSchema = z.object({ from: ymd.optional(), to: ymd.optional() });
+export const attendanceBoardSchema = z.object({ date: ymd.optional() });
+
+/* ---------------- announcements ---------------- */
+export const ANNOUNCEMENT_CATEGORIES = [
+  { key: 'COMPANY_NEWS', label: 'Company news' },
+  { key: 'IMPORTANT_UPDATE', label: 'Important update' },
+  { key: 'HOLIDAY', label: 'Holidays' },
+  { key: 'NEW_FEATURE', label: 'New feature' },
+  { key: 'POLICY', label: 'Policy change' },
+  { key: 'EVENT', label: 'Event' },
+  { key: 'TEAM_UPDATE', label: 'Team update' },
+  { key: 'URGENT', label: 'Urgent notice' },
+] as const;
+export type AnnouncementCategoryKey = (typeof ANNOUNCEMENT_CATEGORIES)[number]['key'];
+
+export const announcementSchema = z.object({
+  title: z.string().trim().min(3, 'Add a short title').max(140),
+  body: z.string().trim().min(1, 'Write the announcement').max(8000),
+  category: z.enum(['COMPANY_NEWS', 'IMPORTANT_UPDATE', 'HOLIDAY', 'NEW_FEATURE', 'POLICY', 'EVENT', 'TEAM_UPDATE', 'URGENT']).default('COMPANY_NEWS'),
+  priority: z.enum(['NORMAL', 'IMPORTANT', 'CRITICAL']).default('NORMAL'),
+  departmentId: z.string().max(40).nullable().optional(),
+  pinned: z.boolean().default(false),
+  requireAck: z.boolean().default(false),
+  expiresAt: z.string().datetime().nullable().optional(),
+});
+export type AnnouncementInput = z.infer<typeof announcementSchema>;
+
+export const notificationsQuerySchema = z.object({
+  filter: z.enum(['all', 'unread', 'mentions']).default('all'),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export const markReadSchema = z.object({ ids: z.array(z.string().min(1)).max(200).optional(), all: z.boolean().optional() });

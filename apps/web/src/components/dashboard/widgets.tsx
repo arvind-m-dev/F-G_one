@@ -1,11 +1,12 @@
 'use client';
 import { PERMISSIONS, presenceMeta, type WidgetKey } from '@fg/shared';
-import { Award, Building2, Cake, CalendarDays, Hash, Lock, Megaphone, MessageSquarePlus, Pin, Search, Sparkles, UserPlus, Users } from 'lucide-react';
+import { Award, Building2, Cake, Check, CircleCheckBig, Clock, X, CalendarDays, Hash, Lock, Megaphone, MessageSquarePlus, Pin, Search, Sparkles, UserPlus, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { AttendancePanel } from '@/components/attendance/attendance-panel';
 import { PresenceIcon } from '@/components/presence';
 import { Button } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
@@ -13,9 +14,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { Badge, Kbd, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
-import { channelLabel } from '@/lib/hooks';
+import { channelLabel, useAttendanceToday } from '@/lib/hooks';
 import { useLivePeople, useLivePerson } from '@/lib/presence-store';
-import { useCan, useClock, useSession } from '@/lib/session';
+import { useCan, useClock, useModule, useSession, useUpdatePreferences } from '@/lib/session';
 import type { ChannelSummary, Person } from '@/lib/types';
 import { cn, greeting, parseDateOnly, timeAgo } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ export interface DashboardData {
   recentChats: ChannelSummary[];
   unreadTotal: number;
   orgStats: { headcount: number; departments: number; joinersThisMonth: number; onlineNow: number };
+  onboarding: { sentMessage: boolean; profileComplete: boolean; statusSet: boolean };
 }
 
 export interface WidgetProps {
@@ -455,12 +457,78 @@ function OrgStatsWidget({ data }: WidgetProps) {
   );
 }
 
+/* ───────────── Attendance ───────────── */
+function AttendanceWidget() {
+  const mod = useModule();
+  if (!mod('attendance')) return null;
+  return (
+    <section aria-label="Attendance">
+      <AttendancePanel compact />
+    </section>
+  );
+}
+
+/* ───────────── Getting started ───────────── */
+function GettingStartedWidget({ data, actions }: WidgetProps) {
+  const me = useSession();
+  const router = useRouter();
+  const mod = useModule();
+  const save = useUpdatePreferences();
+  const att = useAttendanceToday();
+  if (me.preferences.onboardingDismissed) return null;
+  const steps = [
+    ...(mod('attendance') ? [{ done: !!att.data?.record, title: 'Check in for today', text: 'Tell your team you’ve started and where you’re working.', action: () => router.push('/app/attendance') }] : []),
+    { done: data.onboarding.statusSet, title: 'Set your status', text: 'Let people know if you’re available, in a meeting or on a break.', action: actions.setStatus },
+    ...(mod('chat') ? [{ done: data.onboarding.sentMessage, title: 'Say hello in a channel', text: 'Open #general and introduce yourself.', action: () => router.push('/app/chat') }] : []),
+    { done: data.onboarding.profileComplete, title: 'Complete your profile', text: 'Add a short bio and your work phone.', action: () => router.push('/app/profile') },
+  ];
+  const done = steps.filter((s) => s.done).length;
+  if (done === steps.length) return null;
+  return (
+    <section aria-label="Getting started" className="rounded-xl border bg-surface p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <CircleCheckBig className="size-4 text-primary" /> Getting started
+          </p>
+          <p className="mt-0.5 text-[13px] text-muted">
+            {done} of {steps.length} done. A few quick steps to get the most out of FG One.
+          </p>
+        </div>
+        <button onClick={() => void save({ onboardingDismissed: true })} className="rounded-md p-1 text-subtle hover:bg-surface-2 hover:text-foreground" aria-label="Hide getting started">
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2">
+        <motion.div className="h-full rounded-full bg-primary" initial={{ width: 0 }} animate={{ width: `${(done / steps.length) * 100}%` }} />
+      </div>
+      <ol className="mt-4 grid gap-2 sm:grid-cols-2">
+        {steps.map((s, i) => (
+          <li key={s.title}>
+            <button onClick={s.action} disabled={s.done} className={cn('flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition', s.done ? 'border-transparent bg-surface-2/60' : 'hover:border-primary/40 hover:bg-primary-soft/40')}>
+              <span className={cn('mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold', s.done ? 'bg-emerald-500 text-white' : 'border border-border-strong text-muted')}>
+                {s.done ? <Check className="size-3" /> : i + 1}
+              </span>
+              <span>
+                <span className={cn('block text-[13px] font-medium', s.done && 'text-muted line-through decoration-muted/50')}>{s.title}</span>
+                {!s.done && <span className="block text-xs text-muted">{s.text}</span>}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 /**
  * Widget registry. `column` places the widget in the page composition; `fixed` widgets can't be hidden.
  * Add a key in @fg/shared WIDGET_KEYS and an entry here to ship a new widget.
  */
 export const WIDGETS: Record<WidgetKey, { component: React.ComponentType<WidgetProps>; column: 'header' | 'main' | 'side'; fixed?: boolean }> = {
   welcome: { component: WelcomeWidget, column: 'header', fixed: true },
+  gettingStarted: { component: GettingStartedWidget, column: 'header' },
+  attendance: { component: AttendanceWidget, column: 'side' },
   quickActions: { component: QuickActionsWidget, column: 'header' },
   clock: { component: ClockWidget, column: 'header' },
   recentChats: { component: RecentChatsWidget, column: 'main' },

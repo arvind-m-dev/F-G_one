@@ -1,9 +1,11 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Briefcase, Building2, Cake, CalendarClock, Globe, Mail, Phone, UserRound } from 'lucide-react';
+import { Briefcase, Building2, Cake, CalendarClock, Globe, Mail, Phone, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { MessageButton } from '@/components/message-button';
+import { Breadcrumbs } from '@/components/shell/page';
+import { usePageTitle } from '@/lib/use-title';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
@@ -30,6 +32,7 @@ export default function PersonPage() {
   const { id } = useParams<{ id: string }>();
   const me = useSession();
   const q = useQuery({ queryKey: ['employee', id], queryFn: () => api<Employee>(`/employees/${id}`) });
+  usePageTitle(q.data?.name);
   const live = useLivePerson(q.data ?? { id, online: false, presence: 'available', statusEmoji: null, statusText: null, statusExpiresAt: null });
 
   if (q.isError) return <EmptyState icon={<UserRound />} title="Profile unavailable" description={errorMessage(q.error)} className="mt-20" />;
@@ -39,9 +42,7 @@ export default function PersonPage() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-6 pt-8 pb-14 sm:px-10">
-      <Link href="/app/people" className="mb-4 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
-        <ArrowLeft className="size-4" /> People
-      </Link>
+      <Breadcrumbs className="mb-4" items={[{ label: 'Directory', href: '/app/people' }, { label: p.name }]} />
       <Card className="overflow-hidden">
         <div className="h-28" style={{ background: `linear-gradient(135deg, ${p.avatarColor}, ${p.department?.color ?? 'var(--brand-2)'})` }} />
         <div className="flex flex-col gap-4 px-6 pb-6 sm:flex-row sm:items-end">
