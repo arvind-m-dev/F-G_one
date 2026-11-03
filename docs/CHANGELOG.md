@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased: Favicon and link previews (branch `brand-meta`)
+### Added
+- New favicon (`icon.svg`, a drawn "F." mark on the brand gradient) and an iOS home-screen icon (`apple-icon`).
+- Open Graph and Twitter card tags with a generated 1200×630 share image (`opengraph-image`), so shared links unfurl in Google Chat, Slack and WhatsApp. `metadataBase` comes from `NEXT_PUBLIC_SITE_URL` or Vercel's production URL.
+### Fixed
+- The auth middleware no longer redirects `/opengraph-image` and `/apple-icon` to `/login`, so crawlers can fetch them.
+
 ## Unreleased: Admin-managed passwords (no email)
 ### Changed
 - Adding an employee sets a temporary password instead of sending an invitation link. The account is active straight away, and the admin gets a ready-to-copy message with the sign-in link, email and password (shown once).
