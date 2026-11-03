@@ -151,7 +151,7 @@ function ClockWidget({ data }: WidgetProps) {
   const pct = (m: number) => ((Math.min(Math.max(m, from), to) - from) / span) * 100;
 
   const nowMs = now?.getTime() ?? Date.now();
-  const breaks = (rec?.breaks ?? []).filter((b) => b.kind === 'BREAK').map((b) => {
+  const breaks = (rec?.breaks ?? []).filter((b) => b.kind !== 'AWAY').map((b) => {
     const s = new Date(b.startAt);
     const e = b.endAt ? new Date(b.endAt) : new Date(nowMs);
     return { id: b.id, s: minutesOfDate(s), e: minutesOfDate(e), start: s, end: b.endAt ? e : null, mins: Math.max(0, Math.round((e.getTime() - s.getTime()) / 60_000)) };

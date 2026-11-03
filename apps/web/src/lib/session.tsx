@@ -1,15 +1,21 @@
 'use client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect } from 'react';
-import { hasPermission, type ModuleKey, type Permission } from '@fg/shared';
+import { hasPermission, parseOrganizationSettings, type ModuleKey, type Permission } from '@fg/shared';
 import { useTheme } from 'next-themes';
 import { api } from './api';
 import type { Me } from './types';
 
 const SessionContext = createContext<Me | null>(null);
 
+/**
+ * Fill in defaults for settings the response doesn't have yet: a session restored from cache,
+ * or an API deployed after the web app, may predate newly added settings.
+ */
+const withSettingDefaults = (me: Me): Me => ({ ...me, organization: { ...me.organization, settings: parseOrganizationSettings(me.organization.settings) } });
+
 export function useMeQuery() {
-  return useQuery({ queryKey: ['me'], queryFn: () => api<Me>('/auth/me'), staleTime: 60_000 });
+  return useQuery({ queryKey: ['me'], queryFn: () => api<Me>('/auth/me'), staleTime: 60_000, select: withSettingDefaults });
 }
 
 export function SessionProvider({ me, children }: { me: Me; children: React.ReactNode }) {
