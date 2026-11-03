@@ -1,7 +1,7 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Copy, MailPlus, MoreHorizontal, Pencil, RefreshCw, Search, UserCheck, UserPlus, UserX, Users } from 'lucide-react';
+import { Copy, MailPlus, MoreHorizontal, Pencil, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, UserX, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -22,7 +22,7 @@ import type { Employee } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn, timeAgo } from '@/lib/utils';
 
-const statusTone = { ACTIVE: 'success', INVITED: 'warning', DEACTIVATED: 'muted' } as const;
+const statusTone = { ACTIVE: 'success', INVITED: 'warning', SUSPENDED: 'danger', DEACTIVATED: 'muted', ARCHIVED: 'muted' } as const;
 
 function InviteLinkBox({ url, expiresAt }: { url: string; expiresAt: string }) {
   return (
@@ -397,7 +397,14 @@ function EmployeesAdmin() {
                     </button>
                   </td>
                   <td className="px-4 py-2.5">
-                    <Badge tone={e.role.key === 'super_admin' ? 'brand' : 'default'}>{e.role.name}</Badge>
+                    <span className="inline-flex flex-wrap items-center gap-1">
+                      <Badge tone={e.role.key === 'administrator' ? 'brand' : 'default'}>{e.role.name}</Badge>
+                      {e.isSuperAdmin && (
+                        <Badge tone="brand">
+                          <ShieldCheck className="size-3" aria-hidden /> Super Admin
+                        </Badge>
+                      )}
+                    </span>
                   </td>
                   <td className="px-4 py-2.5">
                     {e.department ? (

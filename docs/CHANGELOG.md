@@ -7,6 +7,14 @@
 - Scoped permission grants per role (`RoleGrant`), additional roles per user (`UserRole`) and per-user ALLOW/DENY overrides. Explicit deny always wins; default deny.
 - Permission catalogue with modules, actions, supported scopes, plain-language help and sensitive flags (`@fg/shared` `authz.ts`).
 - `/auth/me` returns `grants`; `/roles` returns grants and the catalogue.
+### Added (Phase 2b, Super Admin authority)
+- Super Admin is a protected flag, not a role. Up to `settings.security.superAdminLimit` (max 4, pending invitations count). Nominate, accept (nominee signs in and confirms their password), revoke and remove endpoints, all password-confirmed and audited. The last active Super Admin cannot be removed, even by concurrent requests.
+- Account types (internal, client) and the suspended and archived statuses. Client accounts are blocked from internal routes and the realtime socket.
+### Security
+- Re-issuing an activation link now requires authority over the account. Before this, HR could obtain the link for a pending higher-rank account.
+- Only Super Admins can manage Super Admin accounts or change security settings.
+### Changed (Phase 2b)
+- The **Super Admin role is renamed Administrator** (same permissions, assignable by Super Admins). Existing holders keep everything and gain the Super Admin flag.
 ### Changed
 - Effective permissions are resolved per request from grants, so changes apply without signing out. Legacy permission checks are derived from grants with identical results for every existing role.
 - Attendance visibility and HR recipient lookup use the new engine.

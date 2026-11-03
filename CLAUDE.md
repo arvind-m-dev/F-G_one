@@ -17,7 +17,7 @@ pnpm --filter @fg/api prisma:deploy && pnpm db:seed
 ```bash
 pnpm dev
 ```
-Web runs on http://localhost:3000 and the API on :4000. Demo logins are `admin@`, `hr@`, `manager@` and `employee@futuristglobal.com`, using `SEED_PASSWORD` from `apps/api/.env`. After changing `packages/shared`, rebuild it (`pnpm --filter @fg/shared build`).
+Web runs on http://localhost:3000 and the API on :4000. Demo logins are `admin@` (Super Admin flag + Administrator role), `hr@`, `manager@` and `employee@futuristglobal.com`, using `SEED_PASSWORD` from `apps/api/.env`. After changing `packages/shared`, rebuild it (`pnpm --filter @fg/shared build`).
 
 ## Tests (run before every commit)
 ```bash

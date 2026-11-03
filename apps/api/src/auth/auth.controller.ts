@@ -10,7 +10,7 @@ import {
   resetPasswordSchema,
 } from '@fg/shared';
 import { z } from 'zod';
-import { Auth, AuthContext, Public } from '../common/auth-context';
+import { Auth, AuthContext, ClientAllowed, Public } from '../common/auth-context';
 import { env } from '../common/env';
 import { ZodPipe } from '../common/zod.pipe';
 import { PrismaService } from '../prisma/prisma.service';
@@ -49,6 +49,7 @@ export class AuthController {
     return { ok: true };
   }
 
+  @ClientAllowed()
   @Post('logout')
   @HttpCode(200)
   async logout(@Auth() auth: AuthContext, @Res({ passthrough: true }) res: Response) {
@@ -58,6 +59,7 @@ export class AuthController {
   }
 
   /** The signed-in user, their permissions and their organization's branding/settings. */
+  @ClientAllowed()
   @Get('me')
   async me(@Auth() auth: AuthContext) {
     const [user, org, prefs] = await Promise.all([
@@ -70,6 +72,8 @@ export class AuthController {
       permissions: auth.permissions,
       grants: auth.grants,
       role: { key: auth.roleKey, rank: auth.rank },
+      isSuperAdmin: auth.isSuperAdmin,
+      accountType: auth.accountType,
       preferences: prefs.preferences,
       organization: {
         id: org.id,
@@ -101,6 +105,7 @@ export class AuthController {
     return { ok: true };
   }
 
+  @ClientAllowed()
   @Post('change-password')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 15 * 60_000 } })

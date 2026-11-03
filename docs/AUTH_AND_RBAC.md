@@ -32,6 +32,14 @@ This document describes **what is implemented today**. It was updated after Phas
 > * Scoped checks use `apps/api/src/common/authz.ts`: `scopeOf` and `userScopeWhere` (ORG = organization, TEAM = direct reports, OWN = self). Attendance visibility uses it.
 > * `hrUsers` resolves through the same engine (`usersWithLegacyPermission`).
 >
+> **Phase 2b (done):**
+> * Super Admin is a flag (`User.isSuperAdmin`) with protected endpoints, a limit (1–4) that counts pending invites, last-admin protection in SERIALIZABLE transactions, password re-confirmation and audit.
+> * The old `super_admin` role is now the ordinary **Administrator** role.
+> * `isSuperAdmin` resolves to every catalogue permission at ORG.
+> * Client accounts are default-denied on routes and sockets and are masked to CLIENT-scoped permissions.
+> * `SUSPENDED` and `ARCHIVED` statuses block sign-in and sessions.
+> * The invite re-issue escalation gap is closed.
+>
 > The text below describes the legacy layer that still drives route guards.
 
 * **Permission catalogue:** 20 flat strings in `packages/shared/src/permissions.ts`, for example `employees.manage` and `attendance.view_all`. There are no data scopes; scope is encoded in the name (`view_team` versus `view_all`).
@@ -56,13 +64,13 @@ There are no update or delete endpoints. It is **not** append-only at the databa
 
 | PRD requirement | Status |
 |---|---|
-| Super Admin as a separate authority (1–4 accounts, last one protected) | **Missing.** It is an ordinary role that anyone holding `employees.manage` with rank > 100 could assign. Rank prevents that today, but it is not a separate concept and there is no limit. |
+| Super Admin as a separate authority (1–4 accounts, last one protected) | **Done (Phase 2b), backend.** The UI arrives in Phase 3. |
 | MFA, re-auth, session list and revoke, login history | Missing |
 | Secure bootstrap that closes after first use | Partial. `db:bootstrap` creates a Super Admin invite but can be re-run and does not require MFA. |
 | Dynamic roles (create, edit, duplicate, archive, templates) | Data model and enforcement done (Phase 2a). There is no UI or API to edit yet (Phase 4). |
 | Granular actions × modules × **data scopes**, explicit deny, user overrides | Engine done (Phase 2a). The catalogue covers today's modules with ORG and TEAM scopes; other scopes arrive with their modules. |
 | Additional roles per user | Done in the engine (`UserRole`); not yet assignable in the UI |
-| Account types (employee, client, admin), SUSPENDED and ARCHIVED statuses | Missing (`INVITED`, `ACTIVE`, `DEACTIVATED` only) |
+| Account types (employee, client, admin), SUSPENDED and ARCHIVED statuses | Done in the data model and enforcement (Phase 2b). Suspend and archive actions arrive in Phase 3. |
 | Clients, projects, tasks, milestones, calendar events | Missing (no models) |
 | Announcement audience targeting (roles, departments, projects, clients) | Partial (category, expiry, acknowledgements; audience is everyone) |
 | Reports with CSV | Partial (attendance CSV only) |

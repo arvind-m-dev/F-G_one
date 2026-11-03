@@ -26,6 +26,7 @@ type Person = {
   last: string;
   email: string;
   role: string;
+  superAdmin?: boolean;
   dept: string;
   title: string;
   manager?: string;
@@ -43,7 +44,7 @@ function relDate(daysFromToday: number, year: number) {
 }
 
 const PEOPLE: Person[] = [
-  { first: 'Aarav', last: 'Mehta', email: 'admin@futuristglobal.com', role: 'super_admin', dept: 'Management', title: 'Chief Technology Officer', joined: '2019-04-01', color: '#8b5cf6', presence: 'working', statusText: 'Planning Q1 roadmap' },
+  { first: 'Aarav', last: 'Mehta', email: 'admin@futuristglobal.com', role: 'administrator', superAdmin: true, dept: 'Management', title: 'Chief Technology Officer', joined: '2019-04-01', color: '#8b5cf6', presence: 'working', statusText: 'Planning Q1 roadmap' },
   { first: 'Priya', last: 'Sharma', email: 'hr@futuristglobal.com', role: 'hr_admin', dept: 'Human Resources', title: 'HR Manager', manager: 'admin@futuristglobal.com', joined: '2020-07-15', birthday: relDate(3, 1991), color: '#ec4899', presence: 'in_office' },
   { first: 'Rohan', last: 'Verma', email: 'manager@futuristglobal.com', role: 'manager', dept: 'Engineering', title: 'Engineering Manager', manager: 'admin@futuristglobal.com', joined: relDate(5, 2021), color: '#0ea5e9', presence: 'meeting', statusText: 'Sprint planning' },
   { first: 'Ananya', last: 'Iyer', email: 'employee@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Senior Frontend Engineer', manager: 'manager@futuristglobal.com', joined: '2022-02-01', birthday: relDate(0, 1996), color: '#14b8a6', presence: 'focus', statusText: 'Deep work until 3pm' },
@@ -114,7 +115,7 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
 
   if (opts.minimal) {
     await prisma.user.create({
-      data: { organizationId: org.id, email: `admin@${opts.domain}`, firstName: 'Other', lastName: 'Admin', roleId: roles.super_admin.id, status: 'ACTIVE', passwordHash },
+      data: { organizationId: org.id, email: `admin@${opts.domain}`, firstName: 'Other', lastName: 'Admin', roleId: roles.administrator.id, isSuperAdmin: true, status: 'ACTIVE', passwordHash },
     });
     return org;
   }
@@ -133,6 +134,7 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
         lastName: p.last,
         designation: p.title,
         roleId: roles[p.role].id,
+        isSuperAdmin: p.superAdmin === true,
         departmentId: depts[p.dept].id,
         managerId: p.manager ? users[p.manager]?.id : null,
         joinedAt: new Date(`${p.joined}T00:00:00Z`),
@@ -167,7 +169,7 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     { name: 'ideas', description: 'Suggestions to improve the product and the workplace', type: 'PUBLIC' as const, members: all.slice(0, 12) },
     { name: 'help-support', description: 'Ask for help with tools, access and IT', type: 'PUBLIC' as const, members: all.slice(0, 9) },
     { name: 'team-discussion', description: 'Water-cooler conversations', type: 'PUBLIC' as const, members: all.slice(0, 10) },
-    { name: 'management', description: 'Leadership — private', type: 'PRIVATE' as const, members: PEOPLE.filter((p) => ['super_admin', 'hr_admin', 'manager'].includes(p.role)).map((p) => users[p.email].id) },
+    { name: 'management', description: 'Leadership — private', type: 'PRIVATE' as const, members: PEOPLE.filter((p) => ['administrator', 'hr_admin', 'manager'].includes(p.role)).map((p) => users[p.email].id) },
   ];
   const admin = users['admin@futuristglobal.com'].id;
   for (const c of channelDefs) {

@@ -18,7 +18,10 @@ export interface Person {
 
 export interface Employee extends Person {
   email: string;
-  status: 'INVITED' | 'ACTIVE' | 'DEACTIVATED';
+  status: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED' | 'ARCHIVED';
+  accountType: 'INTERNAL' | 'CLIENT';
+  /** System authority, separate from the role. */
+  isSuperAdmin: boolean;
   displayName: string | null;
   employeeCode?: string | null;
   phone: string | null;
@@ -42,6 +45,8 @@ export interface Me {
   /** Effective scoped grants: permission → widest scope (ORG, TEAM, ...). */
   grants: Record<string, string>;
   role: { key: string; rank: number };
+  isSuperAdmin: boolean;
+  accountType: 'INTERNAL' | 'CLIENT';
   preferences: UserPreferences;
   organization: {
     id: string;

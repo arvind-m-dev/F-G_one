@@ -22,7 +22,7 @@ export class RolesController {
         /** Legacy flat permissions derived from the grants (the column is deprecated). */
         permissions: legacyFromGrants(mergeGrants(grants.map((g) => ({ permission: g.permission, scope: g.scope as Scope })))),
         memberCount: _count.users,
-        assignable: auth.roleKey === 'super_admin' || r.rank < auth.rank,
+        assignable: auth.isSuperAdmin || r.rank < auth.rank,
       })),
       permissionLabels: PERMISSION_LABELS,
       catalog: PERMISSION_CATALOG,

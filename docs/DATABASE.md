@@ -59,6 +59,13 @@ Migration `…_attendance_announcements_notifications` also adds the new Home wi
 * Enums: `PermissionScope` (CLIENT, OWN, ASSIGNED, PROJECT, TEAM, DEPARTMENT, ORG; the declaration order is the widening order) and `OverrideEffect`.
 * Migration `20261103091117_permission_engine` backfills `RoleGrant` from `Role.permissions` using `LEGACY_PERMISSION_MAP`, keeping the widest scope. It was verified on the dev database: 8 of 8 roles round-trip to identical permissions.
 
+## Added (Super Admin Phase 2b: authority)
+* `User.isSuperAdmin` (bool) is the system authority, changed only by `/super-admins` and the operator CLIs. `User.accountType` is `INTERNAL | CLIENT`.
+* `UserStatus` adds `SUSPENDED` (reversible) and `ARCHIVED`. Only `ACTIVE` users can sign in or keep a session.
+* `SuperAdminInvitation { organizationId, userId (nominee), invitedById, tokenHash, expiresAt, acceptedAt, revokedAt }`
+* `settings.security.superAdminLimit` (1–4, default 4) in the organization settings JSON
+* Migration `20261103095255_super_admin_authority` sets `isSuperAdmin` for every holder of the old `super_admin` role, then renames that role to the assignable **Administrator** (`administrator`, rank 90, grants unchanged). Verified on the dev database: 2 of 2 former Super Admins were flagged.
+
 ## Planned models (added by later milestones, no changes to existing tables)
 
 | Milestone | Models |

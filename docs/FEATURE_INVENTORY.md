@@ -46,5 +46,7 @@
 | Recent accounts on login (device-local) | ✅ |
 | Organization isolation | ✅ tested |
 | Permission engine (scoped grants, extra roles, ALLOW/DENY overrides, resolved per request) | ✅ backend only; the role editor UI arrives in Phase 4 |
+| Super Admin authority (flag, limit 1–4, nominate/accept/remove, last-admin protection) | ✅ API and tests; the Super Admins page arrives in Phase 3. Employees list shows a Super Admin badge. |
+| Client accounts default-denied; suspended and archived statuses | ✅ enforced; client portal (5b) and suspend actions (3) not built |
 | Realtime with reconnection | ✅ Socket.IO with automatic reconnect and an indicator in the rail |
 | File storage, email notifications, notification inbox | ⬜ |

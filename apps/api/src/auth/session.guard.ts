@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Unauthor
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { hasPermission, type Permission } from '@fg/shared';
-import { IS_PUBLIC, REQUIRED_PERMISSIONS } from '../common/auth-context';
+import { CLIENT_ALLOWED, IS_PUBLIC, REQUIRED_PERMISSIONS, SUPER_ADMIN_ONLY } from '../common/auth-context';
 import { env } from '../common/env';
 import { AuthService } from './auth.service';
 
@@ -27,6 +27,14 @@ export class SessionGuard implements CanActivate {
     const auth = token ? await this.auth.validateSession(token, req.ip) : null;
     if (!auth) throw new UnauthorizedException('Please sign in');
     req.auth = auth;
+
+    // Client accounts are default-denied on every internal route.
+    if (auth.accountType === 'CLIENT' && !this.reflector.getAllAndOverride<boolean>(CLIENT_ALLOWED, targets)) {
+      throw new ForbiddenException('This area is not available to client accounts');
+    }
+    if (this.reflector.getAllAndOverride<boolean>(SUPER_ADMIN_ONLY, targets) && !auth.isSuperAdmin) {
+      throw new ForbiddenException('Only a Super Admin can do that');
+    }
 
     const required = this.reflector.getAllAndOverride<Permission[]>(REQUIRED_PERMISSIONS, targets);
     if (required?.length && !hasPermission(auth.permissions, required)) {

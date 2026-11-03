@@ -153,8 +153,23 @@ export interface OverrideInput {
  * 1. union of all non-archived roles, widest scope per permission;
  * 2. ALLOW overrides add at their scope (widest wins);
  * 3. DENY overrides remove the permission, whatever the roles say.
+ * Super Admins get everything at ORG; client accounts are masked to CLIENT-scoped permissions.
  */
-export function resolveGrants(roles: { archivedAt?: Date | null; grants: Grant[] }[], overrides: OverrideInput[] = []): GrantMap {
+export function resolveGrants(
+  roles: { archivedAt?: Date | null; grants: Grant[] }[],
+  overrides: OverrideInput[] = [],
+  subject: { isSuperAdmin?: boolean; accountType?: 'INTERNAL' | 'CLIENT' } = {},
+): GrantMap {
+  // Client accounts: only permissions that support the CLIENT scope, always at CLIENT.
+  // Checked first so a client can never become a Super Admin through bad data.
+  if (subject.accountType === 'CLIENT') {
+    const out: GrantMap = {};
+    const merged = resolveGrants(roles, overrides);
+    for (const k of Object.keys(merged)) if (CATALOG_BY_KEY[k]?.scopes.includes('CLIENT')) out[k] = 'CLIENT';
+    return out;
+  }
+  // Super Admin: every catalogue permission at ORG. Overrides do not apply.
+  if (subject.isSuperAdmin) return Object.fromEntries(PERMISSION_CATALOG.map((e) => [e.key, 'ORG' as Scope]));
   const all: Grant[] = roles.filter((r) => !r.archivedAt).flatMap((r) => r.grants);
   for (const o of overrides) if (o.effect === 'ALLOW') all.push({ permission: o.permission, scope: o.scope ?? 'ORG' });
   const map = mergeGrants(all);

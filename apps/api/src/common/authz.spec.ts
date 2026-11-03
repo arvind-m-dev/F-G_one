@@ -56,4 +56,15 @@ describe('permission engine v2', () => {
     expect(legacyFromGrants(map)).toContain('attendance.view_team');
     expect(legacyFromGrants(map)).not.toContain('attendance.view_all');
   });
+
+  it('Super Admins get every catalogue permission at ORG and overrides cannot reduce it', () => {
+    const map = resolveGrants([], [{ permission: 'roles.manage', effect: 'DENY' }], { isSuperAdmin: true });
+    expect(Object.keys(map).sort()).toEqual(PERMISSION_CATALOG.map((e) => e.key).sort());
+    expect(new Set(Object.values(map))).toEqual(new Set(['ORG']));
+  });
+
+  it('client accounts are masked to CLIENT-scoped permissions, even with an admin role or the Super Admin flag', () => {
+    const map = resolveGrants([{ grants: legacyToGrants(ALL_PERMISSIONS) }], [], { accountType: 'CLIENT', isSuperAdmin: true });
+    expect(map).toEqual({}); // no catalogue entry supports CLIENT yet (Phase 5b)
+  });
 });

@@ -115,7 +115,15 @@ export const organizationSettingsSchema = z.object({
       sessionTtlHours: z.number().int().min(1).max(720).default(168),
     })
     .default({}),
+  security: z
+    .object({
+      /** How many Super Admins the organization may have (1 to SUPER_ADMIN_HARD_LIMIT). */
+      superAdminLimit: z.number().int().min(1).max(4).default(4),
+    })
+    .default({}),
 });
+/** System maximum for Super Admins per organization; the org setting can only lower it. */
+export const SUPER_ADMIN_HARD_LIMIT = 4;
 export type OrganizationSettings = z.infer<typeof organizationSettingsSchema>;
 
 export function parseOrganizationSettings(raw: unknown): OrganizationSettings {

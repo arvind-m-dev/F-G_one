@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Patch } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, NotFoundException, Patch } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { organizationSettingsSchema, parseOrganizationSettings, PERMISSIONS, updateOrganizationSchema, UpdateOrganizationInput } from '@fg/shared';
 import { AuditService } from '../audit/audit.service';
@@ -51,6 +51,11 @@ export class OrganizationController {
   @RequirePermissions(PERMISSIONS.SETTINGS_MANAGE)
   async update(@Auth() auth: AuthContext, @Body(new ZodPipe(updateOrganizationSchema)) body: UpdateOrganizationInput) {
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: auth.organizationId } });
+    const current = parseOrganizationSettings(org.settings);
+    if (body.settings?.security && !auth.isSuperAdmin) {
+      const next = organizationSettingsSchema.parse(deepMerge(current, body.settings)).security;
+      if (JSON.stringify(next) !== JSON.stringify(current.security)) throw new ForbiddenException('Only a Super Admin can change security settings');
+    }
     const settings = body.settings
       ? organizationSettingsSchema.parse(deepMerge(parseOrganizationSettings(org.settings), body.settings))
       : undefined;

@@ -113,7 +113,7 @@ describe('employee onboarding & RBAC', () => {
   it('HR invites an employee who activates via the invitation link', async () => {
     const hr = await login(app, 'hr_admin@futuristglobal.com');
     await hr.post('/api/employees').send({ email: 'new@gmail.com', firstName: 'N', lastName: 'J', roleId: fg.roles.employee.id }).expect(400); // domain policy
-    await hr.post('/api/employees').send({ email: 'boss@futuristglobal.com', firstName: 'B', lastName: 'S', roleId: fg.roles.super_admin.id }).expect(403); // cannot grant higher role
+    await hr.post('/api/employees').send({ email: 'boss@futuristglobal.com', firstName: 'B', lastName: 'S', roleId: fg.roles.administrator.id }).expect(403); // cannot grant higher role
 
     const res = await hr.post('/api/employees').send({ email: 'New.Joiner@futuristglobal.com', firstName: 'New', lastName: 'Joiner', roleId: fg.roles.employee.id, designation: 'Engineer' }).expect(201);
     expect(res.body.employee.status).toBe('INVITED');

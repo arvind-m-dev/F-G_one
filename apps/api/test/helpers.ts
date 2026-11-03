@@ -26,9 +26,11 @@ export async function makeOrg(prisma: PrismaClient, slug: string, domain: string
   }
   const passwordHash = await hash(PASSWORD);
   const users: Record<string, { id: string; email: string }> = {};
+  // `super_admin` holds the Administrator role plus the Super Admin authority flag.
   for (const key of ['super_admin', 'hr_admin', 'manager', 'employee']) {
+    const roleKey = key === 'super_admin' ? 'administrator' : key;
     users[key] = await prisma.user.create({
-      data: { organizationId: org.id, email: `${key}@${domain}`, firstName: key, lastName: 'User', roleId: roles[key].id, status: 'ACTIVE', passwordHash },
+      data: { organizationId: org.id, email: `${key}@${domain}`, firstName: key, lastName: 'User', roleId: roles[roleKey].id, isSuperAdmin: key === 'super_admin', status: 'ACTIVE', passwordHash },
     });
   }
   const general = await prisma.channel.create({

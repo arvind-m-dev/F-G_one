@@ -53,10 +53,10 @@ export async function bootstrap(prisma: PrismaClient) {
   ]) {
     await prisma.leaveType.upsert({ where: { organizationId_code: { organizationId: org.id, code: t.code } }, update: {}, create: { ...t, organizationId: org.id } });
   }
-  const role = await prisma.role.findUniqueOrThrow({ where: { organizationId_key: { organizationId: org.id, key: 'super_admin' } } });
+  const role = await prisma.role.findUniqueOrThrow({ where: { organizationId_key: { organizationId: org.id, key: 'administrator' } } });
   if (await prisma.user.findUnique({ where: { email } })) throw new Error(`${email} already exists`);
   const user = await prisma.user.create({
-    data: { organizationId: org.id, email, firstName: need('ADMIN_FIRST'), lastName: need('ADMIN_LAST'), roleId: role.id, status: 'INVITED' },
+    data: { organizationId: org.id, email, firstName: need('ADMIN_FIRST'), lastName: need('ADMIN_LAST'), roleId: role.id, isSuperAdmin: true, status: 'INVITED' },
   });
   const token = randomBytes(32).toString('base64url');
   await prisma.invitation.create({

@@ -268,3 +268,12 @@ export const correctionSchema = z
   })
   .refine((v) => !v.checkOut || v.checkOut > v.checkIn, { path: ['checkOut'], message: 'Check-out must be after check-in' });
 export type CorrectionInput = z.infer<typeof correctionSchema>;
+
+// ───────────── Super Admins (Phase 2b) ─────────────
+/** Sensitive Super Admin actions require the caller's current password (re-authentication). */
+export const superAdminInviteSchema = z.object({ userId: z.string().min(1), password: z.string().min(1).max(200) });
+export type SuperAdminInviteInput = z.infer<typeof superAdminInviteSchema>;
+export const superAdminConfirmSchema = z.object({ password: z.string().min(1).max(200) });
+export type SuperAdminConfirmInput = z.infer<typeof superAdminConfirmSchema>;
+export const superAdminAcceptSchema = z.object({ token: z.string().min(10).max(200), password: z.string().min(1).max(200) });
+export type SuperAdminAcceptInput = z.infer<typeof superAdminAcceptSchema>;

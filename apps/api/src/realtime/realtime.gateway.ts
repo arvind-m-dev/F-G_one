@@ -72,7 +72,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const cookies = parseCookie(socket.handshake.headers.cookie ?? '');
       const token = cookies[env().SESSION_COOKIE_NAME];
       const ctx = token ? await this.auth.validateSession(token) : null;
-      if (!ctx) {
+      // Client accounts never join internal rooms (org-wide presence, channels, announcements).
+      if (!ctx || ctx.accountType !== 'INTERNAL') {
         socket.emit('error', 'unauthorized');
         socket.disconnect(true);
         return;

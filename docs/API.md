@@ -12,7 +12,7 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 |---|---|---|
 | 🌐 POST | `/auth/login` | `{ email, password }`. Limit 10/min. Locks for 15 min after 5 failures. Generic error message. |
 | POST | `/auth/logout` | Deletes the server session |
-| GET | `/auth/me` | `{ user, permissions, grants, role, preferences, organization{branding, settings} }`. `grants` maps permission → widest scope (e.g. `{"attendance.view":"TEAM"}`). `permissions` are the legacy flat keys derived from it. |
+| GET | `/auth/me` | `{ user, permissions, grants, role, preferences, organization{branding, settings} }`. `grants` maps permission → widest scope (e.g. `{"attendance.view":"TEAM"}`). `permissions` are the legacy flat keys derived from it. Also `isSuperAdmin` and `accountType` (`INTERNAL` or `CLIENT`). |
 | 🌐 POST | `/auth/forgot-password` | `{ email }`. Always returns 200 (no enumeration). Limit 5 per 15 min. |
 | 🌐 POST | `/auth/reset-password` | `{ token, password }`. Single use, 30-min expiry. Signs out all sessions. |
 | POST | `/auth/change-password` | `{ currentPassword, newPassword }`. Signs out other sessions. |
@@ -46,6 +46,24 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 | 🌐 GET | `/public/branding` | Login-page branding for `DEFAULT_ORG_SLUG` |
 | GET | `/organization` | any |
 | PATCH | `/organization` | `settings.manage`. `{ name?, logoUrl?, primaryColor?, secondaryColor?, settings?: deep-partial }`, deep-merged and re-validated. |
+
+## Super Admins (Phase 2b)
+Super Admin is an authority flag (`User.isSuperAdmin`), not a role. Every route below except `accept` requires it (`@RequireSuperAdmin`); anyone else gets 403. Other tenants' records return 404. Sensitive actions take the caller's current `password`; a wrong password returns 403 and is audited as `superadmin.reauth_failed`. Concurrent changes run in SERIALIZABLE transactions, and a conflict returns 409.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/super-admins` | `{ limit, hardLimit, used, superAdmins[], pending[] }`. `used` = active Super Admins + pending invitations. |
+| POST | `/super-admins/invitations` | `{ userId, password }`. The nominee must be an active internal user. Returns 409 when `used >= limit`. Emails a 72-hour link and returns `{ id, expiresAt, url }`. The link only works for the nominee, signed in, with their own password. |
+| POST | `/super-admins/invitations/:id/revoke` | Frees the slot |
+| POST | `/super-admins/invitations/accept` | **Nominee** (any signed-in internal user): `{ token, password }`. Returns 404 for anyone else's, used, revoked or expired links. The limit is re-checked. |
+| POST | `/super-admins/:userId/remove` | `{ password }`. Returns 403 when targeting yourself and 409 for the last active Super Admin. Takes effect on the target's next request. |
+
+Related rules:
+* Only a Super Admin can edit, deactivate or re-issue the invite of a Super Admin account.
+* Deactivating a Super Admin requires removing the authority first.
+* `POST /employees/:id/invite` now applies the same rank and Super Admin checks as editing. This closes a gap where HR could obtain the activation link for a pending higher-rank account.
+* Changing `settings.security` (`superAdminLimit`, 1–4) requires a Super Admin.
+* **Client accounts** (`accountType = CLIENT`) are denied on every route except `GET /auth/me`, `POST /auth/logout` and `POST /auth/change-password` (`@ClientAllowed`), and they cannot open a realtime socket.
 
 ## Dashboard · Analytics · Search · Audit
 | Method | Path | Permission |

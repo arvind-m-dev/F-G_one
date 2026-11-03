@@ -99,7 +99,7 @@ export class AuthService {
     const u = session.user;
     // Extra roles must belong to the same tenant (defence in depth).
     const roles = [u.role, ...u.extraRoles.map((x) => x.role).filter((r) => r.organizationId === u.organizationId)];
-    const grants = resolveGrants(roles, u.permissionOverrides);
+    const grants = resolveGrants(roles, u.permissionOverrides, { isSuperAdmin: u.isSuperAdmin, accountType: u.accountType });
     return {
       sessionId: session.id,
       userId: session.userId,
@@ -109,6 +109,8 @@ export class AuthService {
       rank: session.user.role.rank,
       permissions: legacyFromGrants(grants),
       grants,
+      isSuperAdmin: u.accountType === 'INTERNAL' && u.isSuperAdmin,
+      accountType: u.accountType,
       ip,
     };
   }

@@ -24,6 +24,7 @@ Principles:
 └──────────────────────────────────────────────────────────────┘
 ```
 
+* *(Implemented in Phase 2b, except MFA and generic re-auth, which come in 2c. Today sensitive Super Admin actions re-confirm the password.)*
 * `isSuperAdmin` lives on `User`. It can be changed **only** by the dedicated Super Admin endpoints (invite, accept, deactivate). Each requires MFA plus recent re-auth and is audited. It can never be changed through employee or role editing.
 * **Limit:** `settings.security.superAdminLimit` defaults to 4, and 4 is also the hard cap in code. A new invite is rejected when `active + pending invites >= limit`.
 * **Last-admin protection:** deactivating, suspending or demoting a Super Admin is rejected when they are the last *active* one. This is checked in a serializable transaction so two Super Admins can't remove each other at the same time.
