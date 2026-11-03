@@ -11,6 +11,12 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === 'true'),
+  /**
+   * Number of reverse-proxy hops in front of the API whose X-Forwarded-For entries are trusted.
+   * Local dev (browser → Next → API): 1. Render (browser → edge → Next → edge → API): 2.
+   * Too high lets clients spoof their IP; too low makes everyone share one rate-limit bucket.
+   */
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(1),
   SMTP_URL: z.string().optional().default(''),
   MAIL_FROM: z.string().default('FG One <no-reply@futuristglobal.com>'),
 });

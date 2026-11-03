@@ -10,7 +10,7 @@ export function configureApp(app: INestApplication) {
   app.use(cookieParser());
   app.enableCors({ origin: env().WEB_ORIGIN, credentials: true });
   const http = app.getHttpAdapter().getInstance();
-  http.set('trust proxy', 1);
+  http.set('trust proxy', env().TRUST_PROXY);
   http.disable('x-powered-by');
   app.enableShutdownHooks();
   return app;

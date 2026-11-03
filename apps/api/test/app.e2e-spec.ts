@@ -25,6 +25,14 @@ describe('health & public', () => {
   it('reports healthy', async () => {
     await request(app.getHttpServer()).get('/api/health').expect(200);
   });
+  it('derives the client IP from trusted proxy hops only (rate-limit key)', async () => {
+    const res = await request(app.getHttpServer()).get('/api/health').set('X-Forwarded-For', '203.0.113.7, 10.0.0.5').expect(200);
+    expect(res.body.clientIp).toBe('203.0.113.7');
+    // A client-supplied (spoofed) entry in front is ignored.
+    const spoofed = await request(app.getHttpServer()).get('/api/health').set('X-Forwarded-For', '6.6.6.6, 203.0.113.7, 10.0.0.5').expect(200);
+    expect(spoofed.body.clientIp).toBe('203.0.113.7');
+  });
+
   it('requires a session for protected routes', async () => {
     await request(app.getHttpServer()).get('/api/auth/me').expect(401);
     await request(app.getHttpServer()).get('/api/employees').expect(401);

@@ -11,6 +11,10 @@
 - Seed channels from the PRD (development, qa-testing, project-updates, ideas, help-support, team-discussion).
 - Docs: UI audit, design system, UI components, implementation plan, feature inventory, decisions, known issues, progress.
 
+### Fixed
+- API production image now includes the Prisma CLI, so migrations run on start instead of downloading an unpinned version.
+- Rate limiting and audit IPs use the real visitor IP behind the Render + Next.js proxy chain (`TRUST_PROXY`, default 1, Render 2). `/api/health` reports `clientIp` for verification.
+
 ### Changed
 - New design tokens (PRD palette), Geist typeface, chrome/canvas layering, redesigned dark theme.
 - Home recomposed: greeting with personal summary, day timeline, attention list, editorial announcements, team pulse grouped by availability.

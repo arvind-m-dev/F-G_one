@@ -22,6 +22,10 @@ services:
         value: "true"
       - key: DEFAULT_ORG_SLUG
         value: futurist-global
+      # Proxy hops in front of the API: Render edge -> fg-one-web (Next) -> Render edge.
+      # Verify with /api/health -> clientIp after deploy (docs/DEPLOY_RENDER_NEON.md).
+      - key: TRUST_PROXY
+        value: "2"
       - key: MAIL_FROM
         value: FG One <no-reply@futuristglobal.com>
       # Neon *direct* (non-pooled) connection string; `prisma migrate deploy` runs on start.

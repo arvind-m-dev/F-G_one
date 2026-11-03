@@ -99,6 +99,7 @@ It creates the organization, the system roles, `#general` and `#announcements`, 
 - [ ] Invite a test employee; the email arrives (or copy the link from the admin UI)
 - [ ] Open chat in two browsers: messages, typing indicators and status changes appear live
 - [ ] Sign out, then use **Forgot password** and receive the reset email
+- [ ] Open `https://<fg-one-web>/api/health` and check that `clientIp` is **your own public IP** (compare with any "what is my IP" site). If it shows a Render address instead, see the rate-limiting section below.
 
 ---
 
@@ -112,9 +113,17 @@ It creates the organization, the system roles, `#general` and `#announcements`, 
 | Neon free has a short restore window | Not a real backup. | Add the nightly `pg_dump` from [DEPLOYMENT.md](DEPLOYMENT.md#backups). |
 | One API instance only | Presence is tracked in memory. | Add the Redis adapter before scaling out (see [DEPLOYMENT.md](DEPLOYMENT.md#scaling-notes)). |
 
-## Known caveat: rate limiting behind the proxy
+## Rate limiting behind the proxy
 
-All API traffic arrives from `fg-one-web`, and the API trusts one proxy hop (`trust proxy 1`). As a result the API may see the same client IP for every user, so the global rate limit (300 requests/minute) can be shared by the whole company. That's fine for a pilot, but verify it before rolling out to everyone. The fix is to make the trusted hop count configurable.
+Requests reach the API as browser → Render edge → `fg-one-web` (Next.js) → Render edge → `fg-one-api`. The Next.js proxy passes `X-Forwarded-For` through unchanged (verified locally), so the API trusts **two** proxy hops. `render.yaml` sets `TRUST_PROXY=2`, which makes the API use the real visitor IP for rate limits and audit logs.
+
+Check it with the `clientIp` step in the smoke test:
+
+| `clientIp` shows | Meaning | Fix |
+|---|---|---|
+| Your public IP | Correct | — |
+| A Render or private address | Too few hops trusted, so everyone shares one rate-limit bucket | Raise `TRUST_PROXY` by 1 on `fg-one-api` and redeploy |
+| An address you can choose by sending your own `X-Forwarded-For` header | Too many hops trusted (spoofable) | Lower `TRUST_PROXY` by 1 |
 
 ## Going to production
 
