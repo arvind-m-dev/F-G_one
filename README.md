@@ -16,6 +16,7 @@ One workspace for chat, people, and HR at Futurist Global. It combines a Slack-s
 | **Presence** | 13 emoji statuses, custom message, auto-expiry, live updates over WebSocket. Kept separate from attendance. |
 | **Chat** | Public/private channels, 1:1 and group DMs, threads, emoji reactions, edit/delete with permissions, typing indicators, unread counters, optimistic sending, infinite history, member management with channel admins, join/leave, rename/topic |
 | **Attendance** | Check in (office, home, client site), breaks, check out, history and summaries. Team board for managers, live admin board with filters and CSV export. |
+| **Leave & holidays** | Balances, requests with working-day counting, approvals for managers and HR, "Who's away" calendar, holiday calendar with categories, admin leave types and holidays |
 | **Announcements** | Editorial feed with categories and read confirmations. Admins publish, target, pin, set expiry and track readers. |
 | **Notifications** | Inbox for DMs, @mentions, replies and announcements, with per-type settings |
 | **People** | Directory (grid/list, search, department filter), profile pages with reporting line, editable own profile (avatar colour/photo URL, bio, pronouns, timezone, birthday privacy) |

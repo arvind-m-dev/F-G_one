@@ -1,9 +1,11 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, WorkLocation } from '@prisma/client';
-import { hasPermission, parseOrganizationSettings, PERMISSIONS, RT } from '@fg/shared';
+import { hasPermission, parseOrganizationSettings, PERMISSIONS, RT, type CorrectionInput } from '@fg/shared';
+import { approversFor, assertCanDecide, deciderScope } from '../common/approvals';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import type { AuthContext } from '../common/auth-context';
-import { addDays, localDate, localMinutes, localWeekday, toDbDate } from '../common/tz';
+import { addDays, localDate, localMinutes, localToUtc, localWeekday, toDbDate } from '../common/tz';
 import { personSelect, toPerson } from '../employees/employee.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -30,6 +32,7 @@ export class AttendanceService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private async policy(organizationId: string) {
@@ -193,7 +196,12 @@ export class AttendanceService {
       select: { ...personSelect, attendance: { where: { date: toDbDate(day) }, include: recordInclude } },
       orderBy: [{ firstName: 'asc' }],
     });
-    const rows = people.map(({ attendance, ...p }) => ({ person: toPerson(p, this.realtime.isOnline(p.id)), record: this.serialize(attendance[0] ?? null) }));
+    const leaves = await this.prisma.leaveRequest.findMany({
+      where: { organizationId: auth.organizationId, status: 'APPROVED', startDate: { lte: toDbDate(day) }, endDate: { gte: toDbDate(day) }, userId: { in: people.map((p) => p.id) } },
+      select: { userId: true, halfDay: true, type: { select: { name: true, color: true } } },
+    });
+    const leaveBy = new Map(leaves.map((l) => [l.userId, { type: l.type.name, color: l.type.color, halfDay: l.halfDay !== 'NONE' }]));
+    const rows = people.map(({ attendance, ...p }) => ({ person: toPerson(p, this.realtime.isOnline(p.id)), record: this.serialize(attendance[0] ?? null), leave: leaveBy.get(p.id) ?? null }));
     const recs = rows.map((r) => r.record).filter(Boolean) as NonNullable<ReturnType<AttendanceService['serialize']>>[];
     return {
       date: day,
@@ -207,7 +215,8 @@ export class AttendanceService {
         clientSite: recs.filter((r) => r.location === 'ON_DUTY').length,
         onBreak: recs.filter((r) => r.state === 'on_break').length,
         checkedOut: recs.filter((r) => r.state === 'checked_out').length,
-        notCheckedIn: rows.length - recs.length,
+        notCheckedIn: rows.filter((r) => !r.record && !r.leave).length,
+        onLeave: rows.filter((r) => r.leave).length,
         late: recs.filter((r) => r.late).length,
       },
       rows,
@@ -241,5 +250,99 @@ export class AttendanceService {
     });
     await this.audit.log(auth, 'attendance.exported', 'attendance', null, { from: start, to: end, rows: rows.length });
     return { filename: `attendance-${start}-to-${end}.csv`, csv: [header.join(','), ...lines].join('\n') };
+  }
+
+  // ───────── corrections ─────────
+
+  async requestCorrection(auth: AuthContext, body: CorrectionInput) {
+    const policy = await this.policy(auth.organizationId);
+    if (body.date > localDate(policy.timezone)) throw new BadRequestException('You can only correct today or past days');
+    if (body.date < addDays(localDate(policy.timezone), -60)) throw new BadRequestException('Corrections are limited to the last 60 days');
+    const dup = await this.prisma.attendanceCorrection.count({ where: { userId: auth.userId, date: toDbDate(body.date), status: 'PENDING' } });
+    if (dup) throw new ConflictException('You already have a pending correction for that day');
+    const c = await this.prisma.attendanceCorrection.create({
+      data: { organizationId: auth.organizationId, userId: auth.userId, date: toDbDate(body.date), checkIn: body.checkIn, checkOut: body.checkOut ?? null, location: body.location, reason: body.reason },
+      include: { user: { select: { firstName: true, lastName: true } } },
+    });
+    await this.audit.log(auth, 'attendance.correction_requested', 'attendance_correction', c.id, { date: body.date });
+    void this.notifications.notify({
+      organizationId: auth.organizationId,
+      userIds: await approversFor(this.prisma, auth.organizationId, auth.userId),
+      actorId: auth.userId,
+      type: 'correction',
+      title: `${c.user.firstName} ${c.user.lastName} asked to correct attendance for ${body.date}`,
+      body: body.reason,
+      link: '/app/approvals',
+    });
+    return this.serializeCorrection({ ...c, user: undefined } as never);
+  }
+
+  private serializeCorrection(c: { id: string; date: Date; checkIn: string; checkOut: string | null; location: string; reason: string; status: string; reviewNote: string | null; decidedAt: Date | null; createdAt: Date; user?: Parameters<typeof toPerson>[0]; reviewer?: { firstName: string; lastName: string } | null }) {
+    return {
+      id: c.id,
+      date: c.date.toISOString().slice(0, 10),
+      checkIn: c.checkIn,
+      checkOut: c.checkOut,
+      location: c.location,
+      reason: c.reason,
+      status: c.status,
+      reviewNote: c.reviewNote,
+      decidedAt: c.decidedAt,
+      createdAt: c.createdAt,
+      person: c.user ? toPerson(c.user) : undefined,
+      reviewer: c.reviewer ?? null,
+    };
+  }
+
+  async listCorrections(auth: AuthContext, scope: 'mine' | 'approvals') {
+    let where: Prisma.AttendanceCorrectionWhereInput = { userId: auth.userId, organizationId: auth.organizationId };
+    if (scope === 'approvals') {
+      const s = deciderScope(auth, 'attendance');
+      if (!s) throw new ForbiddenException('You do not review attendance');
+      where = { ...s, status: 'PENDING' };
+    }
+    const rows = await this.prisma.attendanceCorrection.findMany({
+      where,
+      include: { user: { select: personSelect }, reviewer: { select: { firstName: true, lastName: true } } },
+      orderBy: [{ status: 'asc' }, { date: 'desc' }],
+      take: 100,
+    });
+    return rows.map((r) => this.serializeCorrection(r));
+  }
+
+  async decideCorrection(auth: AuthContext, id: string, decision: 'APPROVED' | 'REJECTED', note?: string | null) {
+    const c = await this.prisma.attendanceCorrection.findFirst({ where: { id, organizationId: auth.organizationId } });
+    if (!c) throw new NotFoundException('Correction not found');
+    await assertCanDecide(this.prisma, auth, c.userId, 'attendance');
+    if (c.status !== 'PENDING') throw new ConflictException(`Already ${c.status.toLowerCase()}`);
+    const policy = await this.policy(auth.organizationId);
+    const day = c.date.toISOString().slice(0, 10);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.attendanceCorrection.update({ where: { id }, data: { status: decision, reviewerId: auth.userId, reviewNote: note || null, decidedAt: new Date() } });
+      if (decision === 'APPROVED') {
+        const checkInAt = localToUtc(day, c.checkIn, policy.timezone);
+        const checkOutAt = c.checkOut ? localToUtc(day, c.checkOut, policy.timezone) : null;
+        const [h, m] = c.checkIn.split(':').map(Number);
+        const late = h! * 60 + m! > hhmm(policy.workdayStart) + policy.graceMinutes;
+        const remarks = `Corrected: ${c.reason}`.slice(0, 200);
+        await tx.attendanceRecord.upsert({
+          where: { userId_date: { userId: c.userId, date: c.date } },
+          update: { checkInAt, checkOutAt, location: c.location, late, remarks },
+          create: { organizationId: auth.organizationId, userId: c.userId, date: c.date, checkInAt, checkOutAt, location: c.location, late, remarks },
+        });
+      }
+    });
+    await this.audit.log(auth, decision === 'APPROVED' ? 'attendance.corrected' : 'attendance.correction_rejected', 'attendance_correction', id, { userId: c.userId, date: day, checkIn: c.checkIn, checkOut: c.checkOut });
+    void this.notifications.notify({
+      organizationId: auth.organizationId,
+      userIds: [c.userId],
+      actorId: auth.userId,
+      type: 'correction',
+      title: `Your attendance correction for ${day} was ${decision === 'APPROVED' ? 'approved' : 'declined'}`,
+      body: note || null,
+      link: '/app/attendance',
+    });
+    this.realtime.toUser(c.userId, RT.ATTENDANCE_CHANGED, { userId: c.userId });
+    return { ok: true };
   }
 }

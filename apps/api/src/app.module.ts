@@ -5,6 +5,10 @@ import { AnnouncementsController } from './announcements/announcements.controlle
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
 import { AuditController } from './audit/audit.controller';
+import { HolidaysController } from './holidays/holidays.controller';
+import { ApprovalsController } from './leave/approvals.controller';
+import { LeaveController } from './leave/leave.controller';
+import { LeaveService } from './leave/leave.service';
 import { AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -49,6 +53,9 @@ import { SearchController } from './search/search.controller';
     AttendanceController,
     AnnouncementsController,
     NotificationsController,
+    HolidaysController,
+    LeaveController,
+    ApprovalsController,
   ],
   providers: [
     AuditService,
@@ -59,6 +66,7 @@ import { SearchController } from './search/search.controller';
     RealtimeGateway,
     AttendanceService,
     NotificationsService,
+    LeaveService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
   ],

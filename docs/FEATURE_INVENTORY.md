@@ -18,7 +18,11 @@
 | Announcements | ✅ | Editorial feed, categories, search, reader, "I've read this" confirmations, banner for pending confirmations |
 | Notifications inbox | ✅ | Bell with unread count. DMs (grouped per conversation), @mentions, thread replies, announcements. Filters, mark read, per-type settings, live toasts. |
 | Getting started checklist | ✅ | Real progress, dismissible |
-| My Work, Calendar, Leave, Ideas, Knowledge Base | ⬜ | Planned |
+| Leave | ✅ | Balances per type and leave year, request with live working-day count (weekends and holidays excluded, half days), overlap and balance checks, cancel, "Who's away" month calendar (colleagues see dates only, never reasons) |
+| Holidays | ✅ | Year view by month, next-holiday banner, categories: public, company, optional, special working day |
+| Approvals | ✅ | For managers (direct reports) and HR: leave and attendance corrections, approve/decline with note, badge count |
+| Attendance corrections | ✅ | "Fix a day" or per-day "Request correction"; applied in the organization's time zone when approved; status shown on the Attendance page |
+| My Work, Calendar, Ideas, Knowledge Base | ⬜ | Planned |
 
 ## Admin portal (`/admin`)
 | Module | Status |
@@ -29,9 +33,11 @@
 | Roles & permissions | 🟡 Read-only matrix. Editing is planned. |
 | System settings | ✅ Branding, modules, home defaults, navigation, attendance and leave policy values, allowed domains, session length |
 | Audit logs | ✅ Search and filter |
-| Attendance monitoring | ✅ Live board by day, filters (office, home, client site, on a break, checked out, not checked in, late), CSV export of the last 30 days (formula-safe) |
+| Attendance monitoring | ✅ Live board by day, filters (office, home, client site, on a break, checked out, not checked in, on leave, late), CSV export of the last 30 days (formula-safe) |
 | Announcements management | ✅ Publish, edit, delete, target a department, pin, expiry, ask for confirmation, see who has and hasn't confirmed |
-| Channel, leave, holiday and task management, reports | ⬜ |
+| Leave management | ✅ All requests by status, decide, company calendar (including pending), leave types (allowance, paid, colour, hide) |
+| Holiday management | ✅ Add, edit and remove with categories |
+| Channel and task management, reports | ⬜ |
 
 ## Platform
 | Capability | Status |

@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased: UI redesign (branch `ui-redesign`)
+### Added (HR round)
+- Leave: types with yearly allowances, balances, requests with working-day counting, overlap and balance checks, cancellation, manager/HR approvals, privacy-aware "Who's away" calendar, admin requests/calendar/types.
+- Holidays: categories (public, company, optional, special working day), employee calendar, admin management.
+- Attendance corrections: request, review, apply in the organization's time zone, audited.
+- Approvals page with nav badge; leave shown on the attendance board.
+- `db:reset-org` go-live script (dry run by default) and default leave types in `db:bootstrap`.
+
 ### Added (features round)
 - Attendance: check-in/break/check-out with server-validated transitions, work location and notes, history with summaries, team board for managers, admin board with filters and CSV export. Times use the organization's time zone.
 - Announcements: editorial feed, categories, read confirmations; admin publishing with targeting, pinning, expiry and confirmation tracking.

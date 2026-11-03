@@ -1,7 +1,9 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock } from 'lucide-react';
-import { Suspense } from 'react';
+import { CalendarClock, ClipboardCheck, Wrench } from 'lucide-react';
+import { Suspense, useState } from 'react';
+import { CorrectionDialog, type CorrectionPrefill } from '@/components/attendance/correction-dialog';
+import { Button } from '@/components/ui/button';
 import { PERMISSIONS } from '@fg/shared';
 import { AttendanceBoard } from '@/components/attendance/attendance-board';
 import { AttendancePanel, DayBar, LOCATION_ICON, LOCATION_LABEL } from '@/components/attendance/attendance-panel';
@@ -9,7 +11,7 @@ import { PageHeader } from '@/components/shell/page';
 import { SectionTitle } from '@/components/ui/card';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
 import { api } from '@/lib/api';
-import { fmtDuration } from '@/lib/hooks';
+import { fmtDuration, useCorrections } from '@/lib/hooks';
 import { useCan, useClock } from '@/lib/session';
 import type { AttendanceHistory } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
@@ -34,12 +36,20 @@ function History() {
     placeholderData: (p) => p,
   });
   const s = hist.data?.summary;
+  const [fix, setFix] = useState<CorrectionPrefill | null>(null);
+  const tz = hist.data?.timezone;
+  const hm = (t: string | null) => (t ? new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t)) : null);
+  const yesterday = new Date(Date.now() - 86400_000).toLocaleDateString('en-CA');
   const time = (t: string | Date) => clockTime(t, hist.data?.timezone);
   return (
     <section className="mt-10">
       <SectionTitle
         icon={<CalendarClock />}
         action={
+          <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setFix({ date: yesterday })}>
+            <Wrench /> Fix a day
+          </Button>
           <div className="inline-flex rounded-lg bg-surface-2 p-0.5" role="radiogroup" aria-label="Period">
             {RANGES.map(([v, label]) => (
               <button key={v} role="radio" aria-checked={range === v} onClick={() => set({ range: v })} className={cn('rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap transition', range === v ? 'bg-canvas shadow-sm' : 'text-muted')}>
@@ -47,6 +57,7 @@ function History() {
                 {label}
               </button>
             ))}
+          </div>
           </div>
         }
       >
@@ -98,13 +109,47 @@ function History() {
                 <span className="col-span-2 sm:col-span-1">
                   <DayBar r={r} now={Date.now()} />
                 </span>
-                <span className="hidden text-right text-sm font-medium tabular-nums sm:block">{fmtDuration(r.workedMinutes)}</span>
+                <span className="hidden text-right text-sm font-medium tabular-nums sm:block">
+                  {fmtDuration(r.workedMinutes)}
+                  {r.state === 'checked_out' && (
+                    <button onClick={() => setFix({ date: r.date, checkIn: hm(r.checkInAt) ?? undefined, checkOut: hm(r.checkOutAt), location: r.location })} className="block w-full text-right text-[11px] font-normal text-muted hover:text-primary">
+                      Request correction
+                    </button>
+                  )}
+                </span>
               </li>
             );
           })}
         </ul>
       )}
+      <MyCorrections />
+      <CorrectionDialog prefill={fix} onClose={() => setFix(null)} />
     </section>
+  );
+}
+
+function MyCorrections() {
+  const q = useCorrections('mine');
+  if (!q.data?.length) return null;
+  const tone = { PENDING: 'warning', APPROVED: 'success', REJECTED: 'danger' } as const;
+  const label = { PENDING: 'Waiting for review', APPROVED: 'Applied', REJECTED: 'Declined' } as const;
+  return (
+    <div className="mt-8">
+      <SectionTitle icon={<ClipboardCheck />}>My correction requests</SectionTitle>
+      <ul className="divide-y rounded-xl border">
+        {q.data.map((c) => (
+          <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-[13px]">
+            <span className="font-medium">{new Date(`${c.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+            <span className="text-muted tabular-nums">
+              {c.checkIn} – {c.checkOut ?? '…'}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-muted">{c.reason}</span>
+            <Badge tone={tone[c.status]}>{label[c.status]}</Badge>
+            {c.reviewNote && <span className="w-full text-xs text-subtle">“{c.reviewNote}”{c.reviewer ? ` — ${c.reviewer.firstName}` : ''}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

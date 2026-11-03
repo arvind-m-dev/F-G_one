@@ -44,6 +44,11 @@ Channel 1─* Message 1─* Message (thread replies), 1─* MessageReaction
 | **Notification** | In-app inbox | `type`, `title`, `body`, `link`, `groupKey` + `count` (merged while unread), `readAt` |
 | Announcement (changed) | | adds `category`, `requireAck` |
 
+| **LeaveType** | Kinds of leave | unique `(organizationId, code)`, `annualAllowance` (0 = unlimited), `paid`, `active` |
+| **LeaveRequest** | Leave | `startDate`, `endDate`, `halfDay`, `days` (working days), `status PENDING/APPROVED/REJECTED/CANCELLED`, `approverId`, `decisionNote` |
+| **AttendanceCorrection** | Fix a day | `date`, `checkIn`/`checkOut` (local HH:MM), `location`, `reason`, `status`, `reviewerId` |
+| HolidayType (changed) | | adds `COMPANY`, `SPECIAL_WORKING_DAY` |
+
 Migration `…_attendance_announcements_notifications` also adds the new Home widgets to existing organizations' defaults.
 
 ## Planned models (added by later milestones, no changes to existing tables)

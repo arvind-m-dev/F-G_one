@@ -44,6 +44,9 @@ model Organization {
   sessions      Session[]
   attendance    AttendanceRecord[]
   notifications Notification[]
+  leaveTypes    LeaveType[]
+  leaveRequests LeaveRequest[]
+  corrections   AttendanceCorrection[]
 }
 
 model Department {
@@ -154,6 +157,10 @@ model User {
   announcementAcks  AnnouncementAck[]
   notifications     Notification[]       @relation("NotificationUser")
   notificationsSent Notification[]       @relation("NotificationActor")
+  leaveRequests     LeaveRequest[]       @relation("LeaveRequester")
+  leaveDecisions    LeaveRequest[]       @relation("LeaveApprover")
+  corrections       AttendanceCorrection[] @relation("CorrectionRequester")
+  correctionReviews AttendanceCorrection[] @relation("CorrectionReviewer")
 
   @@unique([organizationId, employeeCode])
   @@index([organizationId, status])
@@ -227,9 +234,12 @@ model AuditLog {
 
 // ───────────────────────────── Company content (read in Phase 1, managed in Phase 4) ─────────────────────────────
 
+/// MANDATORY = public holiday. SPECIAL_WORKING_DAY makes a normally off day a working day.
 enum HolidayType {
   MANDATORY
   OPTIONAL
+  COMPANY
+  SPECIAL_WORKING_DAY
 }
 
 model Holiday {
@@ -453,4 +463,97 @@ model MessageReaction {
   createdAt DateTime @default(now())
 
   @@id([messageId, userId, emoji])
+}
+
+// ───────────────────────────── Leave ─────────────────────────────
+
+model LeaveType {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  code            String
+  color           String       @default("#6366f1")
+  /// Days per leave year; 0 = no limit (e.g. unpaid leave)
+  annualAllowance Float        @default(0)
+  paid            Boolean      @default(true)
+  active          Boolean      @default(true)
+  description     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  requests LeaveRequest[]
+
+  @@unique([organizationId, code])
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum HalfDay {
+  NONE
+  FIRST_HALF
+  SECOND_HALF
+}
+
+model LeaveRequest {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("LeaveRequester", fields: [userId], references: [id], onDelete: Cascade)
+  typeId         String
+  type           LeaveType    @relation(fields: [typeId], references: [id])
+  startDate      DateTime     @db.Date
+  endDate        DateTime     @db.Date
+  halfDay        HalfDay      @default(NONE)
+  /// Working days counted (weekends and holidays excluded), 0.5 for half days
+  days           Float
+  reason         String?
+  status         LeaveStatus  @default(PENDING)
+  approverId     String?
+  approver       User?        @relation("LeaveApprover", fields: [approverId], references: [id], onDelete: SetNull)
+  decisionNote   String?
+  decidedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, status])
+  @@index([userId, startDate])
+  @@index([organizationId, startDate, endDate])
+}
+
+// ───────────────────────────── Attendance corrections ─────────────────────────────
+
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AttendanceCorrection {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation("CorrectionRequester", fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime         @db.Date
+  /// Requested times as local "HH:MM" in the organization time zone
+  checkIn        String
+  checkOut       String?
+  location       WorkLocation
+  reason         String
+  status         CorrectionStatus @default(PENDING)
+  reviewerId     String?
+  reviewer       User?            @relation("CorrectionReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewNote     String?
+  decidedAt      DateTime?
+  createdAt      DateTime         @default(now())
+
+  @@index([organizationId, status])
+  @@index([userId, date])
 }

@@ -150,6 +150,7 @@ export const userPreferencesSchema = z.object({
       mentions: z.boolean().optional(),
       threads: z.boolean().optional(),
       announcements: z.boolean().optional(),
+      requests: z.boolean().optional(),
     })
     .optional(),
 });

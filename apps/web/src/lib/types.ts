@@ -157,8 +157,8 @@ export interface AttendanceBoard {
   date: string;
   timezone: string;
   isToday: boolean;
-  totals: { employees: number; checkedIn: number; office: number; home: number; clientSite: number; onBreak: number; checkedOut: number; notCheckedIn: number; late: number };
-  rows: { person: Person; record: AttendanceRecord | null }[];
+  totals: { employees: number; checkedIn: number; office: number; home: number; clientSite: number; onBreak: number; checkedOut: number; notCheckedIn: number; late: number; onLeave: number };
+  rows: { person: Person; record: AttendanceRecord | null; leave: { type: string; color: string; halfDay: boolean } | null }[];
 }
 
 export interface Announcement {
@@ -181,7 +181,7 @@ export interface Announcement {
 
 export interface AppNotification {
   id: string;
-  type: 'dm' | 'mention' | 'thread' | 'announcement';
+  type: 'dm' | 'mention' | 'thread' | 'announcement' | 'leave' | 'correction';
   title: string;
   body: string | null;
   link: string | null;
@@ -189,4 +189,58 @@ export interface AppNotification {
   readAt: string | null;
   createdAt: string;
   actor: { id: string; firstName: string; lastName: string; displayName: string | null; avatarColor: string; avatarUrl: string | null } | null;
+}
+
+export interface LeaveType {
+  id: string;
+  name: string;
+  code: string;
+  color: string;
+  annualAllowance: number;
+  paid: boolean;
+  active: boolean;
+  description: string | null;
+}
+export interface LeaveBalance {
+  type: LeaveType;
+  allowance: number;
+  used: number;
+  pending: number;
+  remaining: number | null;
+}
+export interface LeaveRequest {
+  id: string;
+  type: { id: string; name: string; code: string; color: string; paid: boolean };
+  person: Person;
+  startDate: string;
+  endDate: string;
+  halfDay: 'NONE' | 'FIRST_HALF' | 'SECOND_HALF';
+  days: number;
+  reason: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  approver: { id: string; firstName: string; lastName: string } | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+export interface Holiday {
+  id: string;
+  name: string;
+  date: string;
+  type: 'MANDATORY' | 'OPTIONAL' | 'COMPANY' | 'SPECIAL_WORKING_DAY';
+  description: string | null;
+}
+export interface Correction {
+  id: string;
+  date: string;
+  checkIn: string;
+  checkOut: string | null;
+  location: 'WFO' | 'WFH' | 'ON_DUTY';
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewNote: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  person?: Person;
+  reviewer: { firstName: string; lastName: string } | null;
 }

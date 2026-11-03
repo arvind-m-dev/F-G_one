@@ -24,6 +24,7 @@ const FILTERS = [
   ['break', 'On a break'],
   ['out', 'Checked out'],
   ['missing', 'Not checked in'],
+  ['leave', 'On leave'],
   ['late', 'Late'],
 ] as const;
 type Filter = (typeof FILTERS)[number][0];
@@ -34,7 +35,8 @@ const shiftDay = (ymd: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-function StateBadge({ r }: { r: AttendanceRecord | null }) {
+function StateBadge({ r, leave }: { r: AttendanceRecord | null; leave?: { type: string; halfDay: boolean } | null }) {
+  if (!r && leave) return <Badge tone="brand">{leave.halfDay ? 'Half day off' : 'On leave'}</Badge>;
   if (!r) return <Badge tone="muted">Not checked in</Badge>;
   if (r.state === 'on_break') return <Badge tone="warning">On a break</Badge>;
   if (r.state === 'checked_out') return <Badge>Checked out</Badge>;
@@ -54,16 +56,17 @@ export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
   const time = (t: string | Date) => clockTime(t, d?.timezone);
 
   const counts: Record<Filter, number> = d
-    ? { all: d.totals.employees, in: d.totals.checkedIn, WFO: d.totals.office, WFH: d.totals.home, ON_DUTY: d.totals.clientSite, break: d.totals.onBreak, out: d.totals.checkedOut, missing: d.totals.notCheckedIn, late: d.totals.late }
+    ? { all: d.totals.employees, in: d.totals.checkedIn, WFO: d.totals.office, WFH: d.totals.home, ON_DUTY: d.totals.clientSite, break: d.totals.onBreak, out: d.totals.checkedOut, missing: d.totals.notCheckedIn, leave: d.totals.onLeave, late: d.totals.late }
     : ({} as Record<Filter, number>);
-  const rows = (d?.rows ?? []).filter(({ person, record: r }) => {
+  const rows = (d?.rows ?? []).filter(({ person, record: r, leave }) => {
     if (q && !person.name.toLowerCase().includes(q.toLowerCase())) return false;
     switch (show) {
       case 'in': return !!r;
       case 'WFO': case 'WFH': case 'ON_DUTY': return r?.location === show;
       case 'break': return r?.state === 'on_break';
       case 'out': return r?.state === 'checked_out';
-      case 'missing': return !r;
+      case 'missing': return !r && !leave;
+      case 'leave': return !!leave;
       case 'late': return !!r?.late;
       default: return true;
     }
@@ -152,7 +155,7 @@ export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
             <span className="text-right">Worked</span>
           </div>
           <ul className="divide-y">
-            {rows.map(({ person, record: r }) => {
+            {rows.map(({ person, record: r, leave }) => {
               const Loc = r ? LOCATION_ICON[r.location] : null;
               return (
                 <li key={person.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-2.5 md:grid-cols-[minmax(0,2fr)_120px_120px_90px_90px_90px]">
@@ -164,7 +167,7 @@ export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
                     </span>
                   </span>
                   <span className="justify-self-end md:justify-self-start">
-                    <StateBadge r={r} />
+                    <StateBadge r={r} leave={leave} />
                   </span>
                   <span className="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-11 text-xs text-muted md:contents md:pl-0 md:text-[13px]">
                     <span className="flex items-center gap-1.5 md:text-foreground">

@@ -79,6 +79,35 @@ Days use the organization's time zone (`settings.attendance.timezone`). Every tr
 | GET | `/announcements/:id/acks` | `announcements.manage`: confirmed and pending lists |
 | POST / PATCH / DELETE | `/announcements[/:id]` | `announcements.manage`. Publishing notifies the audience. Audited. |
 
+## Holidays
+| Method | Path | Rules |
+|---|---|---|
+| GET | `/holidays?year=` | Everyone in the organization |
+| POST / PATCH / DELETE | `/holidays[/:id]` | `holidays.manage`. `{ name, date, type: MANDATORY\|COMPANY\|OPTIONAL\|SPECIAL_WORKING_DAY, description? }`. Audited. |
+
+## Leave
+Working days follow `attendance.workingDays`. Public and company holidays don't count, and special working days do.
+
+| Method | Path | Rules |
+|---|---|---|
+| GET | `/leave/types?include=all` | Active types (HR can include hidden ones) |
+| POST / PATCH | `/leave/types[/:id]` | `employees.manage` |
+| GET | `/leave/balances?userId=` | Yours. Managers can see reports, HR anyone. Pending days are held from the balance. |
+| POST | `/leave/preview` | `{ typeId, startDate, endDate, halfDay }` returns `{ days }` |
+| POST | `/leave/requests` | Validates the type, half-day policy, non-working ranges, overlap (409) and balance (400). Notifies the manager, or HR if there is none. |
+| GET | `/leave/requests?scope=mine\|approvals\|all&status=` | `approvals` covers your direct reports (`leave.approve`), or everyone for HR. `all` is HR only. |
+| POST | `/leave/requests/:id/decision` | `{ decision: APPROVED\|REJECTED, note? }`. Manager of the requester or HR, never yourself. 409 if already decided. Audited and notified. |
+| POST | `/leave/requests/:id/cancel` | Your own pending or future approved leave |
+| GET | `/leave/calendar?month=YYYY-MM` | Approved leave for your department and reports (HR also sees pending). Reasons only for HR and yourself. |
+| GET | `/approvals/count` | `{ canApprove, leave, corrections, total }` |
+
+## Attendance corrections
+| Method | Path | Rules |
+|---|---|---|
+| POST | `/attendance/corrections` | `{ date, checkIn, checkOut?, location, reason }`. Today or up to 60 days back, one pending per day. |
+| GET | `/attendance/corrections?scope=mine\|approvals` | |
+| POST | `/attendance/corrections/:id/decision` | Manager (`attendance.view_team`) of the requester or HR. Approval writes the record in the organization's time zone. Audited. |
+
 ## Notifications
 | Method | Path | Notes |
 |---|---|---|

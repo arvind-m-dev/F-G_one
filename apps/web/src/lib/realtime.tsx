@@ -58,6 +58,9 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
     s.on(RT.CHANNEL_REMOVED, () => void qc.invalidateQueries({ queryKey: ['channels'] }));
     s.on(RT.NOTIFICATION_NEW, (n: { title: string; body: string | null; link: string | null; type: string }) => {
       void qc.invalidateQueries({ queryKey: ['notifications'] });
+      if (n.type === 'leave' || n.type === 'correction') {
+        for (const k of ['leave-requests', 'leave-balances', 'approvals-count', 'corrections', 'attendance-history', 'attendance-board']) void qc.invalidateQueries({ queryKey: [k] });
+      }
       // Don't toast chat activity for the conversation you're already reading.
       if (n.link && window.location.pathname === n.link.split('?')[0]) return;
       toast(n.title, {

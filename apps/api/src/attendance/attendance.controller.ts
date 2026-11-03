@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { attendanceBoardSchema, attendanceRangeSchema, checkInSchema, checkOutSchema } from '@fg/shared';
+import { attendanceBoardSchema, attendanceRangeSchema, checkInSchema, checkOutSchema, correctionSchema, decisionSchema, type CorrectionInput } from '@fg/shared';
 import { z } from 'zod';
 import { Auth, AuthContext } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
@@ -53,6 +53,22 @@ export class AttendanceController {
   @Get('users/:id')
   forUser(@Auth() auth: AuthContext, @Param('id') id: string, @Query(new ZodPipe(attendanceRangeSchema)) q: z.infer<typeof attendanceRangeSchema>) {
     return this.attendance.history(auth, id, q.from, q.to);
+  }
+
+  @Post('corrections')
+  requestCorrection(@Auth() auth: AuthContext, @Body(new ZodPipe(correctionSchema)) body: CorrectionInput) {
+    return this.attendance.requestCorrection(auth, body);
+  }
+
+  @Get('corrections')
+  corrections(@Auth() auth: AuthContext, @Query(new ZodPipe(z.object({ scope: z.enum(['mine', 'approvals']).default('mine') }))) q: { scope: 'mine' | 'approvals' }) {
+    return this.attendance.listCorrections(auth, q.scope);
+  }
+
+  @Post('corrections/:id/decision')
+  @HttpCode(200)
+  decide(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(decisionSchema)) body: z.infer<typeof decisionSchema>) {
+    return this.attendance.decideCorrection(auth, id, body.decision, body.note);
   }
 
   @Get('export')

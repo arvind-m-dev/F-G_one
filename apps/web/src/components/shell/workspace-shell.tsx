@@ -4,6 +4,9 @@ import { PERMISSIONS, presenceMeta, type Permission } from '@fg/shared';
 import {
   ArrowLeftRight,
   Bell,
+  CalendarDays,
+  ClipboardCheck,
+  TreePalm,
   Clock,
   Megaphone,
   Building2,
@@ -44,7 +47,7 @@ import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSep
 import { Kbd, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api } from '@/lib/api';
-import { useChannels } from '@/lib/hooks';
+import { useApprovalsCount, useChannels } from '@/lib/hooks';
 import { useLivePerson } from '@/lib/presence-store';
 import { useRealtime } from '@/lib/realtime';
 import { useCan, useModule, useSession, useUpdatePreferences } from '@/lib/session';
@@ -72,6 +75,7 @@ function useNav(portal: Portal): NavGroup[] {
   const mod = useModule();
   const channels = useChannels(portal === 'app' && mod('chat'));
   const unread = (channels.data ?? []).reduce((n, c) => n + (c.muted ? 0 : c.unread), 0);
+  const approvals = useApprovalsCount();
   if (portal === 'admin') {
     const g: NavGroup[] = [
       { items: [{ href: '/admin', label: 'Overview', icon: ChartNoAxesCombined, exact: true, perm: PERMISSIONS.ANALYTICS_VIEW }] },
@@ -87,6 +91,8 @@ function useNav(portal: Portal): NavGroup[] {
         label: 'Operations',
         items: [
           { href: '/admin/attendance', label: 'Attendance', icon: Clock, perm: PERMISSIONS.ATTENDANCE_VIEW_ALL },
+          { href: '/admin/leave', label: 'Leave', icon: TreePalm, perm: PERMISSIONS.EMPLOYEES_MANAGE },
+          { href: '/admin/holidays', label: 'Holidays', icon: CalendarDays, perm: PERMISSIONS.HOLIDAYS_MANAGE },
           { href: '/admin/announcements', label: 'Announcements', icon: Megaphone, perm: PERMISSIONS.ANNOUNCEMENTS_MANAGE },
         ],
       },
@@ -105,12 +111,20 @@ function useNav(portal: Portal): NavGroup[] {
       items: [
         { href: '/app/home', label: 'Home', icon: House },
         ...(mod('chat') ? [{ href: '/app/chat', label: 'Chat', icon: MessageSquare, badge: unread }] : []),
-        ...(mod('attendance') ? [{ href: '/app/attendance', label: 'Attendance', icon: Clock }] : []),
         ...(mod('announcements') ? [{ href: '/app/announcements', label: 'Announcements', icon: Megaphone }] : []),
         { href: '/app/people', label: 'Directory', icon: Users },
       ],
     },
-  ];
+    {
+      label: 'My time',
+      items: [
+        ...(mod('attendance') ? [{ href: '/app/attendance', label: 'Attendance', icon: Clock }] : []),
+        ...(mod('leave') ? [{ href: '/app/leave', label: 'Leave', icon: TreePalm }] : []),
+        ...(mod('holidays') ? [{ href: '/app/holidays', label: 'Holidays', icon: CalendarDays }] : []),
+      ],
+    },
+    ...(approvals.data?.canApprove ? [{ label: 'Manage', items: [{ href: '/app/approvals', label: 'Approvals', icon: ClipboardCheck, badge: approvals.data.total }] }] : []),
+  ].filter((g) => g.items.length);
 }
 
 function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: boolean; onNavigate?: () => void }) {
@@ -328,7 +342,8 @@ function MobileTabs({ portal }: { portal: Portal }) {
   const pathname = usePathname();
   const groups = useNav(portal);
   const all = groups.flatMap((g) => g.items);
-  const items = [...all.filter((i) => i.href !== '/app/announcements').slice(0, 4), { href: '/app/profile', label: 'Me', icon: UserRound }];
+  const pick = ['/app/home', '/app/chat', '/app/attendance', '/app/leave'];
+  const items = [...pick.map((h) => all.find((i) => i.href === h)).filter(Boolean) as NavItem[], { href: '/app/profile', label: 'Me', icon: UserRound }];
   if (portal === 'admin') return null;
   return (
     <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

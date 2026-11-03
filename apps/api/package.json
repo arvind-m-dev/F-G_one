@@ -13,7 +13,8 @@
     "db:seed": "ts-node --transpile-only prisma/seed.ts",
     "test": "jest --runInBand",
     "test:e2e": "jest --runInBand test",
-    "db:bootstrap": "ts-node --transpile-only prisma/bootstrap.ts"
+    "db:bootstrap": "ts-node --transpile-only prisma/bootstrap.ts",
+    "db:reset-org": "ts-node --transpile-only prisma/reset-org.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

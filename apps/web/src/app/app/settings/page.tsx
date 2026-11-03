@@ -158,6 +158,7 @@ export default function SettingsPage() {
             ['mentions', 'Mentions', 'When someone writes @your-name in a channel.'],
             ['threads', 'Replies to your messages', 'When someone replies to you in a thread.'],
             ['announcements', 'Announcements', 'When a new announcement is published for you.'],
+            ['requests', 'Leave and attendance requests', 'Approvals, decisions and corrections that involve you.'],
           ] as const).map(([k, title, description]) => (
             <Row key={k} title={title} description={description}>
               <Switch

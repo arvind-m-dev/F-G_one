@@ -223,6 +223,8 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     ['Republic Day', `${year + 1}-01-26`, 'MANDATORY'],
     ['Holi', `${year + 1}-03-04`, 'MANDATORY'],
     ['Christmas', `${year}-12-25`, 'MANDATORY'],
+    ['Company offsite', `${year}-12-11`, 'COMPANY'],
+    ['Year-end release Saturday', `${year}-12-19`, 'SPECIAL_WORKING_DAY'],
     ['Guru Nanak Jayanti', `${year}-11-24`, 'OPTIONAL'],
     ['Gandhi Jayanti', `${year}-10-02`, 'MANDATORY'],
   ] as const;
@@ -280,6 +282,42 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
       { organizationId: org.id, authorId: users['manager@futuristglobal.com'].id, departmentId: depts['Engineering'].id, title: 'Engineering: on-call rotation updated', category: 'TEAM_UPDATE', body: 'The on-call rotation for December is published. Please confirm your slots by Friday.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 6 * 3600_000) },
       { organizationId: org.id, authorId: users['hr@futuristglobal.com'].id, title: 'Annual townhall — Friday 4 PM', category: 'EVENT', body: 'Join leadership for the annual townhall. Q&A submissions are open until Thursday evening.', priority: 'CRITICAL', publishedAt: new Date(Date.now() - 3 * 3600_000) },
     ],
+  });
+
+  // ── Leave types and requests ──
+  const lt = Object.fromEntries(
+    await Promise.all(
+      [
+        { code: 'CL', name: 'Casual leave', annualAllowance: 12, color: '#0ea5e9' },
+        { code: 'SL', name: 'Sick leave', annualAllowance: 8, color: '#f43f5e' },
+        { code: 'EL', name: 'Earned leave', annualAllowance: 15, color: '#10b981' },
+        { code: 'UL', name: 'Unpaid leave', annualAllowance: 0, color: '#94a3b8', paid: false },
+      ].map(async (t) => [t.code, await prisma.leaveType.create({ data: { ...t, organizationId: org.id } })]),
+    ),
+  );
+  const d = (offset: number) => ymdIn(new Date(Date.now() + offset * 86400_000));
+  const leaveRows: { email: string; type: string; from: number; to: number; days: number; status: 'APPROVED' | 'PENDING' | 'REJECTED'; reason: string }[] = [
+    { email: 'employee@futuristglobal.com', type: 'CL', from: -20, to: -20, days: 1, status: 'APPROVED', reason: 'Family function' },
+    { email: 'employee@futuristglobal.com', type: 'SL', from: -9, to: -8, days: 2, status: 'APPROVED', reason: 'Fever' },
+    { email: 'kabir.singh@futuristglobal.com', type: 'EL', from: 6, to: 8, days: 3, status: 'PENDING', reason: 'Trip to Goa' },
+    { email: 'meera.nair@futuristglobal.com', type: 'CL', from: 2, to: 2, days: 1, status: 'PENDING', reason: 'Bank work' },
+    { email: 'zara.khan@futuristglobal.com', type: 'CL', from: 0, to: 0, days: 1, status: 'APPROVED', reason: 'Personal' },
+    { email: 'tara.joshi@futuristglobal.com', type: 'EL', from: 12, to: 16, days: 5, status: 'APPROVED', reason: 'Vacation' },
+    { email: 'arjun.patel@futuristglobal.com', type: 'CL', from: -3, to: -3, days: 1, status: 'REJECTED', reason: 'Release week' },
+  ];
+  for (const l of leaveRows) {
+    const u = users[l.email];
+    const approver = PEOPLE.find((p) => p.email === l.email)?.manager;
+    await prisma.leaveRequest.create({
+      data: {
+        organizationId: org.id, userId: u.id, typeId: lt[l.type].id, startDate: new Date(`${d(l.from)}T00:00:00Z`), endDate: new Date(`${d(l.to)}T00:00:00Z`), days: l.days, reason: l.reason, status: l.status,
+        approverId: l.status !== 'PENDING' && approver ? users[approver].id : null, decidedAt: l.status !== 'PENDING' ? new Date() : null,
+      },
+    });
+  }
+  // A pending attendance correction for the engineering manager to review.
+  await prisma.attendanceCorrection.create({
+    data: { organizationId: org.id, userId: users['vikram.rao@futuristglobal.com'].id, date: new Date(`${d(-1)}T00:00:00Z`), checkIn: '09:20', checkOut: '18:40', location: 'WFO', reason: 'Forgot to check out — was in the office until 6:40 PM' },
   });
 
   // A couple of unread notifications so the inbox isn't empty for the demo employee.

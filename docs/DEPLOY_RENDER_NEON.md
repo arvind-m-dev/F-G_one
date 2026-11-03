@@ -86,9 +86,34 @@ ADMIN_EMAIL=it@futuristglobal.com ADMIN_FIRST=IT ADMIN_LAST=Admin \
 pnpm --filter @fg/api db:bootstrap
 ```
 
-It creates the organization, the system roles, `#general` and `#announcements`, and an invited Super Admin, then prints a **one-time invitation link**. Open it, set a password, and you're in. Invite everyone else from **Administration → Employees**.
+It creates the organization, the system roles, `#general` and `#announcements`, the default leave types (Casual 12, Sick 8, Earned 15, Unpaid), and an invited Super Admin, then prints a **one-time invitation link**. Open it, set a password, and you're in. Invite everyone else from **Administration → Employees**.
 
 `ORG_SLUG` must match `DEFAULT_ORG_SLUG` on the API (`futurist-global` by default).
+
+### If the database already holds demo data
+`db:bootstrap` refuses to touch an existing organization. To remove seeded demo accounts first, use the **reset** script. It deletes the organization and everything in it, then runs the bootstrap.
+
+1. **Back up first:**
+
+   ```bash
+   pg_dump --format=custom --no-owner "$DATABASE_URL" > before-reset.dump
+   ```
+
+2. **Dry run:** shows the database host and what would be deleted, and changes nothing.
+
+   ```bash
+   DATABASE_URL='postgresql://...neon.tech/fgone?sslmode=require' ORG_SLUG=futurist-global pnpm --filter @fg/api db:reset-org
+   ```
+
+3. **Real run:** add `CONFIRM_RESET` with the same slug, plus the bootstrap values from above.
+
+   ```bash
+   DATABASE_URL='postgresql://...neon.tech/fgone?sslmode=require' ORG_SLUG=futurist-global CONFIRM_RESET=futurist-global \
+   ORG_NAME="Futurist Global" ORG_DOMAIN=futuristglobal.com ADMIN_EMAIL=it@futuristglobal.com ADMIN_FIRST=IT ADMIN_LAST=Admin \
+   WEB_ORIGIN=https://fg-one-web.onrender.com pnpm --filter @fg/api db:reset-org
+   ```
+
+Do this **before** sharing the public URL. The demo accounts share one known password.
 
 ---
 

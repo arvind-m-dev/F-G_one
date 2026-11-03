@@ -2,7 +2,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { Clock, Hash, House, LogIn, Megaphone, Lock, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, UserCircle2, Users } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, TreePalm, Clock, Hash, House, LogIn, Megaphone, Lock, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, UserCircle2, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -148,6 +148,18 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   </Command.Item>
                   <Command.Item onSelect={() => go('/app/announcements')} className={itemCls}>
                     <Megaphone /> Announcements
+                  </Command.Item>
+                  <Command.Item onSelect={() => go('/app/leave?request=1')} className={itemCls}>
+                    <TreePalm /> Request time off
+                  </Command.Item>
+                  <Command.Item onSelect={() => go('/app/leave?tab=team')} className={itemCls}>
+                    <TreePalm /> Who&apos;s away
+                  </Command.Item>
+                  <Command.Item onSelect={() => go('/app/holidays')} className={itemCls}>
+                    <CalendarDays /> Holiday calendar
+                  </Command.Item>
+                  <Command.Item onSelect={() => go('/app/approvals')} className={itemCls}>
+                    <ClipboardCheck /> Approvals
                   </Command.Item>
                   <Command.Item onSelect={() => go('/app/profile')} className={itemCls}>
                     <UserCircle2 /> My profile

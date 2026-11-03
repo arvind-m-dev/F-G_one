@@ -18,3 +18,15 @@ export function addDays(ymd: string, n: number) {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+
+/** UTC instant for a local wall-clock time ("YYYY-MM-DD", "HH:MM") in an IANA time zone. */
+export function localToUtc(ymd: string, hhmm: string, tz: string): Date {
+  const guess = new Date(`${ymd}T${hhmm}:00Z`);
+  const offset = (d: Date) => {
+    const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(d);
+    const g = (t: string) => Number(p.find((x) => x.type === t)?.value);
+    return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second')) - d.getTime();
+  };
+  const first = new Date(guess.getTime() - offset(guess));
+  return new Date(guess.getTime() - offset(first)); // second pass handles DST edges
+}

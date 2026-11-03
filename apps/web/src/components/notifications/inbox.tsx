@@ -1,6 +1,6 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AtSign, Bell, BellOff, CheckCheck, Megaphone, MessageSquare, MessageSquareReply } from 'lucide-react';
+import { AtSign, Bell, BellOff, CheckCheck, ClipboardCheck, Megaphone, MessageSquare, MessageSquareReply, TreePalm } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -12,7 +12,7 @@ import { useNotifications, useUnreadNotifications } from '@/lib/hooks';
 import type { AppNotification } from '@/lib/types';
 import { cn, timeAgo } from '@/lib/utils';
 
-const TYPE_ICON = { dm: MessageSquare, mention: AtSign, thread: MessageSquareReply, announcement: Megaphone } as const;
+const TYPE_ICON = { dm: MessageSquare, mention: AtSign, thread: MessageSquareReply, announcement: Megaphone, leave: TreePalm, correction: ClipboardCheck } as const;
 
 function Item({ n, onOpen }: { n: AppNotification; onOpen: (n: AppNotification) => void }) {
   const Icon = TYPE_ICON[n.type] ?? Bell;

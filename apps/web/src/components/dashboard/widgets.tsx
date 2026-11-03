@@ -33,7 +33,7 @@ export interface DashboardData {
     author: { id: string; firstName: string; lastName: string; avatarColor: string; avatarUrl: string | null } | null;
     department: { name: string } | null;
   }[];
-  holidays: { id: string; name: string; date: string; type: 'MANDATORY' | 'OPTIONAL' }[];
+  holidays: { id: string; name: string; date: string; type: 'MANDATORY' | 'OPTIONAL' | 'COMPANY' | 'SPECIAL_WORKING_DAY' }[];
   celebrations: { type: 'birthday' | 'anniversary'; inDays: number; years?: number; person: Person }[];
   recentChats: ChannelSummary[];
   unreadTotal: number;
@@ -370,7 +370,9 @@ function HolidaysWidget({ data }: WidgetProps) {
   today.setHours(0, 0, 0, 0);
   return (
     <section>
-      <SectionTitle icon={<CalendarDays />}>Upcoming holidays</SectionTitle>
+      <SectionTitle icon={<CalendarDays />} action={<Link href="/app/holidays" className="text-xs text-muted hover:text-foreground">All holidays</Link>}>
+        Upcoming holidays
+      </SectionTitle>
       {data.holidays.length === 0 && <p className="text-sm text-muted">No upcoming holidays.</p>}
       <ul className="space-y-0.5">
         {data.holidays.slice(0, 5).map((h) => {
@@ -389,6 +391,7 @@ function HolidaysWidget({ data }: WidgetProps) {
                 </span>
               </span>
               {h.type === 'OPTIONAL' && <Badge tone="muted">Optional</Badge>}
+              {h.type === 'SPECIAL_WORKING_DAY' && <Badge tone="warning">Working day</Badge>}
             </li>
           );
         })}
