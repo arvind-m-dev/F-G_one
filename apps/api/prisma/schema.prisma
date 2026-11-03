@@ -114,23 +114,32 @@ enum AccountType {
 }
 
 model User {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                  String       @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   /// Company email, stored lower-case; globally unique so login can resolve the tenant.
-  email          String       @unique
-  passwordHash   String?
-  status         UserStatus   @default(INVITED)
-  accountType    AccountType  @default(INTERNAL)
+  email               String       @unique
+  passwordHash        String?
+  status              UserStatus   @default(INVITED)
+  accountType         AccountType  @default(INTERNAL)
   /// System authority, separate from roles. Changed only through /super-admins endpoints and operator CLIs.
-  isSuperAdmin   Boolean      @default(false)
-  roleId         String
-  role           Role         @relation(fields: [roleId], references: [id])
-  departmentId   String?
-  department     Department?  @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
-  managerId      String?
-  manager        User?        @relation("Reports", fields: [managerId], references: [id], onDelete: SetNull)
-  reports        User[]       @relation("Reports")
+  isSuperAdmin        Boolean      @default(false)
+  /// TOTP secret, AES-256-GCM encrypted with MFA_ENCRYPTION_KEY. Set only after a code was verified.
+  mfaSecretEnc        String?
+  /// Secret awaiting its first verified code (enrolment in progress).
+  mfaPendingSecretEnc String?
+  mfaEnabledAt        DateTime?
+  /// sha256 of unused one-time recovery codes.
+  mfaRecoveryCodes    String[]     @default([])
+  /// Last accepted TOTP time step; a code is never accepted twice.
+  mfaLastStep         Int?
+  roleId              String
+  role                Role         @relation(fields: [roleId], references: [id])
+  departmentId        String?
+  department          Department?  @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: SetNull)
+  managerId           String?
+  manager             User?        @relation("Reports", fields: [managerId], references: [id], onDelete: SetNull)
+  reports             User[]       @relation("Reports")
 
   firstName    String
   lastName     String
@@ -194,18 +203,23 @@ model User {
 }
 
 model Session {
-  id             String       @id @default(cuid())
+  id              String       @id @default(cuid())
   /// sha256 of the opaque cookie token; the raw token is never stored
-  tokenHash      String       @unique
-  userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  ip             String?
-  userAgent      String?
-  createdAt      DateTime     @default(now())
-  lastSeenAt     DateTime     @default(now())
-  expiresAt      DateTime
+  tokenHash       String       @unique
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ip              String?
+  userAgent       String?
+  createdAt       DateTime     @default(now())
+  lastSeenAt      DateTime     @default(now())
+  expiresAt       DateTime
+  /// Password accepted but the second step (TOTP or recovery code) is still owed. Such a session can only call /auth/mfa/verify and /auth/logout.
+  mfaPending      Boolean      @default(false)
+  mfaFailures     Int          @default(0)
+  /// When the user last proved who they are (sign-in or re-authentication). Drives @RequireRecentAuth.
+  authenticatedAt DateTime     @default(now())
 
   @@index([userId])
   @@index([expiresAt])

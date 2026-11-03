@@ -100,6 +100,14 @@ The result is computed **per request**, as today, so changes apply immediately w
 
 ## 4. MFA, re-auth and sessions
 
+> **As built (Phase 2c).** Differences from the design below:
+> * TOTP is about 60 lines in `apps/api/src/auth/mfa.ts` using Node's crypto (tested against the RFC 6238 vectors), not `otplib`.
+> * Recovery codes are random 60-bit codes stored as sha256. A slow hash adds nothing at that entropy.
+> * Wrong codes do not count toward the password lockout. Instead, the half session is discarded after 5, and `/auth/mfa/verify` shares the login rate limit.
+> * The session field is `authenticatedAt`, not `reauthAt`.
+> * A flagged Super Admin without MFA keeps the flag, but the authority is dormant (`superAdminNeedsMfa`) until they turn it on.
+> * `settings.security.requireMfa` for other users is **not built yet**.
+
 * **TOTP (RFC 6238)** using a small vetted library (`otplib`), compatible with any authenticator app.
   * The secret is encrypted at rest with AES-256-GCM using `MFA_ENCRYPTION_KEY`, an environment secret that is never sent to the frontend.
   * There are 10 single-use recovery codes, hashed with argon2.

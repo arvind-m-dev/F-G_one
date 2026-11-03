@@ -4,7 +4,7 @@ import {
   superAdminAcceptSchema, superAdminConfirmSchema, superAdminInviteSchema,
   type SuperAdminAcceptInput, type SuperAdminConfirmInput, type SuperAdminInviteInput,
 } from '@fg/shared';
-import { Auth, AuthContext, RequireSuperAdmin } from '../common/auth-context';
+import { Auth, AuthContext, RequireRecentAuth, RequireSuperAdmin } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { SuperAdminsService } from './super-admins.service';
 
@@ -19,6 +19,7 @@ export class SuperAdminsController {
   }
 
   @Post('invitations')
+  @RequireRecentAuth()
   @RequireSuperAdmin()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   invite(@Auth() auth: AuthContext, @Body(new ZodPipe(superAdminInviteSchema)) body: SuperAdminInviteInput) {
@@ -26,6 +27,7 @@ export class SuperAdminsController {
   }
 
   @Post('invitations/:id/revoke')
+  @RequireRecentAuth()
   @RequireSuperAdmin()
   @HttpCode(200)
   revoke(@Auth() auth: AuthContext, @Param('id') id: string) {
@@ -34,6 +36,7 @@ export class SuperAdminsController {
 
   /** Called by the nominee (not yet a Super Admin). */
   @Post('invitations/accept')
+  @RequireRecentAuth()
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   accept(@Auth() auth: AuthContext, @Body(new ZodPipe(superAdminAcceptSchema)) body: SuperAdminAcceptInput) {
@@ -41,6 +44,7 @@ export class SuperAdminsController {
   }
 
   @Post(':userId/remove')
+  @RequireRecentAuth()
   @RequireSuperAdmin()
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

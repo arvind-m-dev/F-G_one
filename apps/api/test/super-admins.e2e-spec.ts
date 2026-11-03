@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { createApp, login, makeOrg, PASSWORD, resetDb } from './helpers';
+import { createApp, login, makeOrg, mfaFields, PASSWORD, resetDb } from './helpers';
 
 /** Phase 2b: Super Admin authority is a protected flag, separate from roles. */
 const prisma = new PrismaClient();
@@ -78,6 +78,10 @@ describe('Super Admin authority', () => {
     await emp.post('/api/super-admins/invitations/accept').send({ token: tokenOf(inv.url), password: PASSWORD }).expect(404);
     const mgr = await login(app, 'manager@futuristglobal.com');
     await mgr.post('/api/super-admins/invitations/accept').send({ token: tokenOf(inv.url), password: 'nope-nope' }).expect(403);
+    // Super Admins must use two-step verification: no acceptance without it.
+    const noMfa = await mgr.post('/api/super-admins/invitations/accept').send({ token: tokenOf(inv.url), password: PASSWORD }).expect(403);
+    expect(noMfa.body.code).toBe('MFA_SETUP_REQUIRED');
+    await prisma.user.update({ where: { id: fg.users.manager.id }, data: mfaFields() });
     await mgr.post('/api/super-admins/invitations/accept').send({ token: tokenOf(inv.url), password: PASSWORD }).expect(200);
     await mgr.post('/api/super-admins/invitations/accept').send({ token: tokenOf(inv.url), password: PASSWORD }).expect(404); // single use
     expect((await mgr.get('/api/auth/me').expect(200)).body.isSuperAdmin).toBe(true);

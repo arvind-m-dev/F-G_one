@@ -6,7 +6,9 @@ import request from 'supertest';
 import { DEFAULT_ROLE_DEFINITIONS, DEFAULT_ROLE_GRANTS, organizationSettingsSchema } from '@fg/shared';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
+import { currentStep, encryptSecret, totpAt } from '../src/auth/mfa';
 import { MailService } from '../src/mail/mail.service';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 export const PASSWORD = 'Test-Password-123';
 
@@ -30,7 +32,7 @@ export async function makeOrg(prisma: PrismaClient, slug: string, domain: string
   for (const key of ['super_admin', 'hr_admin', 'manager', 'employee']) {
     const roleKey = key === 'super_admin' ? 'administrator' : key;
     users[key] = await prisma.user.create({
-      data: { organizationId: org.id, email: `${key}@${domain}`, firstName: key, lastName: 'User', roleId: roles[roleKey].id, isSuperAdmin: key === 'super_admin', status: 'ACTIVE', passwordHash },
+      data: { organizationId: org.id, email: `${key}@${domain}`, firstName: key, lastName: 'User', roleId: roles[roleKey].id, isSuperAdmin: key === 'super_admin', status: 'ACTIVE', passwordHash, ...(key === 'super_admin' ? mfaFields() : {}) },
     });
   }
   const general = await prisma.channel.create({
@@ -46,10 +48,24 @@ export async function createApp() {
   return { app, mail: app.get(MailService) };
 }
 
-/** Logs in and returns a supertest agent that carries the session cookie. */
+/** Authenticator secret used for every test account with two-step verification on. */
+export const TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+export const mfaFields = () => ({ mfaSecretEnc: encryptSecret(TOTP_SECRET), mfaEnabledAt: new Date(), mfaRecoveryCodes: [] as string[] });
+/** A valid code right now. Clears the replay marker first so tests can sign in many times within one 30-second step. */
+export async function totp(app: INestApplication, userId?: string) {
+  if (userId) await app.get(PrismaService).user.update({ where: { id: userId }, data: { mfaLastStep: null } });
+  return totpAt(TOTP_SECRET, currentStep());
+}
+
+/** Logs in (finishing the authenticator step when the account has one) and returns a supertest agent that carries the session cookie. */
 export async function login(app: INestApplication, email: string, password = PASSWORD) {
   const agent = request.agent(app.getHttpServer());
   const res = await agent.post('/api/auth/login').send({ email, password });
   if (res.status !== 200) throw new Error(`login failed for ${email}: ${res.status} ${JSON.stringify(res.body)}`);
+  if (res.body.mfaRequired) {
+    const user = await app.get(PrismaService).user.findUniqueOrThrow({ where: { email } });
+    const v = await agent.post('/api/auth/mfa/verify').send({ code: await totp(app, user.id) });
+    if (v.status !== 200) throw new Error(`MFA failed for ${email}: ${v.status} ${JSON.stringify(v.body)}`);
+  }
   return agent;
 }

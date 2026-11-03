@@ -235,4 +235,25 @@ export class EmployeesService {
     }
     return this.get(auth, id);
   }
+
+  async listSessions(auth: AuthContext, id: string) {
+    const target = await this.loadTarget(auth, id);
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    const rows = await this.prisma.session.findMany({
+      where: { userId: id, organizationId: auth.organizationId, mfaPending: false, expiresAt: { gt: new Date() } },
+      select: { id: true, ip: true, userAgent: true, createdAt: true, lastSeenAt: true, expiresAt: true },
+      orderBy: { lastSeenAt: 'desc' },
+    });
+    return rows.map((r) => ({ ...r, current: r.id === auth.sessionId }));
+  }
+
+  async revokeSessions(auth: AuthContext, id: string) {
+    if (id === auth.userId) throw new BadRequestException('To sign out your own devices, use your security settings');
+    const target = await this.loadTarget(auth, id);
+    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    const { count } = await this.prisma.session.deleteMany({ where: { userId: id, organizationId: auth.organizationId } });
+    this.realtime.disconnectUser(id);
+    await this.audit.log(auth, 'employee.sessions_revoked', 'user', id, { count });
+    return { count };
+  }
 }

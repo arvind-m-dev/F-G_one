@@ -18,7 +18,7 @@ This document describes **what is implemented today**. It was updated after Phas
 | Change password | Requires the current password. | `auth.service.ts:143-152` |
 | Mail | Sent over SMTP when `SMTP_URL` is set; otherwise logged to the console. | `mail/mail.service.ts` |
 
-**Not implemented:** MFA, email verification separate from invitation acceptance, a session list, self-service "sign out other devices", an admin "revoke sessions" action, recent-reauthentication for sensitive actions, a login history view, and per-attempt failed-login records (only the lock event is audited).
+**Not implemented:** email verification separate from invitation acceptance, a login history view, and per-attempt failed password records (only the lock event is audited; failed MFA codes are). MFA, re-authentication and device sessions were added in Phase 2c (see the note in §2).
 
 ## 2. Authorization
 
@@ -39,6 +39,8 @@ This document describes **what is implemented today**. It was updated after Phas
 > * Client accounts are default-denied on routes and sockets and are masked to CLIENT-scoped permissions.
 > * `SUSPENDED` and `ARCHIVED` statuses block sign-in and sessions.
 > * The invite re-issue escalation gap is closed.
+>
+> **Phase 2c (done):** two-step verification (TOTP plus recovery codes, encrypted secrets, no code reuse), half-signed-in sessions, `@RequireRecentAuth`, device list and sign-out for yourself and for admins, and socket disconnect on sign-out, revoke, password change or reset. Super Admin authority is dormant without MFA.
 >
 > The text below describes the legacy layer that still drives route guards.
 
@@ -65,7 +67,7 @@ There are no update or delete endpoints. It is **not** append-only at the databa
 | PRD requirement | Status |
 |---|---|
 | Super Admin as a separate authority (1–4 accounts, last one protected) | **Done (Phase 2b), backend.** The UI arrives in Phase 3. |
-| MFA, re-auth, session list and revoke, login history | Missing |
+| MFA, re-auth, session list and revoke, login history | **Done (Phase 2c)** except the login history view (Phase 7) |
 | Secure bootstrap that closes after first use | Partial. `db:bootstrap` creates a Super Admin invite but can be re-run and does not require MFA. |
 | Dynamic roles (create, edit, duplicate, archive, templates) | Data model and enforcement done (Phase 2a). There is no UI or API to edit yet (Phase 4). |
 | Granular actions × modules × **data scopes**, explicit deny, user overrides | Engine done (Phase 2a). The catalogue covers today's modules with ORG and TEAM scopes; other scopes arrive with their modules. |

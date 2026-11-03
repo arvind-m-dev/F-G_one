@@ -47,6 +47,10 @@ export interface Me {
   role: { key: string; rank: number };
   isSuperAdmin: boolean;
   accountType: 'INTERNAL' | 'CLIENT';
+  /** Two-step verification is on for this account. */
+  mfaEnabled: boolean;
+  /** Holds the Super Admin flag, but the authority stays off until two-step verification is on. */
+  superAdminNeedsMfa: boolean;
   preferences: UserPreferences;
   organization: {
     id: string;

@@ -123,6 +123,9 @@ export class SuperAdminsService {
         throw new NotFoundException('This nomination link is not valid. Ask a Super Admin for a new one.');
       }
       if (auth.accountType !== 'INTERNAL') throw new NotFoundException('This nomination link is not valid. Ask a Super Admin for a new one.');
+      if (!auth.mfaEnabled) {
+        throw new ForbiddenException({ statusCode: 403, code: 'MFA_SETUP_REQUIRED', message: 'Turn on two-step verification before accepting. Super Admins must use it.' });
+      }
       const limit = await this.limit(tx, auth.organizationId);
       const active = await tx.user.count({ where: this.activeWhere(auth.organizationId) });
       if (active >= limit) throw new ConflictException('The Super Admin limit has been reached. Ask a Super Admin to make room.');

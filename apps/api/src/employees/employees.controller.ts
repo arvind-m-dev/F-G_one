@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { createEmployeeSchema, listEmployeesQuerySchema, PERMISSIONS, updateEmployeeSchema } from '@fg/shared';
 import { z } from 'zod';
-import { Auth, AuthContext, RequirePermissions } from '../common/auth-context';
+import { Auth, AuthContext, RequirePermissions, RequireRecentAuth } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { EmployeesService } from './employees.service';
 
@@ -52,5 +52,21 @@ export class EmployeesController {
   @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
   invite(@Auth() auth: AuthContext, @Param('id') id: string) {
     return this.employees.issueInvitation(auth, id, true);
+  }
+
+  /** Devices the employee is signed in on. */
+  @Get(':id/sessions')
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  sessions(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.employees.listSessions(auth, id);
+  }
+
+  /** Signs the employee out everywhere and closes their live connections. */
+  @Post(':id/sessions/revoke')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  @RequireRecentAuth()
+  revokeSessions(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.employees.revokeSessions(auth, id);
   }
 }

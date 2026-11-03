@@ -18,6 +18,12 @@ const envSchema = z.object({
    */
   TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(1),
   SMTP_URL: z.string().optional().default(''),
+  /**
+   * 32-byte key (base64 or 64 hex characters) that encrypts two-step verification secrets.
+   * Required in production for MFA; development and tests fall back to a fixed local key.
+   * Changing it makes every enrolled authenticator invalid.
+   */
+  MFA_ENCRYPTION_KEY: z.string().optional().default(''),
   MAIL_FROM: z.string().default('FG One <no-reply@futuristglobal.com>'),
 });
 

@@ -277,3 +277,13 @@ export const superAdminConfirmSchema = z.object({ password: z.string().min(1).ma
 export type SuperAdminConfirmInput = z.infer<typeof superAdminConfirmSchema>;
 export const superAdminAcceptSchema = z.object({ token: z.string().min(10).max(200), password: z.string().min(1).max(200) });
 export type SuperAdminAcceptInput = z.infer<typeof superAdminAcceptSchema>;
+
+// ───────── two-step verification and re-authentication (Phase 2c) ─────────
+
+/** A 6-digit authenticator code, or a recovery code like `k3f9-2xq7-mm4p`. */
+export const mfaCodeSchema = z.object({ code: z.string().trim().min(6, 'Enter the code').max(20) });
+export type MfaCodeInput = z.infer<typeof mfaCodeSchema>;
+
+/** Prove identity again before a sensitive action. `code` is required when two-step verification is on. */
+export const reauthSchema = z.object({ password: z.string().min(1, 'Enter your password').max(200), code: z.string().trim().max(20).optional() });
+export type ReauthInput = z.infer<typeof reauthSchema>;

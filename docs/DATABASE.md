@@ -66,6 +66,11 @@ Migration `…_attendance_announcements_notifications` also adds the new Home wi
 * `settings.security.superAdminLimit` (1–4, default 4) in the organization settings JSON
 * Migration `20261103095255_super_admin_authority` sets `isSuperAdmin` for every holder of the old `super_admin` role, then renames that role to the assignable **Administrator** (`administrator`, rank 90, grants unchanged). Verified on the dev database: 2 of 2 former Super Admins were flagged.
 
+## Added (Super Admin Phase 2c: two-step verification and sessions)
+* `User.mfaSecretEnc` (AES-256-GCM, key `MFA_ENCRYPTION_KEY`), `mfaPendingSecretEnc` (enrolment in progress), `mfaEnabledAt`, `mfaRecoveryCodes` (sha256 of unused codes) and `mfaLastStep` (last accepted TOTP step, so no code works twice).
+* `Session.mfaPending` (password accepted, code still owed), `mfaFailures` and `authenticatedAt` (last sign-in or re-authentication, used by `@RequireRecentAuth`).
+* Migration `20261103102615_mfa_and_sessions` is additive. Existing sessions get `authenticatedAt = now()` and `mfaPending = false`.
+
 ## Planned models (added by later milestones, no changes to existing tables)
 
 | Milestone | Models |

@@ -3,6 +3,7 @@ import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { ACCENT_PALETTE } from '@fg/shared';
+import { SecuritySettings } from '@/components/security/security-settings';
 import { PageHeader } from '@/components/shell/page';
 import { Select } from '@/components/ui/input';
 import { Switch } from '@/components/ui/misc';
@@ -192,6 +193,8 @@ export default function SettingsPage() {
           </span>
         </Row>
       </Section>
+
+      <SecuritySettings />
 
       <Section title="Account">
         <Row title="Profile, photo and password" description="Update how colleagues see you and manage your password.">

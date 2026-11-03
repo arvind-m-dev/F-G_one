@@ -37,6 +37,9 @@ services:
       # Resend: smtp://resend:RESEND_API_KEY@smtp.resend.com:587
       - key: SMTP_URL
         sync: false
+      # 32 random bytes (openssl rand -base64 32). Encrypts two-step verification secrets; never change it after use.
+      - key: MFA_ENCRYPTION_KEY
+        generateValue: true
 
   - type: web
     name: fg-one-web

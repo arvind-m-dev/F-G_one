@@ -15,6 +15,13 @@ export interface AuthContext {
   accountType: 'INTERNAL' | 'CLIENT';
   /** Effective v2 grants: permission → widest scope. */
   grants: GrantMap;
+  /** Password accepted, second step still owed (only MFA verify and sign out are allowed). */
+  mfaPending: boolean;
+  mfaEnabled: boolean;
+  /** Super Admin flag is set but authority is dormant until two-step verification is on. */
+  superAdminNeedsMfa: boolean;
+  /** Last time the user proved who they are (sign-in or re-authentication). */
+  authenticatedAt: Date;
   ip?: string;
 }
 
@@ -28,6 +35,15 @@ export const RequireSuperAdmin = () => SetMetadata(SUPER_ADMIN_ONLY, true);
 /** Route may be used by client (external) accounts. Everything else is internal-only by default. */
 export const CLIENT_ALLOWED = 'fg:clientAllowed';
 export const ClientAllowed = () => SetMetadata(CLIENT_ALLOWED, true);
+
+/** Route may be used by a session that still owes its second sign-in step. */
+export const MFA_PENDING_OK = 'fg:mfaPendingOk';
+export const MfaPendingAllowed = () => SetMetadata(MFA_PENDING_OK, true);
+
+/** Sensitive route: the user must have signed in or re-authenticated within `minutes`. */
+export const RECENT_AUTH = 'fg:recentAuth';
+export const RECENT_AUTH_DEFAULT_MINUTES = 10;
+export const RequireRecentAuth = (minutes = RECENT_AUTH_DEFAULT_MINUTES) => SetMetadata(RECENT_AUTH, minutes);
 
 export const REQUIRED_PERMISSIONS = 'fg:permissions';
 export const RequirePermissions = (...perms: Permission[]) => SetMetadata(REQUIRED_PERMISSIONS, perms);
