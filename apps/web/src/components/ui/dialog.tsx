@@ -36,7 +36,7 @@ export function Dialog({
                   'fixed z-50 flex flex-col border bg-elevated shadow-lg focus:outline-none',
                   side === 'right'
                     ? 'inset-y-2 right-2 w-[calc(100%-1rem)] max-w-lg rounded-2xl'
-                    : 'top-1/2 left-1/2 max-h-[90vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl',
+                    : 'top-1/2 left-1/2 max-h-[90dvh] w-[calc(100vw-2rem)] max-w-lg rounded-2xl',
                   className,
                 )}
                 initial={side === 'right' ? { x: 40, opacity: 0 } : { opacity: 0, scale: 0.96, y: '-48%', x: '-50%' }}

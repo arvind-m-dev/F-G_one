@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: Dashboard day progress, leave calendar bars, loading states (branch `dashboard-day-progress`)
+### Changed
+- Dashboard "Today" is a progress bar of the workday built from today's attendance: worked time, breaks (with times on hover), the stretch before a late check-in and time left. Falls back to elapsed workday before check-in.
+- Leave calendar draws each leave as one bar from its first to last day in the leave type's colour, stacked in lanes when people overlap, continuing across weeks. Pending requests are dashed. Adds a leave type legend.
+- Centred dialogs no longer open off-screen (the position was applied twice). Tall dialogs scroll.
+### Added
+- Top-of-window progress bar on internal navigation and skeleton loading screens for the Employee and Admin portals.
+- `apps/web/vercel.json` to host the web app on Vercel (API stays on Render; Socket.IO needs a long-running server).
+- Demo seed: today's tea and lunch breaks for everyone checked in, and overlapping multi-day leaves around today.
+
 ## Unreleased: Super Admin control panel (branch `super-admin`)
 ### Added (Phase 1, docs only)
 - `AUTH_AND_RBAC.md` (current-state audit), `SUPER_ADMIN_ARCHITECTURE.md` (target design), `SUPER_ADMIN_IMPLEMENTATION_PLAN.md` (phases 2a–8). No code changes.

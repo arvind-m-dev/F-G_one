@@ -22,6 +22,36 @@ const shiftMonth = (m: string, n: number) => {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 };
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MAX_LANES = 4;
+
+const fmtDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const rangeLabel = (l: LeaveRequest) => (l.startDate === l.endDate ? fmtDay(l.startDate) : `${fmtDay(l.startDate)} – ${fmtDay(l.endDate)}`);
+
+/** Places each leave overlapping this week as a bar in the first free lane; counts per-day overflow beyond MAX_LANES. */
+function layoutWeek(week: (string | null)[], leaves: LeaveRequest[]) {
+  const days = week.map((d, i) => ({ d, i })).filter((x): x is { d: string; i: number } => !!x.d);
+  if (!days.length) return { bars: [], hidden: week.map(() => 0) };
+  const first = days[0]!.d;
+  const last = days[days.length - 1]!.d;
+  const segs = leaves
+    .filter((l) => l.startDate <= last && l.endDate >= first)
+    .map((l) => {
+      const cols = days.filter((x) => x.d >= l.startDate && x.d <= l.endDate);
+      return { l, from: cols[0]!.i, to: cols[cols.length - 1]!.i, starts: l.startDate >= first, ends: l.endDate <= last };
+    })
+    .sort((a, b) => a.from - b.from || b.to - b.from - (a.to - a.from));
+  const laneEnds: number[] = [];
+  const bars: ((typeof segs)[number] & { lane: number })[] = [];
+  const hidden = week.map(() => 0);
+  for (const s of segs) {
+    let lane = laneEnds.findIndex((end) => end < s.from);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = s.to;
+    if (lane < MAX_LANES) bars.push({ ...s, lane });
+    else for (let c = s.from; c <= s.to; c++) hidden[c]!++;
+  }
+  return { bars, hidden };
+}
 
 /** Month grid of who is away. Colleagues see dates only; reasons stay private. */
 export function LeaveCalendar() {
@@ -35,6 +65,7 @@ export function LeaveCalendar() {
   const lead = (first.getUTCDay() + 6) % 7;
   const cells: (string | null)[] = [...Array(lead).fill(null), ...Array.from({ length: daysIn }, (_, i) => `${cal.month}-${String(i + 1).padStart(2, '0')}`)];
   while (cells.length % 7) cells.push(null);
+  const weeks = Array.from({ length: cells.length / 7 }, (_, w) => cells.slice(w * 7, w * 7 + 7));
   const todayStr = new Date().toLocaleDateString('en-CA');
   const label = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -65,36 +96,81 @@ export function LeaveCalendar() {
             </span>
           ))}
         </div>
-        <div className="grid grid-cols-7">
-          {cells.map((d, i) => {
-            if (!d) return <div key={i} className="min-h-24 border-r border-b bg-surface-2/30 last:border-r-0 [&:nth-child(7n)]:border-r-0" />;
-            const wd = new Date(`${d}T12:00:00Z`).getUTCDay();
-            const off = !cal.workingDays.includes(wd);
-            const hol = cal.holidays.filter((h) => h.date === d);
-            const away = cal.leaves.filter((l) => l.startDate <= d && l.endDate >= d);
-            return (
-              <div key={d} className={cn('min-h-24 border-r border-b p-1.5 [&:nth-child(7n)]:border-r-0', off && 'bg-surface-2/40')}>
-                <p className={cn('mb-1 text-xs tabular-nums', d === todayStr ? 'inline-grid size-5 place-items-center rounded-full bg-primary font-semibold text-white' : 'text-muted')}>{Number(d.slice(8))}</p>
-                {hol.map((h) => (
-                  <p key={h.id} className={cn('mb-0.5 truncate rounded px-1 text-[10px] font-medium', h.type === 'SPECIAL_WORKING_DAY' ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300' : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300')} title={h.name}>
-                    {h.name}
-                  </p>
+        {weeks.map((week, wi) => {
+          const { bars, hidden } = layoutWeek(week, cal.leaves);
+          return (
+            <div key={wi} className="relative border-b last:border-b-0">
+              {/* day backgrounds */}
+              <div className="absolute inset-0 grid grid-cols-7" aria-hidden>
+                {week.map((d, i) => (
+                  <span key={i} className={cn('border-r last:border-r-0', !d ? 'bg-surface-2/30' : !cal.workingDays.includes(new Date(`${d}T12:00:00Z`).getUTCDay()) && 'bg-surface-2/40')} />
                 ))}
-                <div className="flex flex-wrap gap-0.5">
-                  {away.slice(0, 4).map((l) => (
-                    <Tooltip key={l.id} side="top" content={`${l.person.name} · ${l.type.name}${l.status === 'PENDING' ? ' (pending)' : ''}`}>
-                      <span className={cn('rounded-full', l.status === 'PENDING' && 'opacity-50')}>
-                        <UserAvatar person={l.person} size="xs" showPresence={false} />
-                      </span>
-                    </Tooltip>
-                  ))}
-                  {away.length > 4 && <span className="grid size-6 place-items-center rounded-full bg-surface-2 text-[10px] font-medium">+{away.length - 4}</span>}
-                </div>
               </div>
-            );
-          })}
-        </div>
+              {/* dates and holidays */}
+              <div className="relative grid grid-cols-7">
+                {week.map((d, i) => (
+                  <div key={i} className="min-w-0 px-1.5 pt-1.5">
+                    {d && (
+                      <>
+                        <p className={cn('mb-1 text-xs tabular-nums', d === todayStr ? 'inline-grid size-5 place-items-center rounded-full bg-primary font-semibold text-white' : 'text-muted')}>{Number(d.slice(8))}</p>
+                        {cal.holidays
+                          .filter((h) => h.date === d)
+                          .map((h) => (
+                            <p key={h.id} className={cn('mb-0.5 truncate rounded px-1 text-[10px] font-medium', h.type === 'SPECIAL_WORKING_DAY' ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300' : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300')} title={h.name}>
+                              {h.name}
+                            </p>
+                          ))}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* leave bars: one per person, from first to last day, stacked when they overlap */}
+              <div className="relative grid min-h-12 grid-cols-7 content-start gap-y-1 pt-1 pb-2" style={{ gridAutoRows: '1.5rem' }}>
+                {bars.map(({ l, from, to, lane, starts, ends }) => (
+                  <Tooltip key={`${l.id}-${wi}`} side="top" content={`${l.person.name} · ${l.type.name} · ${rangeLabel(l)}${l.status === 'PENDING' ? ' · waiting for approval' : ''}`}>
+                    <div
+                      className={cn(
+                        'mx-1 flex min-w-0 items-center gap-1.5 border px-1 text-[11px] font-medium',
+                        starts ? 'ml-1.5 rounded-l-full' : '-ml-px rounded-l-none border-l-0',
+                        ends ? 'mr-1.5 rounded-r-full' : '-mr-px rounded-r-none border-r-0',
+                        l.status === 'PENDING' && 'border-dashed opacity-70',
+                      )}
+                      style={{
+                        gridColumn: `${from + 1} / ${to + 2}`,
+                        gridRow: lane + 1,
+                        backgroundColor: `color-mix(in oklab, ${l.type.color} 16%, transparent)`,
+                        borderColor: `color-mix(in oklab, ${l.type.color} 55%, transparent)`,
+                      }}
+                    >
+                      {starts ? <UserAvatar person={l.person} size="xs" showPresence={false} /> : <ChevronRight className="size-3 shrink-0 text-muted" aria-hidden />}
+                      <span className="truncate">{l.person.name}</span>
+                      {ends && to > from && <span className="ml-auto shrink-0 pr-1.5 text-[10px] text-muted tabular-nums">{l.days}d</span>}
+                    </div>
+                  </Tooltip>
+                ))}
+                {hidden.map((n, i) =>
+                  n ? (
+                    <span key={`more-${i}`} className="px-2 text-[10px] font-medium text-muted" style={{ gridColumn: i + 1, gridRow: MAX_LANES + 1 }}>
+                      +{n} more
+                    </span>
+                  ) : null,
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
+      {cal.leaves.length > 0 && (
+        <div className="mt-3 hidden flex-wrap gap-x-4 gap-y-1 text-xs text-muted sm:flex">
+          {[...new Map(cal.leaves.map((l) => [l.type.id, l.type])).values()].map((t) => (
+            <span key={t.id} className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+              {t.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Mobile: agenda list */}
       <ul className="divide-y rounded-xl border sm:hidden">
@@ -118,7 +194,7 @@ export function LeaveCalendar() {
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-subtle">Faded faces are requests still waiting for approval (visible to HR only).</p>
+      <p className="mt-2 text-xs text-subtle">Dashed bars are requests still waiting for approval (visible to HR only).</p>
     </div>
   );
 }

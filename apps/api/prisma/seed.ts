@@ -238,6 +238,7 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
   const tz = 'Asia/Kolkata';
   const ymdIn = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
   const at = (ymd: string, hhmm: string) => new Date(`${ymd}T${hhmm}:00+05:30`);
+  const pad = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   const locations = ['WFO', 'WFO', 'WFO', 'WFH', 'WFH', 'ON_DUTY'] as const;
   const todayYmd = ymdIn(new Date());
   const ids = Object.values(users).map((u) => u.id);
@@ -252,7 +253,6 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
       if (rnd() < 0.08) continue; // occasional absence
       const inMin = 9 * 60 + 5 + Math.floor(rnd() * 55);
       const outMin = 18 * 60 + Math.floor(rnd() * 70);
-      const pad = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
       const rec = await prisma.attendanceRecord.create({
         data: {
           organizationId: org.id, userId: uid, date: new Date(`${ymd}T00:00:00Z`), location: locations[Math.floor(rnd() * locations.length)],
@@ -272,6 +272,11 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
       const rec = await prisma.attendanceRecord.create({
         data: { organizationId: org.id, userId: users[p.email].id, date: new Date(`${todayYmd}T00:00:00Z`), location: loc, checkInAt: at(todayYmd, `09:${String(10 + i * 3).padStart(2, '0')}`), late: 10 + i * 3 > 45, remarks: loc === 'ON_DUTY' ? 'At the client office' : null },
       });
+      // Breaks taken so far today: a short morning tea and lunch, once the day has got that far.
+      const teaAt = 11 * 60 + (i % 4) * 5;
+      const lunchAt = 13 * 60 + (i % 3) * 10;
+      if (nowLocal > '11:30') await prisma.attendanceBreak.create({ data: { recordId: rec.id, startAt: at(todayYmd, pad(teaAt)), endAt: at(todayYmd, pad(teaAt + 15)) } });
+      if (nowLocal > '14:00') await prisma.attendanceBreak.create({ data: { recordId: rec.id, startAt: at(todayYmd, pad(lunchAt)), endAt: at(todayYmd, pad(lunchAt + 35 + (i % 4) * 5)) } });
       if (['lunch', 'short_break'].includes(p.presence ?? '')) await prisma.attendanceBreak.create({ data: { recordId: rec.id, startAt: new Date(Date.now() - 12 * 60_000) } });
       if (i % 6 === 5 && nowLocal > '17:30') await prisma.attendanceRecord.update({ where: { id: rec.id }, data: { checkOutAt: new Date(Date.now() - 20 * 60_000) } });
     }
@@ -298,21 +303,36 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     ),
   );
   const d = (offset: number) => ymdIn(new Date(Date.now() + offset * 86400_000));
-  const leaveRows: { email: string; type: string; from: number; to: number; days: number; status: 'APPROVED' | 'PENDING' | 'REJECTED'; reason: string }[] = [
-    { email: 'employee@futuristglobal.com', type: 'CL', from: -20, to: -20, days: 1, status: 'APPROVED', reason: 'Family function' },
-    { email: 'employee@futuristglobal.com', type: 'SL', from: -9, to: -8, days: 2, status: 'APPROVED', reason: 'Fever' },
-    { email: 'kabir.singh@futuristglobal.com', type: 'EL', from: 6, to: 8, days: 3, status: 'PENDING', reason: 'Trip to Goa' },
-    { email: 'meera.nair@futuristglobal.com', type: 'CL', from: 2, to: 2, days: 1, status: 'PENDING', reason: 'Bank work' },
-    { email: 'zara.khan@futuristglobal.com', type: 'CL', from: 0, to: 0, days: 1, status: 'APPROVED', reason: 'Personal' },
-    { email: 'tara.joshi@futuristglobal.com', type: 'EL', from: 12, to: 16, days: 5, status: 'APPROVED', reason: 'Vacation' },
-    { email: 'arjun.patel@futuristglobal.com', type: 'CL', from: -3, to: -3, days: 1, status: 'REJECTED', reason: 'Release week' },
+  // Overlapping, multi-day leaves around today so the team calendar shows who is away together.
+  const leaveRows: { email: string; type: string; from: number; to: number; status: 'APPROVED' | 'PENDING' | 'REJECTED'; reason: string }[] = [
+    { email: 'employee@futuristglobal.com', type: 'CL', from: -20, to: -20, status: 'APPROVED', reason: 'Family function' },
+    { email: 'employee@futuristglobal.com', type: 'SL', from: -9, to: -8, status: 'APPROVED', reason: 'Fever' },
+    { email: 'employee@futuristglobal.com', type: 'EL', from: 3, to: 7, status: 'APPROVED', reason: 'Family trip to Kerala' },
+    { email: 'vikram.rao@futuristglobal.com', type: 'CL', from: 4, to: 5, status: 'APPROVED', reason: 'House shifting' },
+    { email: 'kabir.singh@futuristglobal.com', type: 'EL', from: 6, to: 8, status: 'PENDING', reason: 'Trip to Goa' },
+    { email: 'neha.reddy@futuristglobal.com', type: 'SL', from: -2, to: 1, status: 'APPROVED', reason: 'Viral fever' },
+    { email: 'meera.nair@futuristglobal.com', type: 'CL', from: 2, to: 2, status: 'PENDING', reason: 'Bank work' },
+    { email: 'isha.gupta@futuristglobal.com', type: 'CL', from: 5, to: 6, status: 'APPROVED', reason: 'Sister\'s wedding' },
+    { email: 'manager@futuristglobal.com', type: 'EL', from: 10, to: 14, status: 'APPROVED', reason: 'Vacation' },
+    { email: 'tara.joshi@futuristglobal.com', type: 'EL', from: 12, to: 16, status: 'APPROVED', reason: 'Vacation' },
+    { email: 'hr@futuristglobal.com', type: 'EL', from: -6, to: -4, status: 'APPROVED', reason: 'Personal' },
+    { email: 'arjun.patel@futuristglobal.com', type: 'CL', from: -3, to: -3, status: 'REJECTED', reason: 'Release week' },
   ];
+  // Working days in a range of day offsets (weekends excluded), as the API counts them.
+  const workingDaysBetween = (from: number, to: number) => {
+    let n = 0;
+    for (let o = from; o <= to; o++) {
+      const wd = new Date(`${d(o)}T12:00:00+05:30`).getUTCDay();
+      if (wd !== 0 && wd !== 6) n++;
+    }
+    return n;
+  };
   for (const l of leaveRows) {
     const u = users[l.email];
     const approver = PEOPLE.find((p) => p.email === l.email)?.manager;
     await prisma.leaveRequest.create({
       data: {
-        organizationId: org.id, userId: u.id, typeId: lt[l.type].id, startDate: new Date(`${d(l.from)}T00:00:00Z`), endDate: new Date(`${d(l.to)}T00:00:00Z`), days: l.days, reason: l.reason, status: l.status,
+        organizationId: org.id, userId: u.id, typeId: lt[l.type].id, startDate: new Date(`${d(l.from)}T00:00:00Z`), endDate: new Date(`${d(l.to)}T00:00:00Z`), days: workingDaysBetween(l.from, l.to), reason: l.reason, status: l.status,
         approverId: l.status !== 'PENDING' && approver ? users[approver].id : null, decidedAt: l.status !== 'PENDING' ? new Date() : null,
       },
     });

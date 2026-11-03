@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { AttendancePanel } from '@/components/attendance/attendance-panel';
+import { AttendancePanel, liveWorked } from '@/components/attendance/attendance-panel';
 import { PresenceIcon } from '@/components/presence';
 import { Button } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Badge, Kbd, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
-import { channelLabel, useAttendanceToday } from '@/lib/hooks';
+import { channelLabel, fmtDuration, useAttendanceToday } from '@/lib/hooks';
 import { useLivePeople, useLivePerson } from '@/lib/presence-store';
 import { useCan, useClock, useModule, useSession, useUpdatePreferences } from '@/lib/session';
 import type { ChannelSummary, Person } from '@/lib/types';
@@ -130,8 +130,14 @@ function minutesOf(hhmm: string) {
   const [h, m] = hhmm.split(':').map(Number);
   return h! * 60 + m!;
 }
+const minutesOfDate = (d: Date) => d.getHours() * 60 + d.getMinutes();
+const atMinutes = (m: number) => new Date(new Date().setHours(Math.floor(m / 60), m % 60, 0, 0));
+
+/** Workday as a progress bar: worked time, breaks and what is left, from today's attendance. */
 function ClockWidget({ data }: WidgetProps) {
-  const { time, h24 } = useClock();
+  const { time } = useClock();
+  const mod = useModule();
+  const att = useAttendanceToday();
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
@@ -140,59 +146,133 @@ function ClockWidget({ data }: WidgetProps) {
   }, []);
   const ws = minutesOf(data.workday.start);
   const we = minutesOf(data.workday.end);
-  const from = Math.max(0, Math.floor(ws / 60) * 60 - 120);
-  const to = Math.min(24 * 60, Math.ceil(we / 60) * 60 + 180);
-  const span = to - from;
-  const pos = (m: number) => `${((Math.min(Math.max(m, from), to) - from) / span) * 100}%`;
-  const cur = now ? now.getHours() * 60 + now.getMinutes() : ws;
+  const cur = now ? minutesOfDate(now) : ws;
   const workday = now ? data.workday.workingDays.includes(now.getDay()) : true;
+  const rec = mod('attendance') ? (att.data?.record ?? null) : null;
+
+  const inAt = rec ? minutesOfDate(new Date(rec.checkInAt)) : null;
+  const outAt = rec?.checkOutAt ? minutesOfDate(new Date(rec.checkOutAt)) : null;
+  const workEnd = rec ? (outAt ?? cur) : null;
+  // The bar covers the workday, stretched if you checked in early or worked late.
+  const from = Math.min(ws, inAt ?? ws);
+  const to = Math.max(we, workEnd ?? we);
+  const span = Math.max(1, to - from);
+  const pct = (m: number) => ((Math.min(Math.max(m, from), to) - from) / span) * 100;
+
+  const nowMs = now?.getTime() ?? Date.now();
+  const breaks = (rec?.breaks ?? []).map((b) => {
+    const s = new Date(b.startAt);
+    const e = b.endAt ? new Date(b.endAt) : new Date(nowMs);
+    return { id: b.id, s: minutesOfDate(s), e: minutesOfDate(e), start: s, end: b.endAt ? e : null, mins: Math.max(0, Math.round((e.getTime() - s.getTime()) / 60_000)) };
+  });
+  const worked = rec ? liveWorked(rec, nowMs) : 0;
+  const breakMins = breaks.reduce((n, b) => n + b.mins, 0);
   const left = Math.max(0, we - cur);
-  const status = !workday ? 'Not a working day' : cur < ws ? `Workday starts in ${Math.floor((ws - cur) / 60)}h ${(ws - cur) % 60}m` : cur > we ? 'Workday complete' : `${Math.floor(left / 60)}h ${left % 60}m left in the workday`;
-  const ticks: number[] = [];
-  for (let m = from; m <= to; m += 120) ticks.push(m);
-  const label = (m: number) => {
-    const d = new Date();
-    d.setHours(Math.floor(m / 60), m % 60, 0, 0);
-    return h24 ? `${String(d.getHours()).padStart(2, '0')}:00` : d.toLocaleTimeString(undefined, { hour: 'numeric' });
-  };
+  const progress = Math.round(((Math.min(Math.max(cur, ws), we) - ws) / Math.max(1, we - ws)) * 100);
+
+  const status = !workday
+    ? 'Not a working day'
+    : rec?.checkOutAt
+      ? `Checked out at ${time(rec.checkOutAt)}`
+      : cur < ws
+        ? `Workday starts in ${fmtDuration(ws - cur)}`
+        : cur >= we
+          ? 'Workday complete'
+          : `${progress}% done · ${fmtDuration(left)} left`;
+
+  const stats = rec
+    ? [
+        { key: 'worked', dot: 'bg-primary', label: 'Worked', value: fmtDuration(worked) },
+        { key: 'breaks', dot: 'bg-amber-400', label: breaks.length === 1 ? '1 break' : `${breaks.length} breaks`, value: fmtDuration(breakMins) },
+        ...(!rec.checkOutAt && workday && cur < we ? [{ key: 'left', dot: 'bg-surface-2 ring-1 ring-border-strong ring-inset', label: 'Left', value: fmtDuration(left) }] : []),
+      ]
+    : [];
 
   return (
-    <section aria-label="Today's timeline">
-      <SectionTitle icon={<CalendarDays />} action={<span className="text-xs text-muted">{status}</span>}>
+    <section aria-label="Today's progress">
+      <SectionTitle icon={<CalendarDays />} action={<span className="text-xs text-muted tabular-nums">{status}</span>}>
         Today
       </SectionTitle>
-      <div className="relative rounded-xl border bg-surface px-4 pt-4 pb-3">
-        <div className="relative h-12">
-          {/* hour grid */}
-          {ticks.map((t) => (
-            <span key={t} className="absolute inset-y-0 w-px bg-border" style={{ left: pos(t) }} />
-          ))}
-          {/* workday band */}
-          <div
-            className={cn('absolute inset-y-2 rounded-lg', workday ? 'bg-primary-soft ring-1 ring-primary/20 ring-inset' : 'bg-surface-2')}
-            style={{ left: pos(ws), width: `calc(${pos(we)} - ${pos(ws)})` }}
-          >
-            {workday && now && cur > ws && (
-              <motion.div className="h-full rounded-lg bg-primary/15" initial={{ width: 0 }} animate={{ width: `${Math.min(100, ((cur - ws) / (we - ws)) * 100)}%` }} transition={{ duration: 0.8, ease: 'easeOut' }} />
-            )}
- <span className="absolute top-1/2 left-3 hidden -translate-y-1/2 truncate text-xs font-medium whitespace-nowrap text-primary-ink sm:block">
-              Working hours · {time(new Date(new Date().setHours(Math.floor(ws / 60), ws % 60)))} – {time(new Date(new Date().setHours(Math.floor(we / 60), we % 60)))}
-            </span>
-          </div>
-          {/* now marker */}
-          {now && cur >= from && cur <= to && (
-            <div className="absolute inset-y-0 z-10 flex -translate-x-1/2 flex-col items-center" style={{ left: pos(cur) }}>
-              <span className="size-2 rounded-full bg-danger ring-4 ring-danger/15" />
-              <span className="w-px flex-1 bg-danger" />
-            </div>
+      <div className="rounded-xl border bg-surface px-4 pt-4 pb-3.5">
+        <div className="mb-2 flex items-baseline justify-between text-[11px] text-subtle tabular-nums">
+          <span>{time(atMinutes(from))}</span>
+          <span>Working hours {time(atMinutes(ws))} – {time(atMinutes(we))}</span>
+          <span>{time(atMinutes(to))}</span>
+        </div>
+
+        <div
+          className={cn('relative h-3.5 overflow-hidden rounded-full', workday ? 'bg-surface-2' : 'bg-surface-2/60')}
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+          aria-label={rec ? `Worked ${fmtDuration(worked)}, breaks ${fmtDuration(breakMins)}` : `${progress}% of the workday has passed`}
+        >
+          {/* outside working hours, shaded lightly */}
+          {from < ws && <span className="absolute inset-y-0 left-0 bg-border/40" style={{ width: `${pct(ws)}%` }} />}
+          {to > we && <span className="absolute inset-y-0 right-0 bg-border/40" style={{ width: `${100 - pct(we)}%` }} />}
+
+          {workday && rec && inAt !== null && workEnd !== null ? (
+            <>
+              {/* late start: the stretch before check-in */}
+              {inAt > ws && (
+                <Tooltip side="top" content={`Not checked in · ${time(atMinutes(ws))} – ${time(rec.checkInAt)}`}>
+                  <span className="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_6px)]" style={{ left: `${pct(ws)}%`, width: `${pct(inAt) - pct(ws)}%` }} />
+                </Tooltip>
+              )}
+              <Tooltip side="top" content={`Working · ${time(rec.checkInAt)} – ${rec.checkOutAt ? time(rec.checkOutAt) : 'now'}`}>
+                <motion.span
+                  className="absolute inset-y-0 rounded-full bg-primary"
+                  style={{ left: `${pct(inAt)}%` }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct(workEnd) - pct(inAt)}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                />
+              </Tooltip>
+              {breaks.map((b) => (
+                <Tooltip key={b.id} side="top" content={`Break · ${time(b.start)} – ${b.end ? time(b.end) : 'now'} (${fmtDuration(b.mins)})`}>
+                  <span
+                    className="absolute inset-y-0 bg-amber-400 bg-[repeating-linear-gradient(135deg,transparent_0_4px,rgb(0_0_0/0.12)_4px_6px)]"
+                    style={{ left: `${pct(b.s)}%`, width: `${Math.max(0.8, pct(b.e) - pct(b.s))}%` }}
+                  />
+                </Tooltip>
+              ))}
+            </>
+          ) : (
+            workday &&
+            now &&
+            cur > ws && (
+              <motion.span
+                className="absolute inset-y-0 rounded-full bg-primary/35"
+                style={{ left: `${pct(ws)}%` }}
+                initial={{ width: 0 }}
+                animate={{ width: `${pct(Math.min(cur, we)) - pct(ws)}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
+              />
+            )
+          )}
+
+          {/* now */}
+          {workday && now && !rec?.checkOutAt && cur > from && cur < to && (
+            <span className="absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 bg-foreground/70" style={{ left: `${pct(cur)}%` }} />
           )}
         </div>
-        <div className="relative mt-1.5 h-4 text-[10px] text-subtle tabular-nums">
-          {ticks.map((t) => (
-            <span key={t} className="absolute -translate-x-1/2" style={{ left: pos(t) }}>
-              {label(t)}
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
+          {stats.length ? (
+            stats.map((s) => (
+              <span key={s.key} className="flex items-center gap-1.5 text-muted">
+                <span className={cn('size-2 rounded-full', s.dot)} />
+                {s.label}
+                <span className="font-medium text-foreground tabular-nums">{s.value}</span>
+              </span>
+            ))
+          ) : (
+            <span className="text-muted">
+              {!workday ? 'Enjoy your day off.' : mod('attendance') ? 'You have not checked in yet. Your worked time and breaks will show here.' : `${progress}% of the workday has passed.`}
             </span>
-          ))}
+          )}
+          {rec?.state === 'on_break' && <Badge tone="warning">On a break</Badge>}
         </div>
       </div>
     </section>

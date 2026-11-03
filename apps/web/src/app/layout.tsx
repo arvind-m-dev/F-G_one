@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { Suspense } from 'react';
+import { NavigationProgress } from '@/components/navigation-progress';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
@@ -17,6 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
       <body>
+        <Suspense>
+          <NavigationProgress />
+        </Suspense>
         <Providers>{children}</Providers>
       </body>
     </html>

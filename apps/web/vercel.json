@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "pnpm --filter @fg/shared build && pnpm build",
+  "regions": ["sin1"]
+}

@@ -30,7 +30,7 @@ function useNow(active: boolean) {
   return now;
 }
 
-function liveWorked(r: AttendanceRecord, now: number) {
+export function liveWorked(r: AttendanceRecord, now: number) {
   if (r.state === 'checked_out') return r.workedMinutes;
   const end = now;
   const brk = r.breaks.reduce((n, b) => n + Math.max(0, ((b.endAt ? new Date(b.endAt).getTime() : end) - new Date(b.startAt).getTime()) / 60_000), 0);
