@@ -6,8 +6,8 @@ import type { ChannelSummary, Department, Employee, Paged, Role } from './types'
 export const useChannels = (enabled = true) => useQuery({ queryKey: ['channels'], queryFn: () => api<ChannelSummary[]>('/channels'), enabled });
 export const useDepartments = () => useQuery({ queryKey: ['departments'], queryFn: () => api<Department[]>('/departments') });
 export const useRoles = () => useQuery({ queryKey: ['roles'], queryFn: () => api<{ roles: Role[]; permissionLabels: Record<string, string> }>('/roles') });
-export const useEmployeeList = (q: { q?: string; departmentId?: string; status?: string; page?: number; pageSize?: number }) =>
-  useQuery({ queryKey: ['employees', q], queryFn: () => api<Paged<Employee>>('/employees', { query: q }), placeholderData: (prev) => prev });
+export const useEmployeeList = (q: { q?: string; departmentId?: string; status?: string; page?: number; pageSize?: number }, enabled = true) =>
+  useQuery({ queryKey: ['employees', q], queryFn: () => api<Paged<Employee>>('/employees', { query: q }), placeholderData: (prev) => prev, enabled });
 
 /** Display name for a channel row (DMs use participant names). */
 export function channelLabel(c: Pick<ChannelSummary, 'type' | 'name' | 'participants'>) {
@@ -19,7 +19,7 @@ export function channelLabel(c: Pick<ChannelSummary, 'type' | 'name' | 'particip
 /* ───── attendance / announcements / notifications ───── */
 import type { Announcement, AppNotification, AttendanceToday } from './types';
 
-export const useAttendanceToday = () => useQuery({ queryKey: ['attendance-today'], queryFn: () => api<AttendanceToday>('/attendance/today'), refetchInterval: 60_000 });
+export const useAttendanceToday = (enabled = true) => useQuery({ queryKey: ['attendance-today'], queryFn: () => api<AttendanceToday>('/attendance/today'), refetchInterval: 60_000, enabled });
 export const useAnnouncements = (q: { category?: string; q?: string; include?: string } = {}) =>
   useQuery({ queryKey: ['announcements', q], queryFn: () => api<Announcement[]>('/announcements', { query: q }), placeholderData: (p) => p });
 export const useNotifications = (filter: 'all' | 'unread' | 'mentions', enabled = true) =>
@@ -32,7 +32,9 @@ export const fmtDuration = (min: number) => (min < 60 ? `${min}m` : `${Math.floo
 import type { Correction, Holiday, LeaveBalance, LeaveRequest, LeaveType } from './types';
 
 export const useLeaveTypes = (all = false) => useQuery({ queryKey: ['leave-types', all], queryFn: () => api<LeaveType[]>('/leave/types', { query: { include: all ? 'all' : 'active' } }) });
-export const useLeaveBalances = () => useQuery({ queryKey: ['leave-balances'], queryFn: () => api<{ year: { start: string; end: string }; items: LeaveBalance[] }>('/leave/balances') });
+/** Your balances, or someone else's (HR, managers) when `userId` is given. */
+export const useLeaveBalances = (userId?: string, enabled = true) =>
+  useQuery({ queryKey: ['leave-balances', userId ?? 'me'], queryFn: () => api<{ year: { start: string; end: string }; items: LeaveBalance[] }>('/leave/balances', { query: userId ? { userId } : {} }), enabled });
 export const useLeaveRequests = (scope: 'mine' | 'approvals' | 'all', status = 'ALL', enabled = true) =>
   useQuery({ queryKey: ['leave-requests', scope, status], queryFn: () => api<LeaveRequest[]>('/leave/requests', { query: { scope, status } }), enabled, placeholderData: (p) => p });
 export const useHolidays = (year: number) => useQuery({ queryKey: ['holidays', year], queryFn: () => api<{ year: number; items: Holiday[] }>('/holidays', { query: { year } }), placeholderData: (p) => p });

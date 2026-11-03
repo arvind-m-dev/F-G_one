@@ -3,13 +3,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CalendarPlus, TreePalm } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
-import { LeaveCalendar } from '@/components/leave/leave-calendar';
+import { LeaveCalendar, LeaveDetails } from '@/components/leave/leave-calendar';
 import { LeaveStatusBadge, RequestLeaveDialog } from '@/components/leave/request-leave-dialog';
 import { PageHeader } from '@/components/shell/page';
 import { Button } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
-import { EmptyState, InfoHint, Skeleton } from '@/components/ui/misc';
+import { Badge, EmptyState, InfoHint, Skeleton } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDays, fmtRange, useLeaveBalances, useLeaveRequests } from '@/lib/hooks';
 import type { LeaveRequest } from '@/lib/types';
@@ -20,7 +20,7 @@ function MyLeave() {
   const qc = useQueryClient();
   const balances = useLeaveBalances();
   const requests = useLeaveRequests('mine');
-  const [get, set] = useUrlState({ request: '' });
+  const [get, set] = useUrlState({ request: '', leave: '' });
   const [cancelling, setCancelling] = useState<LeaveRequest | null>(null);
   const today = new Date().toLocaleDateString('en-CA');
   const cancel = useMutation({
@@ -49,6 +49,9 @@ function MyLeave() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {balances.data?.items.map((b) => {
+            // "Used" includes approved leave still ahead; split it into taken and booked.
+            const booked = (requests.data ?? []).filter((r) => r.type.id === b.type.id && r.status === 'APPROVED' && r.startDate > today && r.startDate <= balances.data.year.end).reduce((n, r) => n + r.days, 0);
+            const taken = Math.max(0, b.used - booked);
             const pct = b.allowance > 0 ? ((b.used + b.pending) / b.allowance) * 100 : 0;
             return (
               <div key={b.type.id} className="rounded-xl border bg-surface p-4">
@@ -57,7 +60,9 @@ function MyLeave() {
                 </p>
                 <p className="mt-2 text-2xl font-semibold tabular-nums">{b.remaining === null ? 'No limit' : fmtDays(b.remaining)}</p>
                 <p className="text-xs text-muted">
-                  {b.remaining === null ? `${fmtDays(b.used)} taken this year` : `left of ${fmtDays(b.allowance)} · ${fmtDays(b.used)} taken${b.pending ? ` · ${fmtDays(b.pending)} pending` : ''}`}
+                  {b.remaining === null ? `${fmtDays(taken)} taken this year` : `left of ${fmtDays(b.allowance)} · ${fmtDays(taken)} taken`}
+                  {booked ? ` · ${fmtDays(booked)} booked` : ''}
+                  {b.pending && b.remaining !== null ? ` · ${fmtDays(b.pending)} pending` : ''}
                 </p>
                 {b.allowance > 0 && (
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2">
@@ -77,37 +82,58 @@ function MyLeave() {
         ) : !requests.data?.length ? (
           <EmptyState icon={<TreePalm />} title="No leave requests yet" description="When you request time off it shows up here with its status." action={<Button variant="outline" onClick={() => set({ request: '1' })}>Request time off</Button>} />
         ) : (
-          <ul className="divide-y rounded-xl border">
-            {requests.data.map((r) => {
-              const canCancel = r.status === 'PENDING' || (r.status === 'APPROVED' && r.startDate > today);
-              return (
-                <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-                  <span className="size-2 shrink-0 rounded-full" style={{ background: r.type.color }} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-medium">
-                      {r.type.name} · {fmtRange(r.startDate, r.endDate)}
-                      {r.halfDay !== 'NONE' && <span className="text-muted"> ({r.halfDay === 'FIRST_HALF' ? 'morning' : 'afternoon'})</span>}
-                    </span>
-                    <span className="block text-xs text-muted">
-                      {fmtDays(r.days)}
-                      {r.reason ? ` · ${r.reason}` : ''}
-                      {r.approver && r.status !== 'PENDING' && r.status !== 'CANCELLED' ? ` · by ${r.approver.firstName} ${r.approver.lastName}` : ''}
-                      {r.decisionNote ? ` · “${r.decisionNote}”` : ''}
-                    </span>
-                  </span>
-                  <LeaveStatusBadge status={r.status} />
-                  {canCancel && (
-                    <Button size="sm" variant="ghost" onClick={() => setCancelling(r)}>
-                      Cancel
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <div className="space-y-5">
+            {(
+              [
+                ['Upcoming and waiting', requests.data.filter((r) => r.endDate >= today)],
+                ['Past', requests.data.filter((r) => r.endDate < today)],
+              ] as const
+            ).map(([title, rows]) =>
+              rows.length ? (
+                <div key={title}>
+                  <p className="mb-1.5 text-xs font-medium text-muted">
+                    {title} · {rows.length}
+                  </p>
+                  <ul className="divide-y rounded-xl border">
+                    {rows.map((r) => {
+                      const canCancel = r.status === 'PENDING' || (r.status === 'APPROVED' && r.startDate > today);
+                      const past = r.endDate < today;
+                      return (
+                        <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                          <button type="button" onClick={() => set({ leave: r.id })} className="flex min-w-0 flex-1 items-center gap-4 text-left" aria-label={`${r.type.name}, ${fmtRange(r.startDate, r.endDate)}. Show details`}>
+                            <span className="size-2 shrink-0 rounded-full" style={{ background: r.type.color }} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[13px] font-medium">
+                                {r.type.name} · {fmtRange(r.startDate, r.endDate)}
+                                {r.halfDay !== 'NONE' && <span className="text-muted"> ({r.halfDay === 'FIRST_HALF' ? 'morning' : 'afternoon'})</span>}
+                              </span>
+                              <span className="block text-xs text-muted">
+                                {fmtDays(r.days)}
+                                {r.reason ? ` · ${r.reason}` : ''}
+                                {r.approver && r.status !== 'PENDING' && r.status !== 'CANCELLED' ? ` · by ${r.approver.firstName} ${r.approver.lastName}` : ''}
+                                {r.decisionNote ? ` · “${r.decisionNote}”` : ''}
+                              </span>
+                            </span>
+                          </button>
+                          {past && r.status === 'APPROVED' ? <Badge tone="muted">Taken</Badge> : <LeaveStatusBadge status={r.status} />}
+                          {canCancel && (
+                            <Button size="sm" variant="ghost" onClick={() => setCancelling(r)}>
+                              Cancel
+                            </Button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null,
+            )}
+            <p className="text-xs text-subtle">Select a request to see how its days add up.</p>
+          </div>
         )}
       </section>
       <RequestLeaveDialog open={get('request') === '1'} onOpenChange={(o) => set({ request: o ? '1' : null })} />
+      <LeaveDetails leave={requests.data?.find((r) => r.id === get('leave'))} onClose={() => set({ leave: null })} />
       <ConfirmDialog
         open={!!cancelling}
         onOpenChange={(o) => !o && setCancelling(null)}

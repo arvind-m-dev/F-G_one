@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Prisma, WorkLocation } from '@prisma/client';
 import { hasPermission, parseOrganizationSettings, PERMISSIONS, RT, type CorrectionInput } from '@fg/shared';
 import { userScopeWhere } from '../common/authz';
@@ -6,13 +6,25 @@ import { approversFor, assertCanDecide, deciderScope } from '../common/approvals
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import type { AuthContext } from '../common/auth-context';
-import { addDays, localDate, localMinutes, localToUtc, localWeekday, toDbDate } from '../common/tz';
+import { addDays, localDate, localMinutes, localToUtc, toDbDate } from '../common/tz';
+import { countWorkingDays } from '../common/workdays';
 import { personSelect, toPerson } from '../employees/employee.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const recordInclude = { breaks: { orderBy: { startAt: 'asc' } } } satisfies Prisma.AttendanceRecordInclude;
 type RecordRow = Prisma.AttendanceRecordGetPayload<{ include: typeof recordInclude }>;
+type Policy = ReturnType<typeof parseOrganizationSettings>['attendance'];
+export type AutoCheckOutReason = 'workday_end' | 'max_shift' | 'idle';
+
+/** An open shift older than this is stale: it no longer blocks a new check-in. */
+const SHIFT_WINDOW_MS = 24 * 3600_000;
+const SWEEP_INTERVAL_MS = 5 * 60_000;
+const AUTO_REASON_TEXT: Record<AutoCheckOutReason, string> = {
+  workday_end: 'the workday had ended',
+  max_shift: 'the shift reached its maximum length',
+  idle: 'there was no activity in FG One',
+};
 
 export type AttendanceState = 'not_checked_in' | 'working' | 'on_break' | 'checked_out';
 
@@ -24,17 +36,42 @@ const hhmm = (s: string) => {
 
 /**
  * Attendance is a daily record (check-in → breaks → check-out) in the organization's time zone.
+ * The record belongs to the day the shift started, so night shifts can check out after midnight.
+ * With `multipleSessions`, checking in again reopens the day's record and the gap is stored as an AWAY interval.
  * It is deliberately independent from presence/status. All transitions are validated here,
  * so the UI only reflects server-confirmed state.
  */
 @Injectable()
-export class AttendanceService {
+export class AttendanceService implements OnModuleInit, OnModuleDestroy {
+  private readonly log = new Logger(AttendanceService.name);
+  private sweep?: ReturnType<typeof setInterval>;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  onModuleInit() {
+    // Auto check-out also runs lazily on every read; the timer covers people who never come back.
+    if (process.env.NODE_ENV === 'test') return;
+    this.sweep = setInterval(() => void this.sweepAll(), SWEEP_INTERVAL_MS);
+    this.sweep.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.sweep) clearInterval(this.sweep);
+  }
+
+  private async sweepAll() {
+    try {
+      const orgs = await this.prisma.organization.findMany({ where: { attendance: { some: { checkOutAt: null } } }, select: { id: true, settings: true } });
+      for (const o of orgs) await this.autoClose(o.id, parseOrganizationSettings(o.settings).attendance);
+    } catch (e) {
+      this.log.error(`Auto check-out sweep failed: ${(e as Error).message}`);
+    }
+  }
 
   private async policy(organizationId: string) {
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
@@ -43,9 +80,11 @@ export class AttendanceService {
 
   serialize(r: RecordRow | null, now = new Date()) {
     if (!r) return null;
-    const breakMinutes = r.breaks.reduce((n, b) => n + minutesBetween(b.startAt, b.endAt ?? r.checkOutAt ?? now), 0);
+    const span = (b: RecordRow['breaks'][number]) => minutesBetween(b.startAt, b.endAt ?? r.checkOutAt ?? now);
+    const breakMinutes = r.breaks.reduce((n, b) => n + (b.kind === 'BREAK' ? span(b) : 0), 0);
+    const awayMinutes = r.breaks.reduce((n, b) => n + (b.kind === 'AWAY' ? span(b) : 0), 0);
     const end = r.checkOutAt ?? now;
-    const state: AttendanceState = r.checkOutAt ? 'checked_out' : r.breaks.some((b) => !b.endAt) ? 'on_break' : 'working';
+    const state: AttendanceState = r.checkOutAt ? 'checked_out' : r.breaks.some((b) => b.kind === 'BREAK' && !b.endAt) ? 'on_break' : 'working';
     return {
       id: r.id,
       date: r.date.toISOString().slice(0, 10),
@@ -55,10 +94,13 @@ export class AttendanceService {
       checkOutAt: r.checkOutAt,
       checkOutRemarks: r.checkOutRemarks,
       late: r.late,
+      autoCheckedIn: r.autoCheckedIn,
+      autoCheckOutReason: (r.autoCheckOutReason as AutoCheckOutReason | null) ?? null,
       state,
-      breaks: r.breaks.map((b) => ({ id: b.id, startAt: b.startAt, endAt: b.endAt })),
+      breaks: r.breaks.map((b) => ({ id: b.id, kind: b.kind, startAt: b.startAt, endAt: b.endAt })),
       breakMinutes,
-      workedMinutes: Math.max(0, minutesBetween(r.checkInAt, end) - breakMinutes),
+      awayMinutes,
+      workedMinutes: Math.max(0, minutesBetween(r.checkInAt, end) - breakMinutes - awayMinutes),
     };
   }
 
@@ -67,19 +109,56 @@ export class AttendanceService {
     this.realtime.server?.to(`org:${auth.organizationId}`).emit(RT.ATTENDANCE_CHANGED, { userId: auth.userId });
   }
 
-  private async todayRecord(auth: AuthContext, tz: string) {
-    return this.prisma.attendanceRecord.findUnique({
-      where: { userId_date: { userId: auth.userId, date: toDbDate(localDate(tz)) } },
-      include: recordInclude,
-    });
+  /**
+   * The shift that matters now: an open one (started within 24h, may be yesterday's night shift),
+   * else today's record, else an earlier shift that ended today (a night shift you just finished).
+   */
+  private async currentRecord(auth: AuthContext, tz: string) {
+    const where = { userId: auth.userId, organizationId: auth.organizationId };
+    const today = localDate(tz);
+    const open = await this.prisma.attendanceRecord.findFirst({ where: { ...where, checkOutAt: null, checkInAt: { gte: new Date(Date.now() - SHIFT_WINDOW_MS) } }, include: recordInclude, orderBy: { checkInAt: 'desc' } });
+    if (open) return open;
+    const todays = await this.prisma.attendanceRecord.findUnique({ where: { userId_date: { userId: auth.userId, date: toDbDate(today) } }, include: recordInclude });
+    if (todays) return todays;
+    return this.prisma.attendanceRecord.findFirst({ where: { ...where, date: { lt: toDbDate(today) }, checkOutAt: { gte: localToUtc(today, '00:00', tz) } }, include: recordInclude, orderBy: { checkOutAt: 'desc' } });
+  }
+
+  /** Start of the latest session: the day's first check-in, or the last time you checked in again. */
+  private sessionStart(r: RecordRow) {
+    return r.breaks.reduce((t, b) => (b.kind === 'AWAY' && b.endAt && b.endAt > t ? b.endAt : t), r.checkInAt);
+  }
+
+  /** Working dates in a range (weekly pattern, holidays and special working days applied). */
+  private async workingDates(organizationId: string, from: string, to: string) {
+    return new Set((await countWorkingDays(this.prisma, organizationId, from, to)).dates);
+  }
+
+  /** Serialized record plus `dayOff`: worked on a weekly day off or a holiday. */
+  private withDayOff(r: RecordRow | null, working: Set<string>) {
+    const s = this.serialize(r);
+    return s ? { ...s, dayOff: !working.has(s.date) } : null;
+  }
+
+  /** Working day (weekly pattern, holidays, special working days) and whether the person is on full-day leave. */
+  private async dayStatus(auth: AuthContext, date: string) {
+    const [{ days }, leave] = await Promise.all([
+      countWorkingDays(this.prisma, auth.organizationId, date, date),
+      this.prisma.leaveRequest.count({ where: { userId: auth.userId, organizationId: auth.organizationId, status: 'APPROVED', halfDay: 'NONE', startDate: { lte: toDbDate(date) }, endDate: { gte: toDbDate(date) } } }),
+    ]);
+    return { isWorkingDay: days > 0, onLeave: leave > 0 };
   }
 
   async today(auth: AuthContext) {
     const policy = await this.policy(auth.organizationId);
-    const record = await this.todayRecord(auth, policy.timezone);
+    await this.autoClose(auth.organizationId, policy, auth.userId);
+    const date = localDate(policy.timezone);
+    const [record, day] = await Promise.all([this.currentRecord(auth, policy.timezone), this.dayStatus(auth, date)]);
+    const recordDate = record?.date.toISOString().slice(0, 10);
+    const working = recordDate ? await this.workingDates(auth.organizationId, recordDate, recordDate) : new Set<string>();
     return {
-      date: localDate(policy.timezone),
-      isWorkingDay: policy.workingDays.includes(localWeekday(policy.timezone)),
+      date,
+      isWorkingDay: day.isWorkingDay,
+      onLeave: day.onLeave,
       policy: {
         workdayStart: policy.workdayStart,
         workdayEnd: policy.workdayEnd,
@@ -87,34 +166,145 @@ export class AttendanceService {
         timezone: policy.timezone,
         allowedLocations: policy.allowedLocations,
         breaksEnabled: policy.breaksEnabled,
+        multipleSessions: policy.multipleSessions,
+        checkInMode: policy.checkInMode,
+        autoCheckOut: policy.autoCheckOut,
       },
-      record: this.serialize(record),
+      record: this.withDayOff(record, working),
     };
   }
 
-  async checkIn(auth: AuthContext, location: WorkLocation, remarks?: string | null) {
+  async checkIn(auth: AuthContext, location: WorkLocation, remarks?: string | null, auto = false) {
     const policy = await this.policy(auth.organizationId);
     if (!policy.allowedLocations.includes(location)) throw new BadRequestException('That work location is not enabled for your company');
+    await this.autoClose(auth.organizationId, policy, auth.userId);
     const now = new Date();
     const date = localDate(policy.timezone, now);
-    const late = localMinutes(policy.timezone, now) > hhmm(policy.workdayStart) + policy.graceMinutes;
-    try {
-      await this.prisma.attendanceRecord.create({
-        data: { organizationId: auth.organizationId, userId: auth.userId, date: toDbDate(date), location, remarks: remarks || null, checkInAt: now, late },
-      });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException('You have already checked in today');
-      throw e;
+    const current = await this.currentRecord(auth, policy.timezone);
+    if (current && !current.checkOutAt) throw new ConflictException('You are already checked in');
+    if (current && current.date.toISOString().slice(0, 10) === date) {
+      // Checked out earlier today. Reopen when split shifts are allowed, or when the system closed the shift for you.
+      if (!policy.multipleSessions && !current.autoCheckOutReason) throw new ConflictException('You have already checked in today');
+      await this.prisma.$transaction([
+        this.prisma.attendanceBreak.create({ data: { recordId: current.id, kind: 'AWAY', startAt: current.checkOutAt!, endAt: now } }),
+        this.prisma.attendanceRecord.update({ where: { id: current.id }, data: { checkOutAt: null, checkOutRemarks: null, autoCheckOutReason: null, lastActiveAt: now } }),
+      ]);
+    } else {
+      const late = localMinutes(policy.timezone, now) > hhmm(policy.workdayStart) + policy.graceMinutes;
+      try {
+        await this.prisma.attendanceRecord.create({
+          data: { organizationId: auth.organizationId, userId: auth.userId, date: toDbDate(date), location, remarks: remarks || null, checkInAt: now, late, autoCheckedIn: auto, lastActiveAt: now },
+        });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException('You have already checked in today');
+        throw e;
+      }
     }
     this.changed(auth);
     return this.today(auth);
   }
 
+  /**
+   * Checks you in when the company uses automatic check-in: on a working day, not on leave,
+   * from two hours before the workday starts until it ends, and only if you haven't checked in today.
+   */
+  async autoCheckIn(auth: AuthContext) {
+    const policy = await this.policy(auth.organizationId);
+    if (policy.checkInMode !== 'auto') return { checkedIn: false, today: await this.today(auth) };
+    const date = localDate(policy.timezone);
+    const mins = localMinutes(policy.timezone);
+    const [day, current] = await Promise.all([this.dayStatus(auth, date), this.currentRecord(auth, policy.timezone)]);
+    const inWindow = mins >= hhmm(policy.workdayStart) - 120 && mins < hhmm(policy.workdayEnd);
+    const alreadyToday = current && (!current.checkOutAt || current.date.toISOString().slice(0, 10) === date);
+    if (!day.isWorkingDay || day.onLeave || !inWindow || alreadyToday) return { checkedIn: false, today: await this.today(auth) };
+    const location = policy.allowedLocations.includes(policy.autoCheckInLocation) ? policy.autoCheckInLocation : policy.allowedLocations[0]!;
+    try {
+      return { checkedIn: true, today: await this.checkIn(auth, location, 'Checked in automatically', true) };
+    } catch (e) {
+      if (e instanceof ConflictException) return { checkedIn: false, today: await this.today(auth) };
+      throw e;
+    }
+  }
+
+  /** Activity heartbeat from the portal, used by the idle auto check-out rule. Written at most once a minute. */
+  async activity(auth: AuthContext) {
+    const policy = await this.policy(auth.organizationId);
+    await this.autoClose(auth.organizationId, policy, auth.userId);
+    const now = Date.now();
+    await this.prisma.attendanceRecord.updateMany({
+      where: { userId: auth.userId, organizationId: auth.organizationId, checkOutAt: null, checkInAt: { gte: new Date(now - SHIFT_WINDOW_MS) }, OR: [{ lastActiveAt: null }, { lastActiveAt: { lt: new Date(now - 60_000) } }] },
+      data: { lastActiveAt: new Date(now) },
+    });
+    return { ok: true };
+  }
+
+  /** When an open shift should be closed by the enabled rules: the rule that fires first wins. */
+  private autoCheckOutAt(r: RecordRow, policy: Policy): { fireAt: Date; at: Date; reason: AutoCheckOutReason } | null {
+    const { afterWorkdayEndHours, maxShiftHours, idleMinutes } = policy.autoCheckOut;
+    const rules: { fireAt: Date; at: Date; reason: AutoCheckOutReason }[] = [];
+    // Rules measure the current session, so checking in again after an automatic check-out isn't closed straight away.
+    const start = this.sessionStart(r);
+    if (maxShiftHours) {
+      const at = new Date(start.getTime() + maxShiftHours * 3600_000);
+      rules.push({ fireAt: at, at, reason: 'max_shift' });
+    }
+    if (afterWorkdayEndHours) {
+      const end = localToUtc(r.date.toISOString().slice(0, 10), policy.workdayEnd, policy.timezone);
+      // Night shifts start after the workday ends; only the shift-length rule applies to them.
+      if (start < end) {
+        const at = new Date(end.getTime() + afterWorkdayEndHours * 3600_000);
+        rules.push({ fireAt: at, at, reason: 'workday_end' });
+      }
+    }
+    if (idleMinutes && !r.breaks.some((b) => b.kind === 'BREAK' && !b.endAt)) {
+      // Closed at the last moment we saw activity, once the idle limit has passed.
+      const last = r.lastActiveAt && r.lastActiveAt > start ? r.lastActiveAt : start;
+      rules.push({ fireAt: new Date(last.getTime() + idleMinutes * 60_000), at: last, reason: 'idle' });
+    }
+    if (!rules.length) return null;
+    return rules.reduce((a, b) => (b.fireAt < a.fireAt ? b : a));
+  }
+
+  /** Closes open shifts that hit an enabled auto check-out rule. Runs lazily on reads and on a timer. */
+  async autoClose(organizationId: string, policy: Policy, userId?: string) {
+    const { afterWorkdayEndHours, maxShiftHours, idleMinutes } = policy.autoCheckOut;
+    if (!afterWorkdayEndHours && !maxShiftHours && !idleMinutes) return 0;
+    const now = new Date();
+    const open = await this.prisma.attendanceRecord.findMany({ where: { organizationId, checkOutAt: null, ...(userId ? { userId } : {}) }, include: recordInclude });
+    let closed = 0;
+    for (const r of open) {
+      const rule = this.autoCheckOutAt(r, policy);
+      if (!rule || rule.fireAt > now) continue;
+      const start = this.sessionStart(r);
+      const at = rule.at < start ? start : rule.at;
+      const done = await this.prisma.$transaction(async (tx) => {
+        const res = await tx.attendanceRecord.updateMany({ where: { id: r.id, checkOutAt: null }, data: { checkOutAt: at, autoCheckOutReason: rule.reason } });
+        if (!res.count) return false;
+        for (const b of r.breaks.filter((x) => !x.endAt)) await tx.attendanceBreak.update({ where: { id: b.id }, data: { endAt: b.startAt > at ? b.startAt : at } });
+        return true;
+      });
+      if (!done) continue;
+      closed++;
+      const time = new Intl.DateTimeFormat('en-GB', { timeZone: policy.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
+      void this.notifications.notify({
+        organizationId,
+        userIds: [r.userId],
+        type: 'correction',
+        title: `You were checked out automatically at ${time}`,
+        body: `Because ${AUTO_REASON_TEXT[rule.reason]}. If you were still working, check in again or request a correction.`,
+        link: '/app/attendance',
+      });
+      this.changed({ userId: r.userId, organizationId } as AuthContext);
+    }
+    return closed;
+  }
+
   private async openRecord(auth: AuthContext) {
     const policy = await this.policy(auth.organizationId);
-    const r = await this.todayRecord(auth, policy.timezone);
+    await this.autoClose(auth.organizationId, policy, auth.userId);
+    const r = await this.currentRecord(auth, policy.timezone);
     if (!r) throw new BadRequestException('Check in first');
-    if (r.checkOutAt) throw new BadRequestException('You have already checked out today');
+    if (r.checkOutAt) throw new BadRequestException(policy.multipleSessions || r.autoCheckOutReason ? 'You are checked out. Check in again first' : 'You have already checked out today');
     return { r, policy };
   }
 
@@ -150,6 +340,7 @@ export class AttendanceService {
   async history(auth: AuthContext, userId: string, from?: string, to?: string) {
     if (userId !== auth.userId) await this.assertCanView(auth, userId);
     const policy = await this.policy(auth.organizationId);
+    await this.autoClose(auth.organizationId, policy, userId);
     const end = to ?? localDate(policy.timezone);
     const start = from ?? addDays(end, -29);
     if (start > end) throw new BadRequestException('"from" must be before "to"');
@@ -158,7 +349,8 @@ export class AttendanceService {
       include: recordInclude,
       orderBy: { date: 'desc' },
     });
-    const items = rows.map((r) => this.serialize(r)!);
+    const working = await this.workingDates(auth.organizationId, start, end);
+    const items = rows.map((r) => this.withDayOff(r, working)!);
     return {
       from: start,
       to: end,
@@ -167,6 +359,8 @@ export class AttendanceService {
       summary: {
         daysPresent: items.length,
         late: items.filter((i) => i.late).length,
+        autoCheckedOut: items.filter((i) => i.autoCheckOutReason).length,
+        dayOffWorked: items.filter((i) => i.dayOff).length,
         office: items.filter((i) => i.location === 'WFO').length,
         home: items.filter((i) => i.location === 'WFH').length,
         clientSite: items.filter((i) => i.location === 'ON_DUTY').length,
@@ -189,6 +383,7 @@ export class AttendanceService {
   async board(auth: AuthContext, date?: string) {
     const scope = await this.scope(auth);
     const policy = await this.policy(auth.organizationId);
+    await this.autoClose(auth.organizationId, policy);
     const day = date ?? localDate(policy.timezone);
     const people = await this.prisma.user.findMany({
       where: { ...scope, status: 'ACTIVE' },
@@ -200,12 +395,14 @@ export class AttendanceService {
       select: { userId: true, halfDay: true, type: { select: { name: true, color: true } } },
     });
     const leaveBy = new Map(leaves.map((l) => [l.userId, { type: l.type.name, color: l.type.color, halfDay: l.halfDay !== 'NONE' }]));
-    const rows = people.map(({ attendance, ...p }) => ({ person: toPerson(p, this.realtime.isOnline(p.id)), record: this.serialize(attendance[0] ?? null), leave: leaveBy.get(p.id) ?? null }));
+    const working = await this.workingDates(auth.organizationId, day, day);
+    const rows = people.map(({ attendance, ...p }) => ({ person: toPerson(p, this.realtime.isOnline(p.id)), record: this.withDayOff(attendance[0] ?? null, working), leave: leaveBy.get(p.id) ?? null }));
     const recs = rows.map((r) => r.record).filter(Boolean) as NonNullable<ReturnType<AttendanceService['serialize']>>[];
     return {
       date: day,
       timezone: policy.timezone,
       isToday: day === localDate(policy.timezone),
+      isWorkingDay: working.has(day),
       totals: {
         employees: rows.length,
         checkedIn: recs.length,
@@ -214,7 +411,8 @@ export class AttendanceService {
         clientSite: recs.filter((r) => r.location === 'ON_DUTY').length,
         onBreak: recs.filter((r) => r.state === 'on_break').length,
         checkedOut: recs.filter((r) => r.state === 'checked_out').length,
-        notCheckedIn: rows.filter((r) => !r.record && !r.leave).length,
+        // Nobody is expected to check in on a day off.
+        notCheckedIn: working.has(day) ? rows.filter((r) => !r.record && !r.leave).length : 0,
         onLeave: rows.filter((r) => r.leave).length,
         late: recs.filter((r) => r.late).length,
       },
@@ -225,6 +423,7 @@ export class AttendanceService {
   async exportCsv(auth: AuthContext, from?: string, to?: string) {
     const scope = await this.scope(auth);
     const policy = await this.policy(auth.organizationId);
+    await this.autoClose(auth.organizationId, policy);
     const end = to ?? localDate(policy.timezone);
     const start = from ?? addDays(end, -29);
     const rows = await this.prisma.attendanceRecord.findMany({
@@ -240,10 +439,10 @@ export class AttendanceService {
       if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['Date', 'Employee', 'Email', 'Employee code', 'Department', 'Location', 'Check in', 'Check out', 'Break (min)', 'Worked (min)', 'Late', 'Remarks'];
+    const header = ['Date', 'Employee', 'Email', 'Employee code', 'Department', 'Location', 'Check in', 'Check out', 'Break (min)', 'Worked (min)', 'Late', 'Checked in automatically', 'Checked out automatically', 'Remarks'];
     const lines = rows.map((r) => {
       const s = this.serialize(r)!;
-      return [s.date, `${r.user.firstName} ${r.user.lastName}`, r.user.email, r.user.employeeCode, r.user.department?.name, s.location, fmt(r.checkInAt), fmt(r.checkOutAt), s.breakMinutes, s.workedMinutes, s.late ? 'yes' : 'no', [r.remarks, r.checkOutRemarks].filter(Boolean).join(' | ')]
+      return [s.date, `${r.user.firstName} ${r.user.lastName}`, r.user.email, r.user.employeeCode, r.user.department?.name, s.location, fmt(r.checkInAt), fmt(r.checkOutAt), s.breakMinutes, s.workedMinutes, s.late ? 'yes' : 'no', s.autoCheckedIn ? 'yes' : 'no', s.autoCheckOutReason ? AUTO_REASON_TEXT[s.autoCheckOutReason] : 'no', [r.remarks, r.checkOutRemarks].filter(Boolean).join(' | ')]
         .map(cell)
         .join(',');
     });
@@ -326,7 +525,7 @@ export class AttendanceService {
         const remarks = `Corrected: ${c.reason}`.slice(0, 200);
         await tx.attendanceRecord.upsert({
           where: { userId_date: { userId: c.userId, date: c.date } },
-          update: { checkInAt, checkOutAt, location: c.location, late, remarks },
+          update: { checkInAt, checkOutAt, location: c.location, late, remarks, autoCheckOutReason: null },
           create: { organizationId: auth.organizationId, userId: c.userId, date: c.date, checkInAt, checkOutAt, location: c.location, late, remarks },
         });
       }

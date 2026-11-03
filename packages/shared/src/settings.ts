@@ -99,6 +99,23 @@ export const organizationSettingsSchema = z.object({
       /** IANA time zone that defines the attendance day and "late" */
       timezone: z.string().min(1).max(60).default('Asia/Kolkata'),
       breaksEnabled: z.boolean().default(true),
+      /** Allow checking in again after checking out on the same day (split shifts). */
+      multipleSessions: z.boolean().default(false),
+      /** On opening FG One without having checked in: do nothing, show a reminder, or check in automatically. */
+      checkInMode: z.enum(['manual', 'prompt', 'auto']).default('prompt'),
+      /** Location used by automatic check-in (falls back to the first allowed location). */
+      autoCheckInLocation: z.enum(['WFO', 'WFH', 'ON_DUTY']).default('WFO'),
+      /** Close shifts people forgot to end. Each rule is off at 0; the earliest enabled rule wins. */
+      autoCheckOut: z
+        .object({
+          /** Hours after the workday ends (only for shifts that started before it ended). */
+          afterWorkdayEndHours: z.number().int().min(0).max(12).default(0),
+          /** Longest a single shift may run. */
+          maxShiftHours: z.number().int().min(0).max(24).default(0),
+          /** Minutes with no activity in FG One (not counted while on a break). */
+          idleMinutes: z.number().int().min(0).max(480).default(0),
+        })
+        .default({}),
     })
     .default({}),
   leave: z
@@ -106,6 +123,8 @@ export const organizationSettingsSchema = z.object({
       yearStartMonth: z.number().int().min(1).max(12).default(1),
       allowHalfDay: z.boolean().default(true),
       requireManagerApproval: z.boolean().default(true),
+      /** "Sandwich" rule: weekends and holidays between the first and last leave day count as leave. */
+      countDaysOffInside: z.boolean().default(false),
     })
     .default({}),
   auth: z

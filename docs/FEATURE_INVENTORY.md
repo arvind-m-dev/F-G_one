@@ -5,7 +5,7 @@
 ## Employee portal (`/app`)
 | Module | Status | Notes |
 |---|---|---|
-| Workspace Home | ✅ | Greeting with personal summary, day timeline (company working hours), quick actions, needs-your-attention, editorial announcements, team pulse, holidays, celebrations, company snapshot. Customize: reorder, hide, restore. |
+| Workspace Home | ✅ | Greeting (updates with the time of day, also when you return to an open tab) with personal summary, day timeline (company working hours), quick actions, needs-your-attention, editorial announcements, team pulse, holidays, celebrations, company snapshot. Customize: reorder, hide, restore. |
 | Chat: channels, DMs, groups | ✅ | Public and private channels, 1:1 and group DMs, browse/join/leave, members and channel admins, rename/topic |
 | Chat: messages | ✅ | Realtime delivery, threads, icon reactions, edit/delete with permissions, copy text/link, typing, unread, infinite history, optimistic send |
 | Chat: rich composer, attachments, link previews, mentions autocomplete, pin/save, search filters | ⬜ | Phase 3 |
@@ -14,12 +14,13 @@
 | My profile | ✅ | Name, display name, pronouns, phone, timezone, avatar colour/photo URL, birthday privacy, password change |
 | Settings | ✅ | Theme, accent, text size, sidebar, density, Enter-to-send, time format |
 | Security (Settings) | ✅ | Two-step verification (authenticator app, QR code, 10 recovery codes shown once, replace codes, turn off unless Super Admin), signed-in devices with sign out one or all others, confirm-it-is-you dialog for sensitive actions. Sign-in asks for the code when it is on. |
+| Top bar | ✅ | Search, admin portal switch, notifications, theme and an account menu (name, email, role, status, profile, preferences, sign out). On phones: search, notifications and the account menu. |
 | ⌘K command palette | ✅ | People, channels, messages, navigation, theme |
-| Attendance | ✅ | Check in with Office/Home/Client site and a note, start/end breaks, check out (confirmed), live worked time and a day bar, late flag from policy, history with 7/30/90-day summary. Managers see their direct reports, HR/Admin see everyone. Times use the organization's time zone. |
+| Attendance | ✅ | Check in with Office/Home/Client site and a note, start/end breaks, check out (confirmed), live worked time and a day bar, late flag from policy, history with 7/30/90-day summary. Managers see their direct reports, HR/Admin see everyone. Times use the organization's time zone. Night shifts check out after midnight (the shift counts for the day it started). Company options: reminder or automatic check-in on opening FG One, checking in more than once a day (split shifts), and automatic check-out (hours after the workday, longest shift, minutes with no activity) with a notification and "Auto check-in/out" labels. |
 | Announcements | ✅ | Editorial feed, categories, search, reader, "I've read this" confirmations, banner for pending confirmations |
 | Notifications inbox | ✅ | Bell with unread count. DMs (grouped per conversation), @mentions, thread replies, announcements. Filters, mark read, per-type settings, live toasts. |
 | Getting started checklist | ✅ | Real progress, dismissible |
-| Leave | ✅ | Balances per type and leave year, request with live working-day count (weekends and holidays excluded, half days), overlap and balance checks, cancel, "Who's away" month calendar (colleagues see dates only, never reasons) |
+| Leave | ✅ | Balances per type and leave year, request with live working-day count (weekends and holidays excluded, half days), overlap and balance checks, cancel, "Who's away" month calendar (colleagues see dates only, never reasons). Past dates are allowed (forgot to apply). HR can record leave on someone's behalf (approved straight away, notified). |
 | Holidays | ✅ | Year view by month, next-holiday banner, categories: public, company, optional, special working day |
 | Approvals | ✅ | For managers (direct reports) and HR: leave and attendance corrections, approve/decline with note, badge count |
 | Attendance corrections | ✅ | "Fix a day" or per-day "Request correction"; applied in the organization's time zone when approved; status shown on the Attendance page |

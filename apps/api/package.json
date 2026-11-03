@@ -11,6 +11,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "db:seed": "ts-node --transpile-only prisma/seed.ts",
+    "db:seed-fill": "ts-node --transpile-only prisma/seed-fill.ts",
     "test": "jest --runInBand",
     "test:e2e": "jest --runInBand test",
     "db:bootstrap": "ts-node --transpile-only prisma/bootstrap.ts",

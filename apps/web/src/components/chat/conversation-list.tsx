@@ -1,6 +1,6 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Compass, Hash, Lock, MessageSquarePlus, Plus, Search, Users } from 'lucide-react';
+import { ChevronDown, Compass, MessageSquarePlus, Plus, Search, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Badge, Skeleton, Tooltip } from '@/components/ui/misc';
+import { ChannelIcon } from '@/components/chat/channel-icon';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
 import { channelLabel, useChannels } from '@/lib/hooks';
@@ -53,7 +54,7 @@ export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; on
         {browse.isPending && <li className="p-4"><Skeleton className="h-10" /></li>}
         {list.map((c) => (
           <li key={c.id} className="flex items-center gap-3 px-3 py-2.5">
-            <Hash className="size-4 text-subtle" />
+            <ChannelIcon channel={{ id: c.id, type: 'PUBLIC' }} />
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-2 text-[13px] font-medium">
                 {c.name} {c.isDefault && <Badge tone="muted">Everyone</Badge>}
@@ -90,15 +91,19 @@ function Row({ c }: { c: ChannelSummary }) {
       className={cn('flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2', active && 'bg-primary-soft hover:bg-primary-soft')}
     >
       {c.type === 'DIRECT' ? (
-        other ? (
+        c.participants.length > 1 ? (
+          // Group message: two overlapping avatars
+          <span className="relative size-8 shrink-0" aria-hidden>
+            <UserAvatar person={c.participants[0]!} size="xs" showPresence={false} className="absolute top-0 left-0" />
+            <UserAvatar person={c.participants[1]!} size="xs" showPresence={false} className="absolute right-0 bottom-0 ring-2 ring-canvas rounded-full" />
+          </span>
+        ) : other ? (
           <UserAvatar person={other} size="sm" />
         ) : (
           <span className="size-8 rounded-full bg-surface-2" />
         )
       ) : (
-        <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', active ? 'bg-canvas text-primary' : 'bg-surface-2 text-muted')}>
-          {c.type === 'PRIVATE' ? <Lock className="size-3.5" /> : <Hash className="size-3.5" />}
-        </span>
+        <ChannelIcon channel={c} />
       )}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">

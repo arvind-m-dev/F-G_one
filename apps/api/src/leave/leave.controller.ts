@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { decisionSchema, leaveCalendarSchema, leaveListSchema, leaveRequestSchema, leaveTypeSchema, PERMISSIONS, type LeaveRequestInput, type LeaveTypeInput } from '@fg/shared';
+import { decisionSchema, leaveCalendarSchema, leaveListSchema, leaveRequestSchema, recordLeaveSchema, leaveTypeSchema, PERMISSIONS, type LeaveRequestInput, type RecordLeaveInput, type LeaveTypeInput } from '@fg/shared';
 import { z } from 'zod';
 import { Auth, AuthContext, RequirePermissions } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
@@ -48,6 +48,13 @@ export class LeaveController {
   @Post('requests')
   create(@Auth() auth: AuthContext, @Body(new ZodPipe(leaveRequestSchema)) body: LeaveRequestInput) {
     return this.leave.create(auth, body);
+  }
+
+  /** HR/admin records leave on someone's behalf; approved straight away. */
+  @Post('requests/record')
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  record(@Auth() auth: AuthContext, @Body(new ZodPipe(recordLeaveSchema)) body: RecordLeaveInput) {
+    return this.leave.record(auth, body);
   }
 
   @Post('requests/:id/decision')

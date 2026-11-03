@@ -1,12 +1,12 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Pencil, Plus, TreePalm, X } from 'lucide-react';
+import { CalendarPlus, Check, Pencil, Plus, TreePalm, X } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { leaveTypeSchema, PERMISSIONS } from '@fg/shared';
 import { Forbidden, PageHeader } from '@/components/admin/page-header';
 import { LeaveCalendar } from '@/components/leave/leave-calendar';
-import { LeaveStatusBadge } from '@/components/leave/request-leave-dialog';
+import { LeaveStatusBadge, RequestLeaveDialog } from '@/components/leave/request-leave-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Textarea } from '@/components/ui/input';
@@ -184,12 +184,21 @@ function Types() {
 
 function AdminLeave() {
   const can = useCan();
-  const [get, set] = useUrlState({ tab: 'requests' });
+  const [get, set] = useUrlState({ tab: 'requests', record: '' });
   if (!can(PERMISSIONS.EMPLOYEES_MANAGE)) return <Forbidden />;
   const tab = get('tab');
   return (
     <div className="mx-auto max-w-[1100px] px-6 pt-8 pb-14 sm:px-10">
-      <PageHeader title="Leave" description="Every leave request in the company, the team calendar, and the types of leave people can take." />
+      <PageHeader
+        title="Leave"
+        description="Every leave request in the company, the team calendar, and the types of leave people can take."
+        actions={
+          <Button onClick={() => set({ record: '1' })}>
+            <CalendarPlus /> Record leave
+          </Button>
+        }
+      />
+      <RequestLeaveDialog record open={get('record') === '1'} onOpenChange={(o) => set({ record: o ? '1' : null })} />
       <div className="mb-6 inline-flex rounded-lg bg-surface-2 p-0.5" role="tablist" aria-label="Leave admin">
         {([
           ['requests', 'Requests'],

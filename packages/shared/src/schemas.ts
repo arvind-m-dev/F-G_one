@@ -236,17 +236,23 @@ export const leaveTypeSchema = z.object({
 });
 export type LeaveTypeInput = z.infer<typeof leaveTypeSchema>;
 
-export const leaveRequestSchema = z
-  .object({
-    typeId: z.string().min(1, 'Choose a leave type'),
-    startDate: ymd,
-    endDate: ymd,
-    halfDay: z.enum(['NONE', 'FIRST_HALF', 'SECOND_HALF']).default('NONE'),
-    reason: z.string().trim().max(500).nullable().optional(),
-  })
+const leaveRequestBase = z.object({
+  typeId: z.string().min(1, 'Choose a leave type'),
+  startDate: ymd,
+  endDate: ymd,
+  halfDay: z.enum(['NONE', 'FIRST_HALF', 'SECOND_HALF']).default('NONE'),
+  reason: z.string().trim().max(500).nullable().optional(),
+});
+export const leaveRequestSchema = leaveRequestBase
   .refine((v) => v.startDate <= v.endDate, { path: ['endDate'], message: 'End date must be on or after the start date' })
   .refine((v) => v.halfDay === 'NONE' || v.startDate === v.endDate, { path: ['halfDay'], message: 'Half days are for a single date' });
 export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>;
+/** HR records leave for someone; it is approved straight away. */
+export const recordLeaveSchema = leaveRequestBase
+  .extend({ userId: z.string().min(1, 'Choose an employee') })
+  .refine((v) => v.startDate <= v.endDate, { path: ['endDate'], message: 'End date must be on or after the start date' })
+  .refine((v) => v.halfDay === 'NONE' || v.startDate === v.endDate, { path: ['halfDay'], message: 'Half days are for a single date' });
+export type RecordLeaveInput = z.infer<typeof recordLeaveSchema>;
 
 export const decisionSchema = z.object({
   decision: z.enum(['APPROVED', 'REJECTED']),

@@ -99,6 +99,9 @@ function History() {
                   <span className="flex items-center gap-1.5 text-[13px] font-medium">
                     <Loc className="size-3.5 text-primary" /> {LOCATION_LABEL[r.location]}
                     {r.late && <Badge tone="warning">Late</Badge>}
+                    {r.dayOff && <Badge tone="success">Day-off work</Badge>}
+                    {r.autoCheckedIn && <Badge>Auto check-in</Badge>}
+                    {r.autoCheckOutReason && <Badge tone="warning">Auto check-out</Badge>}
                     {r.state !== 'checked_out' && <Badge tone="success">Today</Badge>}
                   </span>
                   <span className="block text-xs text-muted tabular-nums">
