@@ -54,8 +54,11 @@ export function useModule() {
 export function useUpdatePreferences() {
   const qc = useQueryClient();
   return async (patch: Partial<Me['preferences']>) => {
+    // Stop any in-flight profile reload so it can't overwrite this change with older data.
+    await qc.cancelQueries({ queryKey: ['me'] });
     qc.setQueryData<Me>(['me'], (old) => (old ? { ...old, preferences: { ...old.preferences, ...patch } } : old));
-    await api('/me/preferences', { method: 'PATCH', body: patch });
+    const saved = await api<Me['preferences']>('/me/preferences', { method: 'PATCH', body: patch });
+    qc.setQueryData<Me>(['me'], (old) => (old ? { ...old, preferences: saved } : old));
   };
 }
 
@@ -63,5 +66,9 @@ export function useUpdatePreferences() {
 export function useClock() {
   const me = useSession();
   const h24 = me.preferences.timeFormat === '24h';
-  return { h24, time: (d: string | Date) => new Date(d).toLocaleTimeString(undefined, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !h24 }) };
+  /** `tz` pins the display to a time zone (attendance uses the organization's). */
+  return {
+    h24,
+    time: (d: string | Date, tz?: string) => new Date(d).toLocaleTimeString(undefined, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !h24, timeZone: tz }),
+  };
 }

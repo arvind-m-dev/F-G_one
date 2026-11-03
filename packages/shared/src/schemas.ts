@@ -152,3 +152,119 @@ export const editMessageSchema = z.object({ body: z.string().trim().min(1).max(4
 export const channelMembersSchema = z.object({ userIds: z.array(z.string().min(1)).min(1).max(200) });
 
 export const reactionSchema = z.object({ emoji: z.enum(REACTION_KEYS) });
+
+/* ---------------- attendance ---------------- */
+export const WORK_LOCATIONS = [
+  { key: 'WFO', label: 'Office', description: 'Working from the office' },
+  { key: 'WFH', label: 'Home', description: 'Working from home' },
+  { key: 'ON_DUTY', label: 'Client site', description: 'On duty or at a client location' },
+] as const;
+export type WorkLocationKey = (typeof WORK_LOCATIONS)[number]['key'];
+
+export const checkInSchema = z.object({
+  location: z.enum(['WFO', 'WFH', 'ON_DUTY']),
+  remarks: z.string().trim().max(200).nullable().optional(),
+});
+export type CheckInInput = z.infer<typeof checkInSchema>;
+
+export const checkOutSchema = z.object({ remarks: z.string().trim().max(200).nullable().optional() });
+
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+export const attendanceRangeSchema = z.object({ from: ymd.optional(), to: ymd.optional() });
+export const attendanceBoardSchema = z.object({ date: ymd.optional() });
+
+/* ---------------- announcements ---------------- */
+export const ANNOUNCEMENT_CATEGORIES = [
+  { key: 'COMPANY_NEWS', label: 'Company news' },
+  { key: 'IMPORTANT_UPDATE', label: 'Important update' },
+  { key: 'HOLIDAY', label: 'Holidays' },
+  { key: 'NEW_FEATURE', label: 'New feature' },
+  { key: 'POLICY', label: 'Policy change' },
+  { key: 'EVENT', label: 'Event' },
+  { key: 'TEAM_UPDATE', label: 'Team update' },
+  { key: 'URGENT', label: 'Urgent notice' },
+] as const;
+export type AnnouncementCategoryKey = (typeof ANNOUNCEMENT_CATEGORIES)[number]['key'];
+
+export const announcementSchema = z.object({
+  title: z.string().trim().min(3, 'Add a short title').max(140),
+  body: z.string().trim().min(1, 'Write the announcement').max(8000),
+  category: z.enum(['COMPANY_NEWS', 'IMPORTANT_UPDATE', 'HOLIDAY', 'NEW_FEATURE', 'POLICY', 'EVENT', 'TEAM_UPDATE', 'URGENT']).default('COMPANY_NEWS'),
+  priority: z.enum(['NORMAL', 'IMPORTANT', 'CRITICAL']).default('NORMAL'),
+  departmentId: z.string().max(40).nullable().optional(),
+  pinned: z.boolean().default(false),
+  requireAck: z.boolean().default(false),
+  expiresAt: z.string().datetime().nullable().optional(),
+});
+export type AnnouncementInput = z.infer<typeof announcementSchema>;
+
+export const notificationsQuerySchema = z.object({
+  filter: z.enum(['all', 'unread', 'mentions']).default('all'),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export const markReadSchema = z.object({ ids: z.array(z.string().min(1)).max(200).optional(), all: z.boolean().optional() });
+
+/* ---------------- holidays ---------------- */
+export const HOLIDAY_TYPES = [
+  { key: 'MANDATORY', label: 'Public holiday', description: 'Office closed for everyone' },
+  { key: 'COMPANY', label: 'Company holiday', description: 'Closed by company decision' },
+  { key: 'OPTIONAL', label: 'Optional holiday', description: 'Take it as leave if you choose' },
+  { key: 'SPECIAL_WORKING_DAY', label: 'Special working day', description: 'A normally off day that is a working day' },
+] as const;
+export type HolidayTypeKey = (typeof HOLIDAY_TYPES)[number]['key'];
+
+export const holidaySchema = z.object({
+  name: z.string().trim().min(2, 'Add a name').max(80),
+  date: ymd,
+  type: z.enum(['MANDATORY', 'OPTIONAL', 'COMPANY', 'SPECIAL_WORKING_DAY']).default('MANDATORY'),
+  description: z.string().trim().max(240).nullable().optional(),
+});
+export type HolidayInput = z.infer<typeof holidaySchema>;
+
+/* ---------------- leave ---------------- */
+export const leaveTypeSchema = z.object({
+  name: z.string().trim().min(2).max(40),
+  code: z.string().trim().toUpperCase().min(2).max(10).regex(/^[A-Z0-9_]+$/, 'Letters, numbers and _ only'),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#6366f1'),
+  annualAllowance: z.coerce.number().min(0).max(365),
+  paid: z.boolean().default(true),
+  active: z.boolean().default(true),
+  description: z.string().trim().max(200).nullable().optional(),
+});
+export type LeaveTypeInput = z.infer<typeof leaveTypeSchema>;
+
+export const leaveRequestSchema = z
+  .object({
+    typeId: z.string().min(1, 'Choose a leave type'),
+    startDate: ymd,
+    endDate: ymd,
+    halfDay: z.enum(['NONE', 'FIRST_HALF', 'SECOND_HALF']).default('NONE'),
+    reason: z.string().trim().max(500).nullable().optional(),
+  })
+  .refine((v) => v.startDate <= v.endDate, { path: ['endDate'], message: 'End date must be on or after the start date' })
+  .refine((v) => v.halfDay === 'NONE' || v.startDate === v.endDate, { path: ['halfDay'], message: 'Half days are for a single date' });
+export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>;
+
+export const decisionSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  note: z.string().trim().max(300).nullable().optional(),
+});
+
+export const leaveListSchema = z.object({
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ALL']).default('ALL'),
+  scope: z.enum(['mine', 'approvals', 'all']).default('mine'),
+});
+export const leaveCalendarSchema = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM').optional() });
+
+/* ---------------- attendance corrections ---------------- */
+const hm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
+export const correctionSchema = z
+  .object({
+    date: ymd,
+    checkIn: hm,
+    checkOut: hm.nullable().optional(),
+    location: z.enum(['WFO', 'WFH', 'ON_DUTY']),
+    reason: z.string().trim().min(5, 'Explain briefly what needs fixing').max(500),
+  })
+  .refine((v) => !v.checkOut || v.checkOut > v.checkIn, { path: ['checkOut'], message: 'Check-out must be after check-in' });
+export type CorrectionInput = z.infer<typeof correctionSchema>;

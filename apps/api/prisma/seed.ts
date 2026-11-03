@@ -223,6 +223,8 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     ['Republic Day', `${year + 1}-01-26`, 'MANDATORY'],
     ['Holi', `${year + 1}-03-04`, 'MANDATORY'],
     ['Christmas', `${year}-12-25`, 'MANDATORY'],
+    ['Company offsite', `${year}-12-11`, 'COMPANY'],
+    ['Year-end release Saturday', `${year}-12-19`, 'SPECIAL_WORKING_DAY'],
     ['Guru Nanak Jayanti', `${year}-11-24`, 'OPTIONAL'],
     ['Gandhi Jayanti', `${year}-10-02`, 'MANDATORY'],
   ] as const;
@@ -230,12 +232,101 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     data: holidays.map(([name, date, type]) => ({ organizationId: org.id, name, date: new Date(`${date}T00:00:00Z`), type })),
   });
 
+  // ── Attendance: last 20 working days for everyone + a realistic "today" ──
+  const tz = 'Asia/Kolkata';
+  const ymdIn = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+  const at = (ymd: string, hhmm: string) => new Date(`${ymd}T${hhmm}:00+05:30`);
+  const locations = ['WFO', 'WFO', 'WFO', 'WFH', 'WFH', 'ON_DUTY'] as const;
+  const todayYmd = ymdIn(new Date());
+  const ids = Object.values(users).map((u) => u.id);
+  let seedN = 7;
+  const rnd = () => ((seedN = (seedN * 9301 + 49297) % 233280) / 233280);
+  for (let back = 28; back >= 1; back--) {
+    const day = new Date(Date.now() - back * 86400_000);
+    const ymd = ymdIn(day);
+    const wd = new Date(`${ymd}T12:00:00+05:30`).getUTCDay();
+    if (wd === 0 || wd === 6) continue;
+    for (const uid of ids) {
+      if (rnd() < 0.08) continue; // occasional absence
+      const inMin = 9 * 60 + 5 + Math.floor(rnd() * 55);
+      const outMin = 18 * 60 + Math.floor(rnd() * 70);
+      const pad = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      const rec = await prisma.attendanceRecord.create({
+        data: {
+          organizationId: org.id, userId: uid, date: new Date(`${ymd}T00:00:00Z`), location: locations[Math.floor(rnd() * locations.length)],
+          checkInAt: at(ymd, pad(inMin)), checkOutAt: at(ymd, pad(outMin)), late: inMin > 9 * 60 + 45,
+        },
+      });
+      await prisma.attendanceBreak.create({ data: { recordId: rec.id, startAt: at(ymd, '13:10'), endAt: at(ymd, pad(13 * 60 + 25 + Math.floor(rnd() * 30))) } });
+    }
+  }
+  // Today: most people are in; a few are not yet (the demo employee checks in themselves).
+  const nowLocal = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+  const todayWd = new Date(`${todayYmd}T12:00:00+05:30`).getUTCDay();
+  if (todayWd !== 0 && todayWd !== 6 && nowLocal > '09:15') {
+    const todayPeople = PEOPLE.filter((p) => !['employee@futuristglobal.com', 'neha.reddy@futuristglobal.com', 'zara.khan@futuristglobal.com'].includes(p.email));
+    for (const [i, p] of todayPeople.entries()) {
+      const loc = p.presence === 'wfh' ? 'WFH' : i % 5 === 0 ? 'ON_DUTY' : i % 3 === 0 ? 'WFH' : 'WFO';
+      const rec = await prisma.attendanceRecord.create({
+        data: { organizationId: org.id, userId: users[p.email].id, date: new Date(`${todayYmd}T00:00:00Z`), location: loc, checkInAt: at(todayYmd, `09:${String(10 + i * 3).padStart(2, '0')}`), late: 10 + i * 3 > 45, remarks: loc === 'ON_DUTY' ? 'At the client office' : null },
+      });
+      if (['lunch', 'short_break'].includes(p.presence ?? '')) await prisma.attendanceBreak.create({ data: { recordId: rec.id, startAt: new Date(Date.now() - 12 * 60_000) } });
+      if (i % 6 === 5 && nowLocal > '17:30') await prisma.attendanceRecord.update({ where: { id: rec.id }, data: { checkOutAt: new Date(Date.now() - 20 * 60_000) } });
+    }
+  }
+
   await prisma.announcement.createMany({
     data: [
-      { organizationId: org.id, authorId: users['admin@futuristglobal.com'].id, title: 'Welcome to FG One', body: 'FG One is our new unified workspace for chat, attendance, HR and daily updates. Explore the dashboard, set your status, and say hi in #general!', priority: 'IMPORTANT', pinned: true, publishedAt: new Date(Date.now() - 2 * 86400_000) },
-      { organizationId: org.id, authorId: users['hr@futuristglobal.com'].id, title: 'Health insurance top-up enrolment', body: 'Open enrolment for the optional family health insurance top-up closes on the 15th. Reach out to HR for plan details.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 86400_000) },
-      { organizationId: org.id, authorId: users['manager@futuristglobal.com'].id, departmentId: depts['Engineering'].id, title: 'Engineering: on-call rotation updated', body: 'The on-call rotation for December is published. Please confirm your slots by Friday.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 6 * 3600_000) },
-      { organizationId: org.id, authorId: users['hr@futuristglobal.com'].id, title: 'Annual townhall — Friday 4 PM', body: 'Join leadership for the annual townhall. Q&A submissions are open until Thursday evening.', priority: 'CRITICAL', publishedAt: new Date(Date.now() - 3 * 3600_000) },
+      { organizationId: org.id, authorId: users['admin@futuristglobal.com'].id, title: 'Welcome to FG One', category: 'NEW_FEATURE', body: 'FG One is our new unified workspace for chat, attendance, HR and daily updates. Explore the dashboard, set your status, and say hi in #general!', priority: 'IMPORTANT', pinned: true, publishedAt: new Date(Date.now() - 2 * 86400_000) },
+      { organizationId: org.id, authorId: users['hr@futuristglobal.com'].id, title: 'Health insurance top-up enrolment', category: 'POLICY', requireAck: true, body: 'Open enrolment for the optional family health insurance top-up closes on the 15th. Reach out to HR for plan details.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 86400_000) },
+      { organizationId: org.id, authorId: users['manager@futuristglobal.com'].id, departmentId: depts['Engineering'].id, title: 'Engineering: on-call rotation updated', category: 'TEAM_UPDATE', body: 'The on-call rotation for December is published. Please confirm your slots by Friday.', priority: 'NORMAL', publishedAt: new Date(Date.now() - 6 * 3600_000) },
+      { organizationId: org.id, authorId: users['hr@futuristglobal.com'].id, title: 'Annual townhall — Friday 4 PM', category: 'EVENT', body: 'Join leadership for the annual townhall. Q&A submissions are open until Thursday evening.', priority: 'CRITICAL', publishedAt: new Date(Date.now() - 3 * 3600_000) },
+    ],
+  });
+
+  // ── Leave types and requests ──
+  const lt = Object.fromEntries(
+    await Promise.all(
+      [
+        { code: 'CL', name: 'Casual leave', annualAllowance: 12, color: '#0ea5e9' },
+        { code: 'SL', name: 'Sick leave', annualAllowance: 8, color: '#f43f5e' },
+        { code: 'EL', name: 'Earned leave', annualAllowance: 15, color: '#10b981' },
+        { code: 'UL', name: 'Unpaid leave', annualAllowance: 0, color: '#94a3b8', paid: false },
+      ].map(async (t) => [t.code, await prisma.leaveType.create({ data: { ...t, organizationId: org.id } })]),
+    ),
+  );
+  const d = (offset: number) => ymdIn(new Date(Date.now() + offset * 86400_000));
+  const leaveRows: { email: string; type: string; from: number; to: number; days: number; status: 'APPROVED' | 'PENDING' | 'REJECTED'; reason: string }[] = [
+    { email: 'employee@futuristglobal.com', type: 'CL', from: -20, to: -20, days: 1, status: 'APPROVED', reason: 'Family function' },
+    { email: 'employee@futuristglobal.com', type: 'SL', from: -9, to: -8, days: 2, status: 'APPROVED', reason: 'Fever' },
+    { email: 'kabir.singh@futuristglobal.com', type: 'EL', from: 6, to: 8, days: 3, status: 'PENDING', reason: 'Trip to Goa' },
+    { email: 'meera.nair@futuristglobal.com', type: 'CL', from: 2, to: 2, days: 1, status: 'PENDING', reason: 'Bank work' },
+    { email: 'zara.khan@futuristglobal.com', type: 'CL', from: 0, to: 0, days: 1, status: 'APPROVED', reason: 'Personal' },
+    { email: 'tara.joshi@futuristglobal.com', type: 'EL', from: 12, to: 16, days: 5, status: 'APPROVED', reason: 'Vacation' },
+    { email: 'arjun.patel@futuristglobal.com', type: 'CL', from: -3, to: -3, days: 1, status: 'REJECTED', reason: 'Release week' },
+  ];
+  for (const l of leaveRows) {
+    const u = users[l.email];
+    const approver = PEOPLE.find((p) => p.email === l.email)?.manager;
+    await prisma.leaveRequest.create({
+      data: {
+        organizationId: org.id, userId: u.id, typeId: lt[l.type].id, startDate: new Date(`${d(l.from)}T00:00:00Z`), endDate: new Date(`${d(l.to)}T00:00:00Z`), days: l.days, reason: l.reason, status: l.status,
+        approverId: l.status !== 'PENDING' && approver ? users[approver].id : null, decidedAt: l.status !== 'PENDING' ? new Date() : null,
+      },
+    });
+  }
+  // A pending attendance correction for the engineering manager to review.
+  await prisma.attendanceCorrection.create({
+    data: { organizationId: org.id, userId: users['vikram.rao@futuristglobal.com'].id, date: new Date(`${d(-1)}T00:00:00Z`), checkIn: '09:20', checkOut: '18:40', location: 'WFO', reason: 'Forgot to check out — was in the office until 6:40 PM' },
+  });
+
+  // A couple of unread notifications so the inbox isn't empty for the demo employee.
+  const emp = users['employee@futuristglobal.com'].id;
+  const general = await prisma.channel.findFirstOrThrow({ where: { organizationId: org.id, name: 'general' } });
+  await prisma.notification.createMany({
+    data: [
+      { organizationId: org.id, userId: emp, actorId: users['manager@futuristglobal.com'].id, type: 'mention', title: 'Rohan Verma mentioned you in #general', body: 'Kudos to @Ananya for shipping the new onboarding flow ahead of schedule.', link: `/app/chat/${general.id}`, createdAt: new Date(Date.now() - 40 * 60_000) },
+      { organizationId: org.id, userId: emp, actorId: users['hr@futuristglobal.com'].id, type: 'announcement', title: 'Please read: Health insurance top-up enrolment', body: 'Open enrolment for the optional family health insurance top-up closes on the 15th.', link: '/app/announcements', createdAt: new Date(Date.now() - 86400_000) },
     ],
   });
 

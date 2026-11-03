@@ -1,6 +1,7 @@
 'use client';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { CircleHelp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Badge({ className, tone = 'default', ...props }: React.HTMLAttributes<HTMLSpanElement> & { tone?: 'default' | 'brand' | 'success' | 'warning' | 'danger' | 'muted' }) {
@@ -57,4 +58,22 @@ export function Tooltip({ content, children, side = 'right' }: { content: React.
 
 export function Kbd({ children }: { children: React.ReactNode }) {
   return <kbd className="inline-grid min-w-[18px] place-items-center rounded border border-border-strong bg-surface px-1 font-sans text-[10px] font-medium text-muted shadow-[0_1px_0_var(--border-strong)]">{children}</kbd>;
+}
+
+/** Small "?" that explains a concept in plain language (hover, focus or tap). */
+export function InfoHint({ children, label = 'What does this mean?' }: { children: React.ReactNode; label?: string }) {
+  return (
+    <TooltipPrimitive.Root delayDuration={100}>
+      <TooltipPrimitive.Trigger asChild>
+        <button type="button" className="inline-grid size-4 place-items-center rounded-full text-subtle transition hover:text-foreground" aria-label={label}>
+          <CircleHelp className="size-3.5" />
+        </button>
+      </TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content side="top" sideOffset={6} className="z-50 max-w-64 rounded-lg bg-[#171a2b] px-3 py-2 text-xs leading-relaxed text-white shadow-lg dark:bg-elevated dark:text-foreground">
+          {children}
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
 }

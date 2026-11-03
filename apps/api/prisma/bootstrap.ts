@@ -10,14 +10,14 @@ import { createHash, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_ROLE_DEFINITIONS, organizationSettingsSchema } from '@fg/shared';
 
-const prisma = new PrismaClient();
 const need = (k: string) => {
   const v = process.env[k];
   if (!v) throw new Error(`Missing ${k}`);
   return v;
 };
 
-async function main() {
+/** Creates the org (if missing), roles, default channels and leave types, and a Super Admin invite. */
+export async function bootstrap(prisma: PrismaClient) {
   const slug = need('ORG_SLUG');
   const domain = need('ORG_DOMAIN').toLowerCase();
   const email = need('ADMIN_EMAIL').toLowerCase();
@@ -44,6 +44,14 @@ async function main() {
       create: { organizationId: org.id, type: 'PUBLIC', name, isDefault: true, description: name === 'general' ? 'Company-wide chatter and news' : 'Official company announcements' },
     });
   }
+  for (const t of [
+    { code: 'CL', name: 'Casual leave', annualAllowance: 12, color: '#0ea5e9' },
+    { code: 'SL', name: 'Sick leave', annualAllowance: 8, color: '#f43f5e' },
+    { code: 'EL', name: 'Earned leave', annualAllowance: 15, color: '#10b981' },
+    { code: 'UL', name: 'Unpaid leave', annualAllowance: 0, color: '#94a3b8', paid: false },
+  ]) {
+    await prisma.leaveType.upsert({ where: { organizationId_code: { organizationId: org.id, code: t.code } }, update: {}, create: { ...t, organizationId: org.id } });
+  }
   const role = await prisma.role.findUniqueOrThrow({ where: { organizationId_key: { organizationId: org.id, key: 'super_admin' } } });
   if (await prisma.user.findUnique({ where: { email } })) throw new Error(`${email} already exists`);
   const user = await prisma.user.create({
@@ -56,9 +64,12 @@ async function main() {
   console.log(`Super Admin invitation (valid 48h):\n${webOrigin}/invite/${token}`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e.message);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  bootstrap(prisma)
+    .catch((e) => {
+      console.error(e.message);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

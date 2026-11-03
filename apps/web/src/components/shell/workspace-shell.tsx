@@ -3,6 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { PERMISSIONS, presenceMeta, type Permission } from '@fg/shared';
 import {
   ArrowLeftRight,
+  Bell,
+  CalendarDays,
+  ClipboardCheck,
+  TreePalm,
+  Clock,
+  Megaphone,
   Building2,
   ChartNoAxesCombined,
   ChevronsUpDown,
@@ -33,13 +39,15 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { BrandMark } from '@/components/brand-mark';
 import { CommandPalette } from '@/components/layout/command-palette';
+import { clearPersistedCache } from '@/components/providers';
+import { NotificationInbox } from '@/components/notifications/inbox';
 import { PresenceIcon } from '@/components/presence';
 import { StatusPicker } from '@/components/status-picker';
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Popover, PopoverContent, PopoverTrigger } from '@/components/ui/dropdown';
 import { Kbd, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api } from '@/lib/api';
-import { useChannels } from '@/lib/hooks';
+import { useApprovalsCount, useChannels } from '@/lib/hooks';
 import { useLivePerson } from '@/lib/presence-store';
 import { useRealtime } from '@/lib/realtime';
 import { useCan, useModule, useSession, useUpdatePreferences } from '@/lib/session';
@@ -67,6 +75,7 @@ function useNav(portal: Portal): NavGroup[] {
   const mod = useModule();
   const channels = useChannels(portal === 'app' && mod('chat'));
   const unread = (channels.data ?? []).reduce((n, c) => n + (c.muted ? 0 : c.unread), 0);
+  const approvals = useApprovalsCount();
   if (portal === 'admin') {
     const g: NavGroup[] = [
       { items: [{ href: '/admin', label: 'Overview', icon: ChartNoAxesCombined, exact: true, perm: PERMISSIONS.ANALYTICS_VIEW }] },
@@ -76,6 +85,15 @@ function useNav(portal: Portal): NavGroup[] {
           { href: '/admin/employees', label: 'Employees', icon: Users, perm: PERMISSIONS.EMPLOYEES_MANAGE },
           { href: '/admin/departments', label: 'Departments', icon: Building2, perm: PERMISSIONS.DEPARTMENTS_MANAGE },
           { href: '/admin/roles', label: 'Roles & permissions', icon: KeyRound, perm: PERMISSIONS.EMPLOYEES_MANAGE },
+        ],
+      },
+      {
+        label: 'Operations',
+        items: [
+          { href: '/admin/attendance', label: 'Attendance', icon: Clock, perm: PERMISSIONS.ATTENDANCE_VIEW_ALL },
+          { href: '/admin/leave', label: 'Leave', icon: TreePalm, perm: PERMISSIONS.EMPLOYEES_MANAGE },
+          { href: '/admin/holidays', label: 'Holidays', icon: CalendarDays, perm: PERMISSIONS.HOLIDAYS_MANAGE },
+          { href: '/admin/announcements', label: 'Announcements', icon: Megaphone, perm: PERMISSIONS.ANNOUNCEMENTS_MANAGE },
         ],
       },
       {
@@ -93,10 +111,20 @@ function useNav(portal: Portal): NavGroup[] {
       items: [
         { href: '/app/home', label: 'Home', icon: House },
         ...(mod('chat') ? [{ href: '/app/chat', label: 'Chat', icon: MessageSquare, badge: unread }] : []),
+        ...(mod('announcements') ? [{ href: '/app/announcements', label: 'Announcements', icon: Megaphone }] : []),
         { href: '/app/people', label: 'Directory', icon: Users },
       ],
     },
-  ];
+    {
+      label: 'My time',
+      items: [
+        ...(mod('attendance') ? [{ href: '/app/attendance', label: 'Attendance', icon: Clock }] : []),
+        ...(mod('leave') ? [{ href: '/app/leave', label: 'Leave', icon: TreePalm }] : []),
+        ...(mod('holidays') ? [{ href: '/app/holidays', label: 'Holidays', icon: CalendarDays }] : []),
+      ],
+    },
+    ...(approvals.data?.canApprove ? [{ label: 'Manage', items: [{ href: '/app/approvals', label: 'Approvals', icon: ClipboardCheck, badge: approvals.data.total }] }] : []),
+  ].filter((g) => g.items.length);
 }
 
 function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: boolean; onNavigate?: () => void }) {
@@ -147,6 +175,7 @@ function Rail({ portal, collapsed, onToggle, onNavigate, onSearch }: { portal: P
       await api('/auth/logout', { method: 'POST' });
     } finally {
       qc.clear();
+      clearPersistedCache();
       router.replace('/login');
       toast.success('Signed out');
     }
@@ -210,6 +239,25 @@ function Rail({ portal, collapsed, onToggle, onNavigate, onSearch }: { portal: P
           </>
         )}
       </button>
+      <NotificationInbox
+        trigger={(unread) => {
+          const btn = (
+            <button
+              className={cn('relative mt-1 flex h-8 items-center gap-2.5 rounded-lg px-2 text-[13px] font-medium text-muted transition hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]', collapsed && 'w-10 justify-center px-0')}
+              aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}
+            >
+              <Bell className="size-[17px]" strokeWidth={1.8} />
+              {!collapsed && <span>Notifications</span>}
+              {unread > 0 && (
+                <span className={cn('grid place-items-center rounded-full bg-danger text-[10px] font-semibold text-white tabular-nums', collapsed ? 'absolute top-0.5 right-0.5 size-4' : 'ml-auto h-[18px] min-w-[18px] px-1')}>
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
+            </button>
+          );
+          return collapsed ? <span><Tooltip content="Notifications">{btn}</Tooltip></span> : btn;
+        }}
+      />
 
       <div className="scrollbar-thin mt-4 flex-1 space-y-5 overflow-x-hidden overflow-y-auto">
         {groups.map((g, i) => (
@@ -293,10 +341,12 @@ function Rail({ portal, collapsed, onToggle, onNavigate, onSearch }: { portal: P
 function MobileTabs({ portal }: { portal: Portal }) {
   const pathname = usePathname();
   const groups = useNav(portal);
-  const items = [...groups.flatMap((g) => g.items).slice(0, 3), { href: '/app/profile', label: 'Me', icon: UserRound }];
+  const all = groups.flatMap((g) => g.items);
+  const pick = ['/app/home', '/app/chat', '/app/attendance', '/app/leave'];
+  const items = [...pick.map((h) => all.find((i) => i.href === h)).filter(Boolean) as NavItem[], { href: '/app/profile', label: 'Me', icon: UserRound }];
   if (portal === 'admin') return null;
   return (
-    <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+    <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       {items.map((it) => {
         const active = pathname.startsWith(it.href);
         return (
@@ -318,6 +368,15 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
   const [collapsed, setCollapsed] = useState(me.preferences.sidebarCollapsed ?? me.organization.settings.navigation.sidebarCollapsedByDefault);
   const [drawer, setDrawer] = useState(false);
   const [search, setSearch] = useState(false);
+  // On tablets (768–1099px) the rail is icon-only so content keeps enough room.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px) and (max-width: 1099px)');
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   useEffect(() => setDrawer(false), [pathname]);
 
   const toggle = () => {
@@ -329,8 +388,8 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
 
   return (
     <div className="flex h-dvh overflow-hidden bg-chrome">
-      <motion.aside animate={{ width: collapsed ? 64 : 232 }} transition={{ type: 'spring', stiffness: 420, damping: 40 }} className="relative hidden shrink-0 md:block">
-        <Rail portal={portal} collapsed={collapsed} onToggle={toggle} onSearch={() => setSearch(true)} />
+      <motion.aside animate={{ width: collapsed || narrow ? 64 : 232 }} transition={{ type: 'spring', stiffness: 420, damping: 40 }} className="relative hidden shrink-0 md:block">
+        <Rail portal={portal} collapsed={collapsed || narrow} onToggle={narrow ? undefined : toggle} onSearch={() => setSearch(true)} />
       </motion.aside>
 
       <AnimatePresence>
@@ -351,7 +410,17 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
           </button>
           <BrandMark name={me.organization.name} logoUrl={me.organization.logoUrl} size={24} />
           <span className="truncate text-sm font-semibold">{portal === 'admin' ? 'Admin' : me.organization.name}</span>
-          <button onClick={() => setSearch(true)} className="ml-auto grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label="Search">
+          <span className="ml-auto" />
+          <NotificationInbox
+            side="bottom"
+            trigger={(unread) => (
+              <button className="relative grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`}>
+                <Bell className="size-5" />
+                {unread > 0 && <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">{unread}</span>}
+              </button>
+            )}
+          />
+          <button onClick={() => setSearch(true)} className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label="Search">
             <Search className="size-5" />
           </button>
         </div>

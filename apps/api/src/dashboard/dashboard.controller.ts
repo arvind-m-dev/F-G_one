@@ -86,6 +86,10 @@ export class DashboardController {
     }
     celebrations.sort((a, b) => a.inDays - b.inDays);
 
+    const [myMessages, myProfile] = await Promise.all([
+      this.prisma.message.count({ where: { authorId: auth.userId, deletedAt: null } }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { bio: true, phone: true, avatarUrl: true, statusText: true, presence: true } }),
+    ]);
     const onlineIds = new Set(this.realtime.onlineIds());
     return {
       workday: { start: settings.attendance.workdayStart, end: settings.attendance.workdayEnd, workingDays: settings.attendance.workingDays },
@@ -96,6 +100,11 @@ export class DashboardController {
       recentChats: channels.slice(0, 6),
       unreadTotal: channels.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0),
       orgStats: { headcount, departments, joinersThisMonth, onlineNow: people.filter((p) => onlineIds.has(p.id)).length },
+      onboarding: {
+        sentMessage: myMessages > 0,
+        profileComplete: !!(myProfile.bio && myProfile.phone),
+        statusSet: !!myProfile.statusText || myProfile.presence !== 'available',
+      },
     };
   }
 

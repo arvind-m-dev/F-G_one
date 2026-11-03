@@ -4,8 +4,9 @@ import { signIn } from './helpers';
 test('mobile: bottom tabs and single-view chat', async ({ page }) => {
   await signIn(page, 'employee@futuristglobal.com');
   const tabs = page.getByRole('navigation', { name: 'Primary' });
-  await tabs.getByRole('link', { name: 'Directory' }).click();
-  await expect(page).toHaveURL(/\/app\/people/);
+  await tabs.getByRole('link', { name: 'Leave' }).click();
+  await expect(page).toHaveURL(/\/app\/leave/);
+  await expect(page.getByRole('heading', { name: 'Leave', exact: true })).toBeVisible();
   await tabs.getByRole('link', { name: 'Chat' }).click();
   await page.getByRole('link', { name: /general/ }).first().click();
   await expect(page.getByRole('log', { name: 'Messages' })).toBeVisible();

@@ -2,7 +2,7 @@
 import { LayoutGrid, Rows3, Search, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { MessageButton } from '@/components/message-button';
 import { PageHeader } from '@/components/shell/page';
 import { Button } from '@/components/ui/button';
@@ -10,21 +10,25 @@ import { EmptyState, Skeleton } from '@/components/ui/misc';
 import { StatusLine, UserAvatar } from '@/components/user-avatar';
 import { useDepartments, useEmployeeList } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
+import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
 
-export default function DirectoryPage() {
+function Directory() {
   const me = useSession();
-  const [q, setQ] = useState('');
-  const [debounced, setDebounced] = useState('');
-  const [dept, setDept] = useState('');
-  const [view, setView] = useState<'list' | 'grid'>('list');
-  const [page, setPage] = useState(1);
+  const [get, set] = useUrlState({ q: '', dept: '', view: 'list', page: '1' });
+  const [q, setQ] = useState(get('q'));
+  const debounced = get('q');
+  const dept = get('dept');
+  const view = get('view') as 'list' | 'grid';
+  const page = Number(get('page')) || 1;
+  const setDept = (v: string) => set({ dept: v, page: null });
+  const setView = (v: 'list' | 'grid') => set({ view: v });
+  const setPage = (fn: (p: number) => number) => set({ page: String(fn(page)) });
   useEffect(() => {
-    const t = setTimeout(() => {
-      setDebounced(q);
-      setPage(1);
-    }, 250);
+    if (q === debounced) return;
+    const t = setTimeout(() => set({ q, page: null }), 250);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
   const depts = useDepartments();
   const list = useEmployeeList({ q: debounced || undefined, departmentId: dept || undefined, page, pageSize: 30 });
@@ -62,10 +66,7 @@ export default function DirectoryPage() {
             key={d.id || 'all'}
             role="radio"
             aria-checked={dept === d.id}
-            onClick={() => {
-              setDept(d.id);
-              setPage(1);
-            }}
+            onClick={() => setDept(d.id)}
             className={cn('flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] transition', dept === d.id ? 'border-foreground/20 bg-foreground text-canvas' : 'text-muted hover:border-border-strong hover:text-foreground')}
           >
             {d.id && <span className="size-1.5 rounded-full" style={{ background: d.color }} />}
@@ -75,7 +76,7 @@ export default function DirectoryPage() {
         ))}
       </div>
 
-      {list.isLoading ? (
+      {list.isPending ? (
         <div className="space-y-2">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-14" />
@@ -159,5 +160,13 @@ export default function DirectoryPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DirectoryPage() {
+  return (
+    <Suspense>
+      <Directory />
+    </Suspense>
   );
 }

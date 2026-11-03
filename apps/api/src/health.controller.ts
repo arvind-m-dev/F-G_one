@@ -1,4 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { Public } from './common/auth-context';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -8,8 +9,9 @@ export class HealthController {
 
   @Public()
   @Get()
-  async health() {
+  async health(@Req() req: Request) {
     await this.prisma.$queryRaw`SELECT 1`;
-    return { status: 'ok', time: new Date().toISOString() };
+    // clientIp is the address used for rate limiting; compare it with your real IP after deploying.
+    return { status: 'ok', time: new Date().toISOString(), clientIp: req.ip };
   }
 }

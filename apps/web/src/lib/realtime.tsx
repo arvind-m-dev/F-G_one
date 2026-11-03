@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { RT, type PresenceEvent } from '@fg/shared';
+import { toast } from 'sonner';
 import { presenceStore } from './presence-store';
 import type { ChatMessage, Me } from './types';
 
@@ -55,6 +56,34 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
       void qc.invalidateQueries({ queryKey: ['channel', p.channelId] });
     });
     s.on(RT.CHANNEL_REMOVED, () => void qc.invalidateQueries({ queryKey: ['channels'] }));
+    s.on(RT.NOTIFICATION_NEW, (n: { title: string; body: string | null; link: string | null; type: string }) => {
+      void qc.invalidateQueries({ queryKey: ['notifications'] });
+      if (n.type === 'leave' || n.type === 'correction') {
+        for (const k of ['leave-requests', 'leave-balances', 'approvals-count', 'corrections', 'attendance-history', 'attendance-board']) void qc.invalidateQueries({ queryKey: [k] });
+      }
+      // Don't toast chat activity for the conversation you're already reading.
+      if (n.link && window.location.pathname === n.link.split('?')[0]) return;
+      toast(n.title, {
+        description: n.body ?? undefined,
+        action: n.link ? { label: 'Open', onClick: () => (window.location.href = n.link!) } : undefined,
+      });
+    });
+    s.on(RT.ATTENDANCE_CHANGED, () => {
+      void qc.invalidateQueries({ queryKey: ['attendance-today'] });
+      void qc.invalidateQueries({ queryKey: ['attendance-board'] });
+      void qc.invalidateQueries({ queryKey: ['attendance-history'] });
+    });
+    s.on(RT.ANNOUNCEMENTS_CHANGED, () => {
+      void qc.invalidateQueries({ queryKey: ['announcements'] });
+      void qc.invalidateQueries({ queryKey: ['dashboard'] });
+    });
+    // After a reconnect (e.g. the server woke from sleep) refresh what may have changed meanwhile.
+    s.io.on('reconnect', () => {
+      void qc.invalidateQueries({ queryKey: ['channels'] });
+      void qc.invalidateQueries({ queryKey: ['messages'] });
+      void qc.invalidateQueries({ queryKey: ['notifications'] });
+      void qc.invalidateQueries({ queryKey: ['attendance-today'] });
+    });
     return () => {
       s.disconnect();
     };

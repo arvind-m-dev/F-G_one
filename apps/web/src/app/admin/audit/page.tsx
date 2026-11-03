@@ -47,7 +47,7 @@ export default function AuditPage() {
             ))}
           </Select>
         </div>
-        {list.isLoading ? <Skeleton className="m-4 h-64" /> : list.data?.items.length ? <AuditList items={list.data.items} /> : <EmptyState icon={<ScrollText />} title="No matching events" />}
+        {list.isPending ? <Skeleton className="m-4 h-64" /> : list.data?.items.length ? <AuditList items={list.data.items} /> : <EmptyState icon={<ScrollText />} title="No matching events" />}
         <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted">
           <span>{list.data?.total ?? 0} events</span>
           <div className="flex items-center gap-2">

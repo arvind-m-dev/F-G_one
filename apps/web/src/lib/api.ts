@@ -30,6 +30,11 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('/auth/login')) {
     const here = window.location.pathname;
     if (!['/login', '/forgot-password', '/reset-password'].includes(here) && !here.startsWith('/invite')) {
+      try {
+        window.sessionStorage.removeItem('fg.cache'); // never restore another session's data
+      } catch {
+        /* ignore */
+      }
       window.location.href = `/login?next=${encodeURIComponent(here)}`;
     }
   }

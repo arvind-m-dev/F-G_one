@@ -18,7 +18,7 @@ export default function InvitePage() {
     retry: false,
   });
 
-  if (invite.isLoading) return <Skeleton className="h-64 w-full" />;
+  if (invite.isPending) return <Skeleton className="h-64 w-full" />;
   if (invite.isError) {
     return (
       <div>

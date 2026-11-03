@@ -18,6 +18,8 @@ import { useRealtime } from '@/lib/realtime';
 import { useSession } from '@/lib/session';
 import type { ChannelDetails, ChatMessage, Employee } from '@/lib/types';
 import { cn, fmtDayLabel } from '@/lib/utils';
+import { useUrlState } from '@/lib/url-state';
+import { usePageTitle } from '@/lib/use-title';
 import { Composer } from './composer';
 import { MessageItem } from './message-item';
 import { PeoplePicker } from './new-conversation';
@@ -170,8 +172,8 @@ function MessageStream({ channel, onReply, parentId }: { channel: ChannelDetails
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={scrollRef} onScroll={onScroll} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto py-3" role="log" aria-label="Messages">
         {q.isFetchingNextPage && <p className="py-2 text-center text-xs text-muted">Loading earlier messages…</p>}
-        {!q.hasNextPage && !q.isLoading && !parentId && <ChannelIntro channel={channel} />}
-        {q.isLoading &&
+        {!q.hasNextPage && !q.isPending && !parentId && <ChannelIntro channel={channel} />}
+        {q.isPending &&
           Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex gap-3 px-4 py-2">
               <Skeleton className="size-9 rounded-full" />
@@ -476,10 +478,21 @@ function HeaderTitle({ channel }: { channel: ChannelDetails }) {
 }
 
 export function Conversation({ channelId }: { channelId: string }) {
-  const [details, setDetails] = useState(false);
-  const [thread, setThread] = useState<ChatMessage | null>(null);
+  // Open thread and details panel live in the URL so they survive a refresh and can be shared.
+  const [getParam, setParam] = useUrlState({ thread: '', panel: '' });
+  const threadId = getParam('thread');
+  const details = getParam('panel') === 'details';
+  const setDetails = (fn: (d: boolean) => boolean) => setParam({ panel: fn(details) ? 'details' : null });
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ['channel', channelId], queryFn: () => api<ChannelDetails>(`/channels/${channelId}`) });
-  useEffect(() => setThread(null), [channelId]);
+  const cachedParent = threadId
+    ? qc.getQueryData<Pages>(['messages', channelId])?.pages.flatMap((p) => p.items).find((m) => m.id === threadId)
+    : undefined;
+  const parentQ = useQuery({ queryKey: ['message', threadId], queryFn: () => api<ChatMessage>(`/messages/${threadId}`), enabled: !!threadId && !cachedParent });
+  const thread = threadId ? (cachedParent ?? parentQ.data ?? null) : null;
+  const setThread = (m: ChatMessage | null) => setParam({ thread: m?.id ?? null, panel: null });
+  const label = q.data ? (q.data.type === 'DIRECT' ? 'Direct message' : `#${q.data.name}`) : 'Chat';
+  usePageTitle(label);
 
   if (q.isError) {
     return (
@@ -528,7 +541,7 @@ export function Conversation({ channelId }: { channelId: string }) {
       </div>
       <AnimatePresence>
         {thread && <ThreadPanel key={thread.id} channel={channel} parent={thread} onClose={() => setThread(null)} />}
-        {details && !thread && <DetailsPanel channel={channel} onClose={() => setDetails(false)} />}
+        {details && !thread && <DetailsPanel channel={channel} onClose={() => setDetails(() => false)} />}
       </AnimatePresence>
     </div>
   );

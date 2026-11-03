@@ -6,10 +6,12 @@ import { BrowseChannelsDialog } from '@/components/chat/conversation-list';
 import { NewChannelDialog, NewMessageDialog } from '@/components/chat/new-conversation';
 import { Button } from '@/components/ui/button';
 import { useCan } from '@/lib/session';
+import { usePageTitle } from '@/lib/use-title';
 
 /** Desktop empty state when no conversation is open. */
 export default function ChatIndex() {
   const can = useCan();
+  usePageTitle('Chat');
   const [dm, setDm] = useState(false);
   const [channel, setChannel] = useState(false);
   const [browse, setBrowse] = useState(false);

@@ -15,6 +15,10 @@ One workspace for chat, people, and HR at Futurist Global. It combines a Slack-s
 | **Dashboard** | Greeting & profile, live clock + workday progress (from company policy), team availability with live presence, announcements (with modal), holidays, birthdays & work anniversaries ("send wishes" opens a DM), recent conversations with unread counts, quick actions, company snapshot. Drag-and-drop reordering and show/hide, saved per user. |
 | **Presence** | 13 emoji statuses, custom message, auto-expiry, live updates over WebSocket. Kept separate from attendance. |
 | **Chat** | Public/private channels, 1:1 and group DMs, threads, emoji reactions, edit/delete with permissions, typing indicators, unread counters, optimistic sending, infinite history, member management with channel admins, join/leave, rename/topic |
+| **Attendance** | Check in (office, home, client site), breaks, check out, history and summaries. Team board for managers, live admin board with filters and CSV export. |
+| **Leave & holidays** | Balances, requests with working-day counting, approvals for managers and HR, "Who's away" calendar, holiday calendar with categories, admin leave types and holidays |
+| **Announcements** | Editorial feed with categories and read confirmations. Admins publish, target, pin, set expiry and track readers. |
+| **Notifications** | Inbox for DMs, @mentions, replies and announcements, with per-type settings |
 | **People** | Directory (grid/list, search, department filter), profile pages with reporting line, editable own profile (avatar colour/photo URL, bio, pronouns, timezone, birthday privacy) |
 | **Admin** | Live analytics (charts), employee management (invite with copyable link, edit, re-invite, deactivate/reactivate), departments CRUD, roles & permission matrix, company settings (branding & colours with live preview, modules, dashboard defaults, navigation, attendance & leave policy, allowed domains, session length), audit log |
 | **Design** | Tailwind v4 design tokens, runtime white-label colours, light/dark/system themes, personal accent colour, Motion micro-interactions, skeletons, empty and error states, toasts, accessible Radix primitives, reduced-motion support, responsive down to phones |
@@ -131,10 +135,13 @@ The end-to-end tests drive two browsers against the running, seeded dev stack:
 E2E_PASSWORD=<SEED_PASSWORD> pnpm --filter @fg/web test:e2e
 ```
 
+Run the API with `LOGIN_RATE_LIMIT_PER_MIN=1000` while running e2e, because the suite signs in many times from one IP. Reseed between runs (`pnpm db:seed`) because the tests change data.
+
 ## Documentation
 * [Architecture, multi-tenancy, AI design, navigation, journeys, roadmap](docs/ARCHITECTURE.md)
 * [Database design (current + planned models)](docs/DATABASE.md)
 * [API reference + WebSocket events](docs/API.md)
 * [Deployment, configuration, backups, go-live checklist](docs/DEPLOYMENT.md)
+* [UX, navigation & performance](docs/UX_AND_PERFORMANCE.md)
 * [Design system](docs/DESIGN_SYSTEM.md) · [UI components](docs/UI_COMPONENTS.md) · [UI audit](docs/UI_AUDIT.md)
 * [Implementation plan](docs/IMPLEMENTATION_PLAN.md) · [Progress](docs/IMPLEMENTATION_PROGRESS.md) · [Decisions](docs/DECISIONS.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Changelog](docs/CHANGELOG.md)

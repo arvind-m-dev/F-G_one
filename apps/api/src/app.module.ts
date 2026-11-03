@@ -1,7 +1,14 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AnnouncementsController } from './announcements/announcements.controller';
+import { AttendanceController } from './attendance/attendance.controller';
+import { AttendanceService } from './attendance/attendance.service';
 import { AuditController } from './audit/audit.controller';
+import { HolidaysController } from './holidays/holidays.controller';
+import { ApprovalsController } from './leave/approvals.controller';
+import { LeaveController } from './leave/leave.controller';
+import { LeaveService } from './leave/leave.service';
 import { AuditService } from './audit/audit.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
@@ -17,6 +24,8 @@ import { EmployeesService } from './employees/employees.service';
 import { HealthController } from './health.controller';
 import { MailService } from './mail/mail.service';
 import { MeController } from './me/me.controller';
+import { NotificationsController } from './notifications/notifications.controller';
+import { NotificationsService } from './notifications/notifications.service';
 import { OrganizationController } from './organization/organization.controller';
 import { PrismaModule } from './prisma/prisma.service';
 import { RealtimeGateway } from './realtime/realtime.gateway';
@@ -41,6 +50,12 @@ import { SearchController } from './search/search.controller';
     ChatController,
     SearchController,
     AuditController,
+    AttendanceController,
+    AnnouncementsController,
+    NotificationsController,
+    HolidaysController,
+    LeaveController,
+    ApprovalsController,
   ],
   providers: [
     AuditService,
@@ -49,6 +64,9 @@ import { SearchController } from './search/search.controller';
     EmployeesService,
     ChatService,
     RealtimeGateway,
+    AttendanceService,
+    NotificationsService,
+    LeaveService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
   ],

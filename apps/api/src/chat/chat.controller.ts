@@ -105,6 +105,11 @@ export class ChatController {
     return this.chat.markRead(auth, id);
   }
 
+  @Get('messages/:id')
+  getMessage(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.chat.getMessage(auth, id);
+  }
+
   @Patch('messages/:id')
   edit(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(editMessageSchema)) body: { body: string }) {
     return this.chat.edit(auth, id, body.body);
