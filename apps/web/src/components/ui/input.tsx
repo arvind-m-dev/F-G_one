@@ -2,7 +2,7 @@ import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
 export const inputClass =
-  'flex h-10 w-full rounded-lg border bg-surface px-3 text-sm text-foreground placeholder:text-muted transition-colors focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary-soft disabled:opacity-60 aria-[invalid=true]:border-danger';
+  'flex h-9 w-full rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground shadow-sm placeholder:text-subtle transition-[border-color,box-shadow] focus-visible:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary-soft disabled:opacity-60 aria-[invalid=true]:border-danger';
 
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
   <input ref={ref} className={cn(inputClass, className)} {...props} />
@@ -20,7 +20,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
 Select.displayName = 'Select';
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cn('text-sm font-medium text-foreground', className)} {...props} />;
+  return <label className={cn('text-[13px] font-medium text-foreground', className)} {...props} />;
 }
 
 export function Field({ label, error, hint, children, htmlFor }: { label: string; error?: string; hint?: string; children: React.ReactNode; htmlFor?: string }) {

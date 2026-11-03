@@ -4,68 +4,104 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * FG One design tokens. --brand / --brand-2 are injected at runtime from the
- * organization's branding (or the user's accent), so white-label themes need no rebuild.
+ * FG One design tokens — see docs/DESIGN_SYSTEM.md.
+ * Layering model: chrome (window) → canvas (main sheet) → surface (cards, panels) → elevated (popovers).
+ * --brand / --brand-2 are injected at runtime from organization branding or the user's accent.
  */
 :root {
-  --brand: #4f46e5;
-  --brand-2: #0ea5e9;
+  --brand: #6366f1;
+  --brand-2: #8b5cf6;
 
-  --background: #f6f7fb;
+  --chrome: #eceef6;
+  --background: #f7f8fc;
+  --canvas: #ffffff;
   --surface: #ffffff;
   --surface-2: #f1f3f9;
-  --foreground: #0f172a;
-  --muted: #64748b;
-  --border: #e3e7ef;
+  --elevated: #ffffff;
+  --foreground: #171a2b;
+  --muted: #667085;
+  --subtle: #98a2b3;
+  --border: #e6e8ef;
+  --border-strong: #d5d9e3;
   --ring: color-mix(in oklab, var(--brand) 55%, transparent);
-  --sidebar: #ffffff;
-  --sidebar-fg: #0f172a;
 
   --primary: var(--brand);
   --primary-foreground: #ffffff;
-  --primary-soft: color-mix(in oklab, var(--brand) 10%, transparent);
-  --danger: #dc2626;
-  --success: #16a34a;
-  --warning: #d97706;
+  --primary-soft: color-mix(in oklab, var(--brand) 9%, transparent);
+  --primary-ink: color-mix(in oklab, var(--brand) 78%, #171a2b);
 
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -4px rgb(15 23 42 / 0.06);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #f43f5e;
+  --info: #0ea5e9;
+  --cyan: #06b6d4;
+
+  --shadow-sm: 0 1px 2px rgb(23 26 43 / 0.05);
+  --shadow-md: 0 1px 2px rgb(23 26 43 / 0.04), 0 6px 20px -6px rgb(23 26 43 / 0.1);
+  --shadow-lg: 0 2px 4px rgb(23 26 43 / 0.04), 0 18px 48px -12px rgb(23 26 43 / 0.22);
+  --canvas-shadow: 0 0 0 1px rgb(23 26 43 / 0.05), 0 1px 3px rgb(23 26 43 / 0.05);
+
+  --font-scale: 1;
 }
 
 .dark {
-  --background: #0b0e17;
-  --surface: #121725;
-  --surface-2: #1a2032;
-  --foreground: #e6e9f2;
-  --muted: #8b93a7;
-  --border: #242b3d;
-  --sidebar: #0e1220;
-  --sidebar-fg: #e6e9f2;
-  --primary: color-mix(in oklab, var(--brand) 85%, white);
-  --primary-soft: color-mix(in oklab, var(--brand) 22%, transparent);
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -8px rgb(0 0 0 / 0.5);
+  --chrome: #0b0d11;
+  --background: #111318;
+  --canvas: #15181f;
+  --surface: #191d25;
+  --surface-2: #222733;
+  --elevated: #292f3b;
+  --foreground: #f1f3f9;
+  --muted: #a0a8b8;
+  --subtle: #6b7385;
+  --border: #272d3a;
+  --border-strong: #303746;
+  --primary: color-mix(in oklab, var(--brand) 88%, white);
+  --primary-soft: color-mix(in oklab, var(--brand) 18%, transparent);
+  --primary-ink: color-mix(in oklab, var(--brand) 55%, white);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 24px -8px rgb(0 0 0 / 0.55);
+  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 56px -12px rgb(0 0 0 / 0.7);
+  --canvas-shadow: 0 0 0 1px rgb(255 255 255 / 0.04);
 }
 
+/* Personal font-size preference (applied to <html data-font-size>) */
+:root[data-font-size='sm'] { font-size: 15px; }
+:root[data-font-size='md'] { font-size: 16px; }
+:root[data-font-size='lg'] { font-size: 17.5px; }
+
 @theme inline {
+  --color-chrome: var(--chrome);
   --color-background: var(--background);
+  --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-elevated: var(--elevated);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-ring: var(--ring);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
   --color-brand: var(--brand);
   --color-brand-2: var(--brand-2);
-  --color-danger: var(--danger);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-fg: var(--sidebar-fg);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --shadow-card: var(--shadow-card);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-cyan: var(--cyan);
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-card: var(--shadow-sm);
+  --shadow-canvas: var(--canvas-shadow);
 }
 
 @layer base {
@@ -74,24 +110,29 @@
   }
   html {
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   body {
-    background: var(--background);
+    background: var(--chrome);
     color: var(--foreground);
     font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
   }
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
   ::selection {
-    background: color-mix(in oklab, var(--brand) 25%, transparent);
+    background: color-mix(in oklab, var(--brand) 22%, transparent);
   }
 }
 
 @utility scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--muted) 40%, transparent) transparent;
+  scrollbar-color: color-mix(in oklab, var(--muted) 35%, transparent) transparent;
 }
 
 @utility bg-brand-gradient {
@@ -99,10 +140,22 @@
 }
 
 @utility text-brand-gradient {
-  background-image: linear-gradient(135deg, var(--brand), var(--brand-2));
+  background-image: linear-gradient(120deg, var(--brand), var(--brand-2));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Soft brand glow used sparingly (login, home header). */
+@utility bg-aurora {
+  background-image:
+    radial-gradient(60% 80% at 0% 0%, color-mix(in oklab, var(--brand) 14%, transparent), transparent 70%),
+    radial-gradient(50% 70% at 100% 0%, color-mix(in oklab, var(--brand-2) 12%, transparent), transparent 70%);
+}
+
+@utility bg-dots {
+  background-image: radial-gradient(color-mix(in oklab, var(--muted) 22%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -112,12 +165,4 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-@keyframes wave {
-  0%, 60%, 100% { transform: rotate(0deg); }
-  10%, 30% { transform: rotate(14deg); }
-  20% { transform: rotate(-8deg); }
-  40% { transform: rotate(-4deg); }
-  50% { transform: rotate(10deg); }
 }

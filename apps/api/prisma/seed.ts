@@ -43,58 +43,63 @@ function relDate(daysFromToday: number, year: number) {
 }
 
 const PEOPLE: Person[] = [
-  { first: 'Aarav', last: 'Mehta', email: 'admin@futuristglobal.com', role: 'super_admin', dept: 'Management', title: 'Chief Technology Officer', joined: '2019-04-01', color: '#8b5cf6', presence: 'working', statusEmoji: '💻', statusText: 'Planning Q1 roadmap' },
-  { first: 'Priya', last: 'Sharma', email: 'hr@futuristglobal.com', role: 'hr_admin', dept: 'Human Resources', title: 'HR Manager', manager: 'admin@futuristglobal.com', joined: '2020-07-15', birthday: relDate(3, 1991), color: '#ec4899', presence: 'in_office', statusEmoji: '🏢' },
-  { first: 'Rohan', last: 'Verma', email: 'manager@futuristglobal.com', role: 'manager', dept: 'Engineering', title: 'Engineering Manager', manager: 'admin@futuristglobal.com', joined: relDate(5, 2021), color: '#0ea5e9', presence: 'meeting', statusEmoji: '📅', statusText: 'Sprint planning' },
-  { first: 'Ananya', last: 'Iyer', email: 'employee@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Senior Frontend Engineer', manager: 'manager@futuristglobal.com', joined: '2022-02-01', birthday: relDate(0, 1996), color: '#14b8a6', presence: 'focus', statusEmoji: '🎧', statusText: 'Deep work until 3pm' },
-  { first: 'Kabir', last: 'Singh', email: 'kabir.singh@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Backend Engineer', manager: 'manager@futuristglobal.com', joined: '2023-06-12', color: '#22c55e', presence: 'wfh', statusEmoji: '🏠' },
+  { first: 'Aarav', last: 'Mehta', email: 'admin@futuristglobal.com', role: 'super_admin', dept: 'Management', title: 'Chief Technology Officer', joined: '2019-04-01', color: '#8b5cf6', presence: 'working', statusText: 'Planning Q1 roadmap' },
+  { first: 'Priya', last: 'Sharma', email: 'hr@futuristglobal.com', role: 'hr_admin', dept: 'Human Resources', title: 'HR Manager', manager: 'admin@futuristglobal.com', joined: '2020-07-15', birthday: relDate(3, 1991), color: '#ec4899', presence: 'in_office' },
+  { first: 'Rohan', last: 'Verma', email: 'manager@futuristglobal.com', role: 'manager', dept: 'Engineering', title: 'Engineering Manager', manager: 'admin@futuristglobal.com', joined: relDate(5, 2021), color: '#0ea5e9', presence: 'meeting', statusText: 'Sprint planning' },
+  { first: 'Ananya', last: 'Iyer', email: 'employee@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Senior Frontend Engineer', manager: 'manager@futuristglobal.com', joined: '2022-02-01', birthday: relDate(0, 1996), color: '#14b8a6', presence: 'focus', statusText: 'Deep work until 3pm' },
+  { first: 'Kabir', last: 'Singh', email: 'kabir.singh@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Backend Engineer', manager: 'manager@futuristglobal.com', joined: '2023-06-12', color: '#22c55e', presence: 'wfh' },
   { first: 'Meera', last: 'Nair', email: 'meera.nair@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'DevOps Engineer', manager: 'manager@futuristglobal.com', joined: '2021-11-08', color: '#f59e0b', presence: 'available' },
-  { first: 'Vikram', last: 'Rao', email: 'vikram.rao@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Full-Stack Engineer', manager: 'manager@futuristglobal.com', joined: '2024-01-22', color: '#ef4444', presence: 'lunch', statusEmoji: '🍽️' },
+  { first: 'Vikram', last: 'Rao', email: 'vikram.rao@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Full-Stack Engineer', manager: 'manager@futuristglobal.com', joined: '2024-01-22', color: '#ef4444', presence: 'lunch' },
   { first: 'Sneha', last: 'Kulkarni', email: 'sneha.kulkarni@futuristglobal.com', role: 'manager', dept: 'Quality Assurance', title: 'QA Lead', manager: 'admin@futuristglobal.com', joined: '2020-09-30', color: '#14b8a6', presence: 'available' },
-  { first: 'Arjun', last: 'Patel', email: 'arjun.patel@futuristglobal.com', role: 'employee', dept: 'Quality Assurance', title: 'QA Engineer', manager: 'sneha.kulkarni@futuristglobal.com', joined: '2023-03-01', birthday: relDate(9, 1998), color: '#6366f1', presence: 'short_break', statusEmoji: '☕' },
+  { first: 'Arjun', last: 'Patel', email: 'arjun.patel@futuristglobal.com', role: 'employee', dept: 'Quality Assurance', title: 'QA Engineer', manager: 'sneha.kulkarni@futuristglobal.com', joined: '2023-03-01', birthday: relDate(9, 1998), color: '#6366f1', presence: 'short_break' },
   { first: 'Isha', last: 'Gupta', email: 'isha.gupta@futuristglobal.com', role: 'employee', dept: 'Quality Assurance', title: 'Automation Engineer', manager: 'sneha.kulkarni@futuristglobal.com', joined: relDate(11, 2022), color: '#ec4899', presence: 'available' },
-  { first: 'Dev', last: 'Malhotra', email: 'dev.malhotra@futuristglobal.com', role: 'manager', dept: 'Design', title: 'Design Lead', manager: 'admin@futuristglobal.com', joined: '2021-05-17', color: '#f59e0b', presence: 'busy', statusEmoji: '🔴', statusText: 'Client review' },
+  { first: 'Dev', last: 'Malhotra', email: 'dev.malhotra@futuristglobal.com', role: 'manager', dept: 'Design', title: 'Design Lead', manager: 'admin@futuristglobal.com', joined: '2021-05-17', color: '#f59e0b', presence: 'busy', statusText: 'Client review' },
   { first: 'Tara', last: 'Joshi', email: 'tara.joshi@futuristglobal.com', role: 'employee', dept: 'Design', title: 'Product Designer', manager: 'dev.malhotra@futuristglobal.com', joined: '2024-08-05', color: '#8b5cf6', presence: 'available' },
-  { first: 'Nikhil', last: 'Bansal', email: 'nikhil.bansal@futuristglobal.com', role: 'manager', dept: 'Sales & Marketing', title: 'Head of Growth', manager: 'admin@futuristglobal.com', joined: '2020-01-06', color: '#0ea5e9', presence: 'stepped_out', statusEmoji: '🚶' },
+  { first: 'Nikhil', last: 'Bansal', email: 'nikhil.bansal@futuristglobal.com', role: 'manager', dept: 'Sales & Marketing', title: 'Head of Growth', manager: 'admin@futuristglobal.com', joined: '2020-01-06', color: '#0ea5e9', presence: 'stepped_out' },
   { first: 'Zara', last: 'Khan', email: 'zara.khan@futuristglobal.com', role: 'employee', dept: 'Sales & Marketing', title: 'Marketing Specialist', manager: 'nikhil.bansal@futuristglobal.com', joined: '2025-02-10', color: '#22c55e', presence: 'available' },
-  { first: 'Rahul', last: 'Desai', email: 'rahul.desai@futuristglobal.com', role: 'employee', dept: 'Human Resources', title: 'Talent Acquisition', manager: 'hr@futuristglobal.com', joined: '2023-10-02', color: '#ef4444', presence: 'dnd', statusEmoji: '⛔', statusText: 'Interviews back-to-back' },
-  { first: 'Neha', last: 'Reddy', email: 'neha.reddy@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Mobile Engineer', manager: 'manager@futuristglobal.com', joined: relDate(2, 2023), color: '#6366f1', presence: 'away', statusEmoji: '🟡' },
+  { first: 'Rahul', last: 'Desai', email: 'rahul.desai@futuristglobal.com', role: 'employee', dept: 'Human Resources', title: 'Talent Acquisition', manager: 'hr@futuristglobal.com', joined: '2023-10-02', color: '#ef4444', presence: 'dnd', statusText: 'Interviews back-to-back' },
+  { first: 'Neha', last: 'Reddy', email: 'neha.reddy@futuristglobal.com', role: 'employee', dept: 'Engineering', title: 'Mobile Engineer', manager: 'manager@futuristglobal.com', joined: relDate(2, 2023), color: '#6366f1', presence: 'away' },
 ];
 
 const CONVERSATIONS: Record<string, [string, string, number][]> = {
   // [author email, body, minutes ago]
   general: [
-    ['hr@futuristglobal.com', 'Good morning everyone! 🌞 Reminder: the townhall is on Friday at 4pm in the main conference room and on the stream.', 300],
-    ['admin@futuristglobal.com', 'Welcome to FG One, team 🎉 This is now our home for chat, updates and HR. Shout here if anything looks off.', 240],
-    ['kabir.singh@futuristglobal.com', 'Loving the new workspace already. Dark mode 👌', 200],
+    ['hr@futuristglobal.com', 'Good morning everyone. Reminder: the townhall is on Friday at 4pm in the main conference room and on the stream.', 300],
+    ['admin@futuristglobal.com', 'Welcome to FG One, team. This is now our home for chat, updates and HR. Shout here if anything looks off.', 240],
+    ['kabir.singh@futuristglobal.com', 'Loving the new workspace already. Dark mode looks great.', 200],
     ['zara.khan@futuristglobal.com', 'The Diwali celebration photos are up on the shared drive — thank you all for making it special!', 95],
-    ['manager@futuristglobal.com', 'Kudos to @Ananya for shipping the new onboarding flow ahead of schedule 🚀', 40],
+    ['manager@futuristglobal.com', 'Kudos to @Ananya for shipping the new onboarding flow ahead of schedule.', 40],
   ],
-  'dev-team': [
+  development: [
     ['manager@futuristglobal.com', 'Sprint 42 starts today. Board is updated — please pick your tickets by noon.', 180],
-    ['meera.nair@futuristglobal.com', 'Staging deploy is green ✅ Prod release window is 6pm.', 120],
+    ['meera.nair@futuristglobal.com', 'Staging deploy is green. Prod release window is 6pm.', 120],
     ['employee@futuristglobal.com', 'PR for the dashboard widgets is up, would love a review when someone has a moment.', 60],
-    ['vikram.rao@futuristglobal.com', 'On it 👀', 55],
+    ['vikram.rao@futuristglobal.com', 'On it, reviewing now.', 55],
   ],
-  'qa-team': [
+  'qa-testing': [
     ['sneha.kulkarni@futuristglobal.com', 'Regression suite for 3.8 is scheduled tonight. Please log blockers here.', 150],
     ['arjun.patel@futuristglobal.com', 'Found a flaky test in the payments flow, raising a ticket.', 70],
   ],
-  announcements: [['hr@futuristglobal.com', '📣 Open enrolment for the health insurance top-up closes on the 15th. Details in the HR announcement on your dashboard.', 1440]],
+  'project-updates': [
+    ['manager@futuristglobal.com', 'Onboarding revamp: design signed off, build is 70% done. Tracking in https://github.com/arvind-m-dev/F-G_one', 210],
+    ['dev.malhotra@futuristglobal.com', 'Updated the dashboard explorations in Figma, feedback welcome before Thursday.', 90],
+  ],
+  ideas: [['tara.joshi@futuristglobal.com', 'What if daily standups could be posted straight from chat and summarised for the week?', 160]],
+  announcements: [['hr@futuristglobal.com', 'Open enrolment for the health insurance top-up closes on the 15th. Details in the HR announcement on your dashboard.', 1440]],
 };
 
 const DM: [string, string, string, number][] = [
   ['manager@futuristglobal.com', 'employee@futuristglobal.com', 'Hey Ananya, can we sync for 10 mins about the widget layout?', 30],
   ['employee@futuristglobal.com', 'manager@futuristglobal.com', 'Sure! Free after 2:30.', 25],
-  ['manager@futuristglobal.com', 'employee@futuristglobal.com', 'Perfect, sending an invite 👍', 22],
-  ['hr@futuristglobal.com', 'employee@futuristglobal.com', 'Happy birthday in advance 🎂 Cake in the pantry at 4!', 10],
+  ['manager@futuristglobal.com', 'employee@futuristglobal.com', 'Perfect, sending an invite.', 22],
+  ['hr@futuristglobal.com', 'employee@futuristglobal.com', 'Happy birthday in advance. Cake in the pantry at 4!', 10],
 ];
 
 async function seedOrg(opts: { name: string; slug: string; domain: string; password: string; minimal?: boolean }) {
   await prisma.organization.deleteMany({ where: { slug: opts.slug } });
   const settings = organizationSettingsSchema.parse({ auth: { allowedEmailDomains: [opts.domain] } });
   const org = await prisma.organization.create({
-    data: { name: opts.name, slug: opts.slug, primaryColor: '#4f46e5', secondaryColor: '#0ea5e9', settings },
+    data: { name: opts.name, slug: opts.slug, primaryColor: '#6366F1', secondaryColor: '#8B5CF6', settings },
   });
 
   const roles = Object.fromEntries(
@@ -156,9 +161,12 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
   const channelDefs = [
     { name: 'general', description: 'Company-wide chatter and news', type: 'PUBLIC' as const, isDefault: true, members: all },
     { name: 'announcements', description: 'Official company announcements', type: 'PUBLIC' as const, isDefault: true, members: all },
-    { name: 'dev-team', description: 'Engineering team room', type: 'PUBLIC' as const, members: deptMembers('Engineering') },
-    { name: 'qa-team', description: 'Quality assurance', type: 'PUBLIC' as const, members: deptMembers('Quality Assurance') },
-    { name: 'random', description: 'Water-cooler 🎈', type: 'PUBLIC' as const, members: all.slice(0, 10) },
+    { name: 'development', description: 'Engineering discussion, reviews and releases', type: 'PUBLIC' as const, members: deptMembers('Engineering') },
+    { name: 'qa-testing', description: 'Test plans, bug reports and verification', type: 'PUBLIC' as const, members: [...deptMembers('Quality Assurance'), ...deptMembers('Engineering').slice(0, 2)] },
+    { name: 'project-updates', description: 'Status updates across projects', type: 'PUBLIC' as const, members: all },
+    { name: 'ideas', description: 'Suggestions to improve the product and the workplace', type: 'PUBLIC' as const, members: all.slice(0, 12) },
+    { name: 'help-support', description: 'Ask for help with tools, access and IT', type: 'PUBLIC' as const, members: all.slice(0, 9) },
+    { name: 'team-discussion', description: 'Water-cooler conversations', type: 'PUBLIC' as const, members: all.slice(0, 10) },
     { name: 'management', description: 'Leadership — private', type: 'PRIVATE' as const, members: PEOPLE.filter((p) => ['super_admin', 'hr_admin', 'manager'].includes(p.role)).map((p) => users[p.email].id) },
   ];
   const admin = users['admin@futuristglobal.com'].id;
@@ -177,7 +185,13 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     let last: Date | null = null;
     for (const [email, body, ago] of CONVERSATIONS[c.name] ?? []) {
       last = new Date(Date.now() - ago * 60_000);
-      await prisma.message.create({ data: { organizationId: org.id, channelId: ch.id, authorId: users[email].id, body, createdAt: last } });
+      const msg = await prisma.message.create({ data: { organizationId: org.id, channelId: ch.id, authorId: users[email].id, body, createdAt: last } });
+      if (body.includes('Kudos') || body.includes('Staging deploy')) {
+        const reactors = c.members.filter((id) => id !== users[email].id).slice(0, 4);
+        await prisma.messageReaction.createMany({
+          data: reactors.map((userId, i) => ({ messageId: msg.id, userId, emoji: i % 2 ? 'party' : 'thumbs-up' })),
+        });
+      }
     }
     if (last) await prisma.channel.update({ where: { id: ch.id }, data: { lastMessageAt: last } });
     // Admin has read everything they posted in; reset their read marker for realism.
@@ -235,7 +249,7 @@ async function main() {
 
   await seedOrg({ name: 'Futurist Global', slug: process.env.DEFAULT_ORG_SLUG || 'futurist-global', domain: 'futuristglobal.com', password });
   await seedOrg({ name: 'Acme Test Co', slug: 'acme-test', domain: 'acme.test', password, minimal: true });
-  console.log('✔ Seeded Futurist Global (16 active employees, 1 pending invite) and Acme Test Co.');
+  console.log('Seeded Futurist Global (16 active employees, 1 pending invite) and Acme Test Co.');
   console.log('  Sign in with admin@ / hr@ / manager@ / employee@futuristglobal.com using SEED_PASSWORD.');
 }
 

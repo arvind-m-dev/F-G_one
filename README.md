@@ -2,7 +2,7 @@
 
 One workspace for chat, people, and HR at Futurist Global. It combines a Slack-style messaging layout with a personal dashboard, behind secure invite-only, role-based access.
 
-> **Status: Milestone 1 (foundation + hybrid workspace) is complete and tested.** See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#8-roadmap) for the roadmap.
+> **Status:** Milestone 1 and the PRD v3.0 UI redesign (Phases 0–1: design system, Employee `/app` and Admin `/admin` portals) are complete and tested. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) and [docs/FEATURE_INVENTORY.md](docs/FEATURE_INVENTORY.md).
 
 ## What works today
 
@@ -96,7 +96,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-Open http://localhost:3000 and sign in with any seeded account using your `SEED_PASSWORD`:
+Open http://localhost:3000 (the Employee portal is at `/app`, the Admin portal at `/admin`) and sign in with any seeded account using your `SEED_PASSWORD`:
 
 | Email | Role |
 |---|---|
@@ -136,3 +136,5 @@ E2E_PASSWORD=<SEED_PASSWORD> pnpm --filter @fg/web test:e2e
 * [Database design (current + planned models)](docs/DATABASE.md)
 * [API reference + WebSocket events](docs/API.md)
 * [Deployment, configuration, backups, go-live checklist](docs/DEPLOYMENT.md)
+* [Design system](docs/DESIGN_SYSTEM.md) · [UI components](docs/UI_COMPONENTS.md) · [UI audit](docs/UI_AUDIT.md)
+* [Implementation plan](docs/IMPLEMENTATION_PLAN.md) · [Progress](docs/IMPLEMENTATION_PROGRESS.md) · [Decisions](docs/DECISIONS.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Changelog](docs/CHANGELOG.md)

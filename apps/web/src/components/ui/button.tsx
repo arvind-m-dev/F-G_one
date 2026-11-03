@@ -5,24 +5,24 @@ import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer',
+  'inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-[13px] font-medium transition-[background-color,box-shadow,color,transform] duration-150 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer',
   {
     variants: {
       variant: {
-        primary: 'bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md',
-        gradient: 'bg-brand-gradient text-white shadow-sm hover:shadow-lg hover:brightness-105',
-        secondary: 'bg-surface-2 text-foreground hover:bg-border/70',
-        outline: 'border bg-surface text-foreground hover:bg-surface-2',
-        ghost: 'text-foreground hover:bg-surface-2',
-        danger: 'bg-danger text-white hover:brightness-110',
-        link: 'text-primary underline-offset-4 hover:underline px-0',
+        primary: 'bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(0_0_0/0.12)] hover:bg-[color-mix(in_oklab,var(--primary)_90%,black)]',
+        gradient: 'bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(0_0_0/0.12)] hover:bg-[color-mix(in_oklab,var(--primary)_90%,black)]',
+        secondary: 'bg-surface-2 text-foreground hover:bg-[color-mix(in_oklab,var(--surface-2)_80%,var(--foreground)_6%)]',
+        outline: 'border border-border-strong bg-surface text-foreground shadow-sm hover:bg-surface-2',
+        ghost: 'text-muted hover:bg-surface-2 hover:text-foreground',
+        danger: 'bg-danger text-white hover:bg-[color-mix(in_oklab,var(--danger)_88%,black)]',
+        link: 'h-auto px-0 text-primary underline-offset-4 hover:underline',
       },
       size: {
-        sm: 'h-8 px-3 text-xs',
-        md: 'h-9 px-4',
-        lg: 'h-11 px-5 text-[15px]',
-        icon: 'size-9',
-        'icon-sm': 'size-8',
+        sm: 'h-7 px-2.5 text-xs',
+        md: 'h-8 px-3',
+        lg: 'h-10 px-4 text-sm',
+        icon: 'size-8',
+        'icon-sm': 'size-7',
       },
     },
     defaultVariants: { variant: 'primary', size: 'md' },

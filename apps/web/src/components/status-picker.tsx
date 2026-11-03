@@ -1,16 +1,17 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { PRESENCE_PRESETS, presenceMeta, STATUS_EXPIRY_OPTIONS, type PresenceKey, type StatusExpiry } from '@fg/shared';
 import { api, errorMessage } from '@/lib/api';
 import { presenceStore } from '@/lib/presence-store';
 import { cn } from '@/lib/utils';
+import { PresenceIcon } from './presence';
 import { Button } from './ui/button';
 import { Input, Select } from './ui/input';
 
-const EMOJI_CHOICES = ['🚀', '🎯', '🔥', '🤒', '✈️', '🧪', '📞', '🎉', '🌴', '📚', '🛠️', '🙌'];
+const SUGGESTIONS = ['Working on QA', 'In a meeting', 'Focus time', 'On a break', 'Out of office'];
 
 /** Presence picker. Only changes availability — attendance is never modified here. */
 export function StatusPicker({
@@ -24,78 +25,88 @@ export function StatusPicker({
 }) {
   const qc = useQueryClient();
   const [presence, setPresence] = useState<PresenceKey>((current.presence as PresenceKey) ?? 'available');
-  const [emoji, setEmoji] = useState<string | null>(current.statusEmoji);
   const [text, setText] = useState(current.statusText ?? '');
   const [expiry, setExpiry] = useState<StatusExpiry>('never');
 
   const save = useMutation({
-    mutationFn: (body: { presence: PresenceKey; emoji: string | null; text: string | null; expiry: StatusExpiry }) => api<{ statusExpiresAt: string | null }>('/me/status', { method: 'PUT', body }),
+    mutationFn: (body: { presence: PresenceKey; emoji: null; text: string | null; expiry: StatusExpiry }) => api<{ statusExpiresAt: string | null }>('/me/status', { method: 'PUT', body }),
     onSuccess: (res, body) => {
-      presenceStore.apply({ userId, presence: body.presence, statusEmoji: body.emoji, statusText: body.text, statusExpiresAt: res.statusExpiresAt });
+      presenceStore.apply({ userId, presence: body.presence, statusEmoji: null, statusText: body.text, statusExpiresAt: res.statusExpiresAt });
       void qc.invalidateQueries({ queryKey: ['me'] });
-      toast.success(`Status set to ${body.emoji ?? presenceMeta(body.presence).emoji} ${body.text || presenceMeta(body.presence).label}`);
+      toast.success(`Status: ${body.text || presenceMeta(body.presence).label}`);
       onDone?.();
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
 
+  // A preset replaces any custom message (type a message below to customise).
   const quick = (key: PresenceKey) => {
-    const m = presenceMeta(key);
-    // A preset replaces any custom message (type a message below to customise).
     setPresence(key);
-    setEmoji(m.emoji);
     setText('');
-    save.mutate({ presence: key, emoji: m.emoji, text: null, expiry });
+    save.mutate({ presence: key, emoji: null, text: null, expiry });
   };
 
   return (
-    <div className="w-[320px] space-y-3">
-      <div>
-        <p className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Quick status</p>
-        <div className="grid grid-cols-2 gap-1" role="listbox" aria-label="Quick status">
-          {PRESENCE_PRESETS.map((p) => (
-            <button
-              key={p.key}
-              role="option"
-              aria-selected={presence === p.key}
-              onClick={() => quick(p.key)}
-              className={cn('flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-surface-2', presence === p.key && 'bg-primary-soft text-primary')}
-            >
-              <span aria-hidden>{p.emoji}</span>
-              <span className="truncate">{p.label}</span>
-              {presence === p.key && <Check className="ml-auto size-3.5" />}
+    <div className="w-[340px]">
+      <div className="mb-3">
+        <div className="relative">
+          <PresenceIcon presence={presence} className="absolute top-1/2 left-3 -translate-y-1/2" />
+          <Input value={text} onChange={(e) => setText(e.target.value)} maxLength={100} placeholder="What are you working on?" aria-label="Status message" className="pr-8 pl-9" />
+          {text && (
+            <button onClick={() => setText('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-subtle hover:text-foreground" aria-label="Clear message">
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {SUGGESTIONS.map((s) => (
+            <button key={s} onClick={() => setText(s)} className="rounded-md border px-2 py-0.5 text-[11px] text-muted transition hover:border-border-strong hover:text-foreground">
+              {s}
             </button>
           ))}
         </div>
       </div>
-      <div className="space-y-2 border-t pt-3">
-        <p className="text-xs font-semibold tracking-wide text-muted uppercase">Custom message</p>
-        <div className="flex flex-wrap gap-1">
-          {EMOJI_CHOICES.map((e) => (
-            <button key={e} onClick={() => setEmoji(e)} className={cn('grid size-8 place-items-center rounded-lg text-base transition hover:bg-surface-2 hover:scale-110', emoji === e && 'bg-primary-soft ring-1 ring-primary')} aria-label={`Use ${e}`}>
-              {e}
-            </button>
-          ))}
-        </div>
-        <Input value={text} onChange={(e) => setText(e.target.value)} maxLength={100} placeholder="What's your status?" aria-label="Status message" />
-        <div className="flex items-center gap-2">
-          <Select value={expiry} onChange={(e) => setExpiry(e.target.value as StatusExpiry)} aria-label="Clear after" className="h-9">
-            {STATUS_EXPIRY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                Clear: {o.label}
-              </option>
-            ))}
-          </Select>
-          <Button size="md" loading={save.isPending} onClick={() => save.mutate({ presence, emoji, text: text.trim() || null, expiry })}>
-            Save
-          </Button>
-        </div>
-        {(current.statusText || current.statusEmoji) && (
-          <button className="text-xs text-muted underline-offset-2 hover:underline" onClick={() => { setText(''); setEmoji(null); save.mutate({ presence: 'available', emoji: null, text: null, expiry: 'never' }); }}>
-            Clear status
+
+      <p className="mb-1 px-1 text-[11px] font-medium tracking-wide text-subtle uppercase">Availability</p>
+      <div className="grid grid-cols-2 gap-0.5" role="listbox" aria-label="Quick status">
+        {PRESENCE_PRESETS.map((p) => (
+          <button
+            key={p.key}
+            role="option"
+            aria-selected={presence === p.key}
+            onClick={() => quick(p.key)}
+            className={cn('flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition hover:bg-surface-2', presence === p.key && 'bg-primary-soft text-primary-ink')}
+          >
+            <PresenceIcon presence={p.key} />
+            <span className="truncate">{p.label}</span>
+            {presence === p.key && <Check className="ml-auto size-3.5" />}
           </button>
-        )}
+        ))}
       </div>
+
+      <div className="mt-3 flex items-center gap-2 border-t pt-3">
+        <Select value={expiry} onChange={(e) => setExpiry(e.target.value as StatusExpiry)} aria-label="Clear after" className="h-8 text-[13px]">
+          {STATUS_EXPIRY_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              Clear: {o.label}
+            </option>
+          ))}
+        </Select>
+        <Button loading={save.isPending} onClick={() => save.mutate({ presence, emoji: null, text: text.trim() || null, expiry })}>
+          Save
+        </Button>
+      </div>
+      {current.statusText && (
+        <button
+          className="mt-2 text-xs text-muted underline-offset-2 hover:underline"
+          onClick={() => {
+            setText('');
+            save.mutate({ presence: 'available', emoji: null, text: null, expiry: 'never' });
+          }}
+        >
+          Clear status
+        </button>
+      )}
     </div>
   );
 }

@@ -2,17 +2,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, MailCheck } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { forgotPasswordSchema } from '@fg/shared';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
 
-export default function ForgotPasswordPage() {
+function ForgotPassword() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { register, handleSubmit, formState } = useForm<{ email: string }>({ resolver: zodResolver(forgotPasswordSchema) });
+  const { register, handleSubmit, formState } = useForm<{ email: string }>({ resolver: zodResolver(forgotPasswordSchema), defaultValues: { email: useSearchParams().get('email') ?? '' } });
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
@@ -26,7 +27,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <Link href="/login" className="mb-6 inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
+      <Link href="/login" className="mb-6 inline-flex items-center gap-1 text-[13px] text-muted hover:text-foreground">
         <ArrowLeft className="size-4" /> Back to sign in
       </Link>
       {sent ? (
@@ -34,12 +35,12 @@ export default function ForgotPasswordPage() {
           <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary-soft text-primary">
             <MailCheck className="size-6" />
           </div>
-          <h2 className="font-display text-2xl font-bold">Check your inbox</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Check your inbox</h2>
           <p className="mt-2 text-sm text-muted">If an account exists for that email, we&apos;ve sent a reset link. It expires in 30 minutes.</p>
         </div>
       ) : (
         <>
-          <h2 className="font-display text-2xl font-bold">Reset your password</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Reset your password</h2>
           <p className="mt-1 text-sm text-muted">Enter your work email and we&apos;ll send you a reset link.</p>
           <form onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
             <Field label="Work email" htmlFor="email" error={formState.errors.email?.message}>
@@ -53,5 +54,13 @@ export default function ForgotPasswordPage() {
         </>
       )}
     </>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense>
+      <ForgotPassword />
+    </Suspense>
   );
 }

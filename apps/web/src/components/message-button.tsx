@@ -19,7 +19,7 @@ export function MessageButton({ userId, label = 'Message', ...props }: { userId:
         setLoading(true);
         try {
           const c = await api<{ id: string }>('/dm', { body: { userIds: [userId] } });
-          router.push(`/chat/${c.id}`);
+          router.push(`/app/chat/${c.id}`);
         } catch (err) {
           toast.error(errorMessage(err));
           setLoading(false);

@@ -78,7 +78,7 @@ export function NewMessageDialog({ open, onOpenChange }: { open: boolean; onOpen
       void qc.invalidateQueries({ queryKey: ['channels'] });
       onOpenChange(false);
       setPeople([]);
-      router.push(`/chat/${c.id}`);
+      router.push(`/app/chat/${c.id}`);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
@@ -115,7 +115,7 @@ export function NewChannelDialog({ open, onOpenChange }: { open: boolean; onOpen
       onOpenChange(false);
       reset();
       setMembers([]);
-      router.push(`/chat/${c.id}`);
+      router.push(`/app/chat/${c.id}`);
     } catch (e) {
       toast.error(errorMessage(e));
     }

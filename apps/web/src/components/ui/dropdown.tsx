@@ -13,7 +13,7 @@ export function DropdownContent({ className, align = 'end', ...props }: React.Co
         align={align}
         sideOffset={8}
         className={cn(
-          'z-50 min-w-48 overflow-hidden rounded-xl border bg-surface p-1 shadow-xl data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95',
+          'z-50 min-w-48 overflow-hidden rounded-xl border bg-elevated p-1 shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95',
           className,
         )}
         {...props}
@@ -26,7 +26,7 @@ export function DropdownItem({ className, danger, ...props }: React.ComponentPro
   return (
     <DM.Item
       className={cn(
-        'flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none select-none data-[highlighted]:bg-surface-2 [&_svg]:size-4 [&_svg]:text-muted',
+        'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] outline-none select-none data-[highlighted]:bg-surface-2 [&_svg]:size-4 [&_svg]:text-muted',
         danger && 'text-danger [&_svg]:text-danger',
         className,
       )}
@@ -42,7 +42,7 @@ export const PopoverTrigger = PopoverPrimitive.Trigger;
 export function PopoverContent({ className, align = 'end', ...props }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
     <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Content align={align} sideOffset={8} className={cn('z-50 rounded-xl border bg-surface p-3 shadow-xl outline-none', className)} {...props} />
+      <PopoverPrimitive.Content align={align} sideOffset={8} className={cn('z-50 rounded-xl border bg-elevated p-3 shadow-lg outline-none', className)} {...props} />
     </PopoverPrimitive.Portal>
   );
 }

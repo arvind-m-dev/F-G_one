@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   devIndicators: false,
   skipTrailingSlashRedirect: true,
+  async redirects() {
+    // Routes before the Employee/Admin portal split.
+    return ['home', 'chat', 'people', 'profile'].flatMap((r) => [
+      { source: `/${r}`, destination: `/app/${r}`, permanent: true },
+      { source: `/${r}/:path*`, destination: `/app/${r}/:path*`, permanent: true },
+    ]);
+  },
   async rewrites() {
     return [
       { source: '/api/:path*', destination: `${API_URL}/api/:path*` },

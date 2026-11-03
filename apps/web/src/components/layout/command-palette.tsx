@@ -2,7 +2,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { Hash, Home, Lock, MessageSquareText, MessagesSquare, Moon, Search, Settings, Sun, UserCircle2, Users } from 'lucide-react';
+import { Hash, House, Lock, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, UserCircle2, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -28,7 +28,7 @@ function useDebounced<T>(value: T, ms = 200) {
   return v;
 }
 
-const itemCls = 'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm aria-selected:bg-primary-soft aria-selected:text-primary [&_svg]:size-4 [&_svg]:text-muted';
+const itemCls = 'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[13px] aria-selected:bg-surface-2 [&_svg]:size-4 [&_svg]:text-muted';
 const groupCls = '[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted';
 
 /** ⌘K global search & command palette — searches people, channels and messages the user may see. */
@@ -59,14 +59,14 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const openDm = async (id: string) => {
     const c = await api<{ id: string }>('/dm', { body: { userIds: [id] } });
-    go(`/chat/${c.id}`);
+    go(`/app/chat/${c.id}`);
   };
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in" />
-        <DialogPrimitive.Content className="fixed top-[12vh] left-1/2 z-50 w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-2xl border bg-surface shadow-2xl data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95">
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#0b0d11]/45 data-[state=open]:animate-in data-[state=open]:fade-in" />
+        <DialogPrimitive.Content className="fixed top-[12vh] left-1/2 z-50 w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-2xl border bg-elevated shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95">
           <DialogPrimitive.Title className="sr-only">Search FG One</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">Search people, channels and messages, or jump to a page.</DialogPrimitive.Description>
           <Command shouldFilter={false} loop>
@@ -84,7 +84,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   {results.data.people.length > 0 && (
                     <Command.Group heading="People" className={groupCls}>
                       {results.data.people.map((p) => (
-                        <Command.Item key={p.id} value={`p-${p.id}`} onSelect={() => go(`/people/${p.id}`)} className={itemCls}>
+                        <Command.Item key={p.id} value={`p-${p.id}`} onSelect={() => go(`/app/people/${p.id}`)} className={itemCls}>
                           <UserAvatar person={p} size="xs" />
                           <span className="font-medium">{p.name}</span>
                           <span className="truncate text-xs text-muted">{p.designation}</span>
@@ -104,7 +104,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   {results.data.channels.length > 0 && (
                     <Command.Group heading="Channels" className={groupCls}>
                       {results.data.channels.map((c) => (
-                        <Command.Item key={c.id} value={`c-${c.id}`} onSelect={() => go(`/chat/${c.id}`)} className={itemCls}>
+                        <Command.Item key={c.id} value={`c-${c.id}`} onSelect={() => go(`/app/chat/${c.id}`)} className={itemCls}>
                           {c.type === 'PRIVATE' ? <Lock /> : <Hash />}
                           <span className="font-medium">{c.name}</span>
                           <span className="truncate text-xs text-muted">{c.description}</span>
@@ -115,7 +115,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   {results.data.messages.length > 0 && (
                     <Command.Group heading="Messages" className={groupCls}>
                       {results.data.messages.map((m) => (
-                        <Command.Item key={m.id} value={`m-${m.id}`} onSelect={() => go(`/chat/${m.channelId}`)} className={itemCls}>
+                        <Command.Item key={m.id} value={`m-${m.id}`} onSelect={() => go(`/app/chat/${m.channelId}`)} className={itemCls}>
                           <MessageSquareText />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate">{m.body}</span>
@@ -131,21 +131,29 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               )}
               {term.length < 2 && (
                 <Command.Group heading="Jump to" className={groupCls}>
-                  <Command.Item onSelect={() => go('/home')} className={itemCls}>
-                    <Home /> Home dashboard
+                  <Command.Item onSelect={() => go('/app/home')} className={itemCls}>
+                    <House /> Home
                   </Command.Item>
-                  <Command.Item onSelect={() => go('/chat')} className={itemCls}>
-                    <MessagesSquare /> Messages & channels
+                  <Command.Item onSelect={() => go('/app/chat')} className={itemCls}>
+                    <MessagesSquare /> Chat
                   </Command.Item>
-                  <Command.Item onSelect={() => go('/people')} className={itemCls}>
-                    <Users /> People directory
+                  <Command.Item onSelect={() => go('/app/people')} className={itemCls}>
+                    <Users /> Directory
                   </Command.Item>
-                  <Command.Item onSelect={() => go('/profile')} className={itemCls}>
+                  <Command.Item onSelect={() => go('/app/profile')} className={itemCls}>
                     <UserCircle2 /> My profile
                   </Command.Item>
+                  <Command.Item onSelect={() => go('/app/settings')} className={itemCls}>
+                    <Settings /> Settings
+                  </Command.Item>
+                  {can(PERMISSIONS.ANALYTICS_VIEW) && (
+                    <Command.Item onSelect={() => go('/admin')} className={itemCls}>
+                      <ShieldCheck /> Admin portal
+                    </Command.Item>
+                  )}
                   {can(PERMISSIONS.SETTINGS_MANAGE) && (
                     <Command.Item onSelect={() => go('/admin/settings')} className={itemCls}>
-                      <Settings /> Company settings
+                      <SlidersHorizontal /> System settings
                     </Command.Item>
                   )}
                   <Command.Item

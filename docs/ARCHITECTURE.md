@@ -123,26 +123,23 @@ Cross-cutting hooks a new module plugs into:
 
 ## 6. Navigation structure
 
-```
-Sidebar (collapsible; drawer on mobile)
-├─ Home                      personal dashboard (draggable widgets)
-├─ Messages                  browse channels · unread badge
-├─ People                    directory · profiles
-├─ My profile                profile · appearance · password
-├─ Administration            (visible per permission)
-│   ├─ Overview              live analytics
-│   ├─ Employees             invite · edit · deactivate · re-invite
-│   ├─ Departments
-│   ├─ Roles & access        permission matrix
-│   ├─ Company settings      branding · modules · dashboard · policies · sign-in
-│   └─ Audit log
-├─ Channels                  # public / 🔒 private, unread counts, create, browse
-└─ Direct messages           1:1 and group DMs with live presence
+Two portals share one shell component (`WorkspaceShell`) and the same services. Old routes (`/home`, `/chat`, `/people`, `/profile`) redirect to `/app/*`.
 
-Top bar: ⌘K global search · + quick actions · status picker · theme · account menu
+```
+Employee portal /app                         Admin portal /admin  (permission-gated)
+├─ Home            /app/home                 ├─ Overview              /admin
+├─ Chat            /app/chat[/:id]           ├─ People
+├─ Directory       /app/people[/:id]         │   ├─ Employees         /admin/employees
+├─ My profile      /app/profile              │   ├─ Departments       /admin/departments
+└─ Settings        /app/settings             │   └─ Roles & permissions /admin/roles
+                                             └─ Workspace
+Rail: workspace switcher · ⌘K search ·           ├─ System settings  /admin/settings
+      nav · admin/workspace switch ·             └─ Audit logs       /admin/audit
+      settings · status · theme · live state
+Mobile: top bar + bottom tabs (Home, Chat, Directory, Me); single-view chat
 ```
 
-Planned additions slot into the same sidebar: Attendance, Daily updates, Leave & holidays, Announcements & noticeboard, Documents, Events, Polls, Tasks, Ask FG One.
+Planned modules (My Work, Calendar, Attendance, Announcements, Ideas, Knowledge Base, Notifications) are added to the rail only when they work end-to-end. See `IMPLEMENTATION_PLAN.md`.
 
 ---
 

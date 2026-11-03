@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PRESENCE_KEYS } from './presence';
+import { PRESENCE_KEYS, REACTION_KEYS } from './presence';
 
 /** Request contracts shared by the API (validation) and the web app (forms). */
 
@@ -90,6 +90,7 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 export const setStatusSchema = z.object({
   presence: z.enum(PRESENCE_KEYS),
+  /** Legacy field; presence icons are derived from `presence`. */
   emoji: z.string().max(16).nullable().optional(),
   text: z.string().trim().max(100).nullable().optional(),
   expiry: z.enum(['never', '30m', '1h', '4h', 'today']).default('never'),
@@ -150,4 +151,4 @@ export const editMessageSchema = z.object({ body: z.string().trim().min(1).max(4
 
 export const channelMembersSchema = z.object({ userIds: z.array(z.string().min(1)).min(1).max(200) });
 
-export const reactionSchema = z.object({ emoji: z.string().min(1).max(16) });
+export const reactionSchema = z.object({ emoji: z.enum(REACTION_KEYS) });

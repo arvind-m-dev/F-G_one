@@ -59,3 +59,16 @@ export function useLivePerson<T extends Pick<Person, 'id' | 'online' | 'presence
   }
   return merged;
 }
+
+/** Live overlay for a list of people (used for grouping, e.g. team pulse). */
+export function useLivePeople<T extends Pick<Person, 'id' | 'online' | 'presence' | 'statusEmoji' | 'statusText' | 'statusExpiresAt'>>(people: T[]): T[] {
+  useSyncExternalStore(presenceStore.subscribe, getVersion, getVersion);
+  return people.map((p) => {
+    const merged = { ...p, ...patches.get(p.id) } as T;
+    if (snapshotReceived) merged.online = online.has(p.id);
+    if (merged.statusExpiresAt && new Date(merged.statusExpiresAt).getTime() < Date.now()) {
+      return { ...merged, presence: 'available', statusEmoji: null, statusText: null, statusExpiresAt: null };
+    }
+    return merged;
+  });
+}

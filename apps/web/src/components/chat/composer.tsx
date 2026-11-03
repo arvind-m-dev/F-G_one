@@ -1,14 +1,15 @@
 'use client';
-import { SendHorizonal, Smile } from 'lucide-react';
+import { AtSign, CornerDownLeft, SendHorizonal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { RT } from '@fg/shared';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/dropdown';
+import { Tooltip } from '@/components/ui/misc';
 import { useRealtime } from '@/lib/realtime';
+import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
-const EMOJIS = ['😀', '😂', '😊', '😍', '🤔', '😅', '🙌', '👍', '👏', '🙏', '🎉', '🔥', '✅', '🚀', '💯', '❤️', '👀', '☕', '🍕', '🎂'];
-
 export function Composer({ channelId, placeholder, onSend, initial, disabled }: { channelId: string; placeholder: string; onSend: (body: string) => void; initial?: string; disabled?: boolean }) {
+  const me = useSession();
+  const enterToSend = me.preferences.enterToSend !== false;
   const [value, setValue] = useState(initial ?? '');
   const ref = useRef<HTMLTextAreaElement>(null);
   const { socket } = useRealtime();
@@ -18,12 +19,9 @@ export function Composer({ channelId, placeholder, onSend, initial, disabled }: 
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
   }, [value]);
-
-  useEffect(() => {
-    ref.current?.focus();
-  }, [channelId]);
+  useEffect(() => ref.current?.focus(), [channelId]);
 
   const stopTyping = () => {
     if (typingRef.current.active) socket?.emit(RT.TYPING, { channelId, typing: false });
@@ -47,16 +45,22 @@ export function Composer({ channelId, placeholder, onSend, initial, disabled }: 
     setValue('');
     stopTyping();
   };
+  const insert = (text: string) => {
+    setValue((v) => (v && !v.endsWith(' ') ? `${v} ${text}` : v + text));
+    ref.current?.focus();
+  };
 
   return (
-    <div className="rounded-2xl border bg-surface shadow-sm transition focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary-soft">
+    <div className="rounded-xl border border-border-strong bg-surface shadow-sm transition focus-within:border-primary/50 focus-within:shadow-[0_0_0_3px_var(--primary-soft)]">
       <textarea
         ref={ref}
         value={value}
         disabled={disabled}
         onChange={(e) => onType(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+          const sendKey = enterToSend ? !e.shiftKey : e.metaKey || e.ctrlKey;
+          if (sendKey) {
             e.preventDefault();
             send();
           }
@@ -65,38 +69,22 @@ export function Composer({ channelId, placeholder, onSend, initial, disabled }: 
         maxLength={4000}
         placeholder={placeholder}
         aria-label="Message"
-        className="block max-h-[200px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[14.5px] outline-none placeholder:text-muted"
+        className="block max-h-[220px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[14.5px] outline-none placeholder:text-subtle"
       />
       <div className="flex items-center justify-between px-2 pb-2">
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-surface-2 hover:text-foreground" aria-label="Insert emoji">
-              <Smile className="size-4.5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" side="top" className="grid w-auto grid-cols-10 gap-0.5 p-1.5">
-            {EMOJIS.map((e) => (
-              <button
-                key={e}
-                className="grid size-8 place-items-center rounded-md text-lg transition hover:scale-110 hover:bg-surface-2"
-                onClick={() => {
-                  setValue((v) => v + e);
-                  ref.current?.focus();
-                }}
-              >
-                {e}
-              </button>
-            ))}
-          </PopoverContent>
-        </Popover>
-        <div className="flex items-center gap-2">
-          <span className="hidden text-[11px] text-muted sm:inline">
-            <b>Enter</b> to send · <b>Shift+Enter</b> new line
+        <Tooltip content="Mention someone" side="top">
+          <button onClick={() => insert('@')} className="grid size-7 place-items-center rounded-md text-subtle transition hover:bg-surface-2 hover:text-foreground" aria-label="Mention">
+            <AtSign className="size-4" />
+          </button>
+        </Tooltip>
+        <div className="flex items-center gap-2.5">
+          <span className="hidden items-center gap-1 text-[11px] text-subtle sm:flex">
+            <CornerDownLeft className="size-3" /> {enterToSend ? 'to send · Shift+Enter for a new line' : '⌘/Ctrl+Enter to send'}
           </span>
           <button
             onClick={send}
             disabled={!value.trim() || disabled}
-            className={cn('grid size-8 place-items-center rounded-lg transition', value.trim() ? 'bg-primary text-white hover:brightness-110' : 'bg-surface-2 text-muted')}
+            className={cn('grid size-8 place-items-center rounded-lg transition', value.trim() ? 'bg-primary text-white shadow-sm hover:brightness-110' : 'bg-surface-2 text-subtle')}
             aria-label="Send message"
           >
             <SendHorizonal className="size-4" />
