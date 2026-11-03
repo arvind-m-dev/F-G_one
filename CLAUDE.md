@@ -50,7 +50,7 @@ DATABASE_URL=postgresql://fgone:<pw>@localhost:5432/fgone_test pnpm --filter @fg
 - **Git:** work on a feature branch and open a PR to `main`. Pushing to `main` redeploys Render. Never commit `.env` files or secrets.
 
 ## Open decisions (ask the user before building what depends on them)
-- **D-6 roles:** keep Super Admin / Admin-HR / Manager / Employee, or switch to the PRD's CEO / Admin / Developer / QA / Employee.
+- **D-6 roles: resolved.** Dynamic roles plus a Super Admin authority flag. Follow `docs/SUPER_ADMIN_ARCHITECTURE.md` and the phase order in `docs/SUPER_ADMIN_IMPLEMENTATION_PLAN.md` (one phase per PR or session).
 - **D-7 file storage** for attachments: Cloudflare R2, Backblaze B2, AWS S3 or Neon. Render's disk is wiped on every deploy.
 
 ## Not built yet (PRD)

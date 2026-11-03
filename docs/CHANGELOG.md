@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: Super Admin control panel (branch `super-admin`)
+### Added (Phase 1, docs only)
+- `AUTH_AND_RBAC.md` (current-state audit), `SUPER_ADMIN_ARCHITECTURE.md` (target design), `SUPER_ADMIN_IMPLEMENTATION_PLAN.md` (phases 2a–8). No code changes.
+
 ## Unreleased: UI redesign (branch `ui-redesign`)
 ### Added (HR round)
 - Leave: types with yearly allowances, balances, requests with working-day counting, overlap and balance checks, cancellation, manager/HR approvals, privacy-aware "Who's away" calendar, admin requests/calendar/types.
