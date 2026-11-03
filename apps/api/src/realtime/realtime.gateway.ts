@@ -33,6 +33,7 @@ interface SocketData {
   userId: string;
   organizationId: string;
   name: string;
+  sessionId: string;
 }
 
 /**
@@ -72,15 +73,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const cookies = parseCookie(socket.handshake.headers.cookie ?? '');
       const token = cookies[env().SESSION_COOKIE_NAME];
       const ctx = token ? await this.auth.validateSession(token) : null;
-      if (!ctx) {
+      // Client accounts never join internal rooms (org-wide presence, channels, announcements).
+      // Sessions still owing the second sign-in step get no live connection either.
+      if (!ctx || ctx.accountType !== 'INTERNAL' || ctx.mfaPending) {
         socket.emit('error', 'unauthorized');
         socket.disconnect(true);
         return;
       }
       const user = await this.prisma.user.findUnique({ where: { id: ctx.userId }, select: { firstName: true, lastName: true } });
-      (socket.data as SocketData) = { userId: ctx.userId, organizationId: ctx.organizationId, name: `${user?.firstName} ${user?.lastName}` };
+      (socket.data as SocketData) = { userId: ctx.userId, organizationId: ctx.organizationId, name: `${user?.firstName} ${user?.lastName}`, sessionId: ctx.sessionId };
       const memberships = await this.prisma.channelMember.findMany({ where: { userId: ctx.userId }, select: { channelId: true } });
-      await socket.join([`org:${ctx.organizationId}`, `user:${ctx.userId}`, ...memberships.map((m) => `channel:${m.channelId}`)]);
+      await socket.join([`org:${ctx.organizationId}`, `user:${ctx.userId}`, `session:${ctx.sessionId}`, ...memberships.map((m) => `channel:${m.channelId}`)]);
 
       const count = (this.online.get(ctx.userId) ?? 0) + 1;
       this.online.set(ctx.userId, count);
@@ -129,8 +132,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   leaveChannel(userIds: string[], channelId: string) {
     for (const id of userIds) this.server?.in(`user:${id}`).socketsLeave(`channel:${channelId}`);
   }
-  /** Kick every socket of a user (deactivation / logout everywhere). */
-  disconnectUser(userId: string) {
-    this.server?.in(`user:${userId}`).disconnectSockets(true);
+  /** Kick every socket of a user (deactivation, sign out everywhere). `exceptSessionId` keeps the caller's own device connected. */
+  disconnectUser(userId: string, exceptSessionId?: string) {
+    if (!this.server) return;
+    if (!exceptSessionId) return void this.server.in(`user:${userId}`).disconnectSockets(true);
+    this.server.in(`user:${userId}`).except(`session:${exceptSessionId}`).disconnectSockets(true);
+  }
+  /** Kick the sockets opened with one session (sign out, session revoked). */
+  disconnectSession(sessionId: string) {
+    this.server?.in(`session:${sessionId}`).disconnectSockets(true);
   }
 }

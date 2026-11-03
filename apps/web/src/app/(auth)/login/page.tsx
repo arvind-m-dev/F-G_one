@@ -1,5 +1,5 @@
 'use client';
-import { ArrowLeft, ArrowRight, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Plus, ShieldCheck, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -12,7 +12,7 @@ import { forgetAccount, readRecentAccounts, rememberAccount, type RecentAccount 
 import type { Me } from '@/lib/types';
 import { cn, initials } from '@/lib/utils';
 
-type Step = 'choose' | 'email' | 'password';
+type Step = 'choose' | 'email' | 'password' | 'code';
 
 function LoginFlow() {
   const router = useRouter();
@@ -24,6 +24,8 @@ function LoginFlow() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState('');
+  const [useRecovery, setUseRecovery] = useState(false);
   const pwRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,8 +54,42 @@ function LoginFlow() {
     setBusy(true);
     setError(null);
     try {
-      await api('/auth/login', { body: { email, password } });
-      try {
+      const res = await api<{ mfaRequired?: boolean }>('/auth/login', { body: { email, password } });
+      if (res.mfaRequired) {
+        setPassword('');
+        setBusy(false);
+        setStep('code');
+        return;
+      }
+      await finish();
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  };
+  const verifyCode = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (code.trim().length < 6) return setError(useRecovery ? 'Enter a recovery code' : 'Enter the 6-digit code');
+    setBusy(true);
+    setError(null);
+    try {
+      await api('/auth/mfa/verify', { body: { code: code.trim() } });
+      await finish();
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      setCode('');
+      setBusy(false);
+      if (status === 401) {
+        // Too many wrong codes or the step timed out: start again from the password.
+        setError(errorMessage(e));
+        setStep('password');
+        return;
+      }
+      setError(errorMessage(e));
+    }
+  };
+  const finish = async () => {
+    try {
         const me = await api<Me>('/auth/me');
         rememberAccount({ email: me.user.email, name: me.user.name, avatarColor: me.user.avatarColor });
       } catch {
@@ -61,10 +97,6 @@ function LoginFlow() {
       }
       const next = params.get('next');
       router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/app/home');
-    } catch (e) {
-      setError(errorMessage(e));
-      setBusy(false);
-    }
   };
   const current = recent.find((r) => r.email === email);
 
@@ -163,6 +195,58 @@ function LoginFlow() {
                 <Link href={`/forgot-password?email=${encodeURIComponent(email)}`} className="text-[13px] text-muted hover:text-foreground">
                   Forgot your password?
                 </Link>
+              </div>
+            </div>
+          </form>
+        )}
+        {step === 'code' && (
+          <form onSubmit={verifyCode} noValidate>
+            <span className="mb-5 grid size-10 place-items-center rounded-xl bg-surface-2">
+              <ShieldCheck className="size-5 text-primary" />
+            </span>
+            <h1 className="text-xl font-semibold tracking-tight">Two-step verification</h1>
+            <p className="mt-1 text-sm text-muted">{useRecovery ? 'Enter one of the recovery codes you saved. Each code works once.' : 'Open your authenticator app and enter the 6-digit code for FG One.'}</p>
+            <div className="mt-6 space-y-4">
+              <Field label={useRecovery ? 'Recovery code' : 'Code'} htmlFor="code">
+                <Input
+                  id="code"
+                  autoFocus
+                  inputMode={useRecovery ? 'text' : 'numeric'}
+                  autoComplete="one-time-code"
+                  placeholder={useRecovery ? 'xxxx-xxxx-xxxx' : '123456'}
+                  className="font-mono tracking-widest"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    setError(null);
+                  }}
+                  aria-invalid={!!error}
+                />
+              </Field>
+              {error && (
+                <p role="alert" className="rounded-lg bg-rose-500/8 px-3 py-2 text-[13px] text-danger">
+                  {error}
+                </p>
+              )}
+              <Button type="submit" size="lg" className="w-full" loading={busy}>
+                Verify and sign in
+              </Button>
+              <div className="flex justify-between text-[13px]">
+                <button type="button" className="text-muted hover:text-foreground" onClick={() => { setUseRecovery((r) => !r); setCode(''); setError(null); }}>
+                  {useRecovery ? 'Use the authenticator app' : 'Use a recovery code'}
+                </button>
+                <button
+                  type="button"
+                  className="text-muted hover:text-foreground"
+                  onClick={() => {
+                    void api('/auth/logout', { method: 'POST' }).catch(() => undefined);
+                    setCode('');
+                    setError(null);
+                    setStep('password');
+                  }}
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </form>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import {
@@ -6,15 +6,18 @@ import {
   changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
+  mfaCodeSchema,
   parseOrganizationSettings,
+  reauthSchema,
   resetPasswordSchema,
 } from '@fg/shared';
 import { z } from 'zod';
-import { Auth, AuthContext, Public } from '../common/auth-context';
+import { Auth, AuthContext, ClientAllowed, MfaPendingAllowed, Public, RequireRecentAuth } from '../common/auth-context';
 import { env } from '../common/env';
 import { ZodPipe } from '../common/zod.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { employeeSelect, toEmployee } from '../employees/employee.mapper';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { AuthService, ClientMeta } from './auth.service';
 
 /** Sign-in attempts per minute per client IP (raise only for local end-to-end test runs). */
@@ -37,6 +40,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   @Public()
@@ -44,20 +48,45 @@ export class AuthController {
   @HttpCode(200)
   @Throttle({ default: { limit: LOGIN_LIMIT, ttl: 60_000 } })
   async login(@Body(new ZodPipe(loginSchema)) body: z.infer<typeof loginSchema>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { token, expiresAt } = await this.auth.login(body.email, body.password, meta(req));
+    const { token, expiresAt, mfaRequired } = await this.auth.login(body.email, body.password, meta(req));
     setSessionCookie(res, token, expiresAt);
-    return { ok: true };
+    // With two-step verification on, this cookie only allows /auth/mfa/verify and sign out.
+    return { ok: true, mfaRequired };
   }
 
+  /** Second sign-in step: an authenticator or recovery code. Issues a new session cookie. */
+  @Public()
+  @Post('mfa/verify')
+  @HttpCode(200)
+  @Throttle({ default: { limit: LOGIN_LIMIT, ttl: 60_000 } })
+  async verifyMfa(@Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Public so the guard does not reject the half-signed-in session; validated here instead.
+    const raw = req.cookies?.[env().SESSION_COOKIE_NAME];
+    const auth = raw ? await this.auth.validateSession(raw, req.ip) : null;
+    if (!auth?.mfaPending) throw new UnauthorizedException('Sign in again');
+    try {
+      const { token, expiresAt } = await this.auth.verifyMfaLogin(auth, body.code, meta(req));
+      setSessionCookie(res, token, expiresAt);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof UnauthorizedException) res.clearCookie(env().SESSION_COOKIE_NAME, { path: '/' });
+      throw e;
+    }
+  }
+
+  @ClientAllowed()
+  @MfaPendingAllowed()
   @Post('logout')
   @HttpCode(200)
   async logout(@Auth() auth: AuthContext, @Res({ passthrough: true }) res: Response) {
     await this.auth.logout(auth);
+    this.realtime.disconnectSession(auth.sessionId);
     res.clearCookie(env().SESSION_COOKIE_NAME, { path: '/' });
     return { ok: true };
   }
 
   /** The signed-in user, their permissions and their organization's branding/settings. */
+  @ClientAllowed()
   @Get('me')
   async me(@Auth() auth: AuthContext) {
     const [user, org, prefs] = await Promise.all([
@@ -68,7 +97,12 @@ export class AuthController {
     return {
       user: toEmployee(user, { privileged: true, online: true }),
       permissions: auth.permissions,
+      grants: auth.grants,
       role: { key: auth.roleKey, rank: auth.rank },
+      isSuperAdmin: auth.isSuperAdmin,
+      accountType: auth.accountType,
+      mfaEnabled: auth.mfaEnabled,
+      superAdminNeedsMfa: auth.superAdminNeedsMfa,
       preferences: prefs.preferences,
       organization: {
         id: org.id,
@@ -96,15 +130,97 @@ export class AuthController {
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 15 * 60_000 } })
   async reset(@Body(new ZodPipe(resetPasswordSchema)) body: z.infer<typeof resetPasswordSchema>, @Req() req: Request) {
-    await this.auth.resetPassword(body.token, body.password, meta(req));
+    const { userId } = await this.auth.resetPassword(body.token, body.password, meta(req));
+    this.realtime.disconnectUser(userId);
     return { ok: true };
   }
 
+  @ClientAllowed()
   @Post('change-password')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 15 * 60_000 } })
   async change(@Auth() auth: AuthContext, @Body(new ZodPipe(changePasswordSchema)) body: z.infer<typeof changePasswordSchema>) {
     await this.auth.changePassword(auth, body.currentPassword, body.newPassword);
+    this.realtime.disconnectUser(auth.userId, auth.sessionId);
+    return { ok: true };
+  }
+
+  // ───────── re-authentication ─────────
+
+  @ClientAllowed()
+  @Post('reauth')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 15 * 60_000 } })
+  reauth(@Auth() auth: AuthContext, @Body(new ZodPipe(reauthSchema)) body: z.infer<typeof reauthSchema>) {
+    return this.auth.reauth(auth, body.password, body.code);
+  }
+
+  // ───────── two-step verification ─────────
+
+  @ClientAllowed()
+  @Get('mfa')
+  mfaStatus(@Auth() auth: AuthContext) {
+    return this.auth.mfaStatus(auth);
+  }
+
+  @ClientAllowed()
+  @RequireRecentAuth()
+  @Post('mfa/setup')
+  @HttpCode(200)
+  mfaSetup(@Auth() auth: AuthContext) {
+    return this.auth.mfaSetup(auth);
+  }
+
+  /** No recent-auth check: it only completes a setup that already required one, and it can only add protection. */
+  @ClientAllowed()
+  @Post('mfa/enable')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 15 * 60_000 } })
+  async mfaEnable(@Auth() auth: AuthContext, @Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>) {
+    const result = await this.auth.mfaEnable(auth, body.code);
+    this.realtime.disconnectUser(auth.userId, auth.sessionId);
+    return result;
+  }
+
+  @ClientAllowed()
+  @RequireRecentAuth()
+  @Post('mfa/disable')
+  @HttpCode(200)
+  mfaDisable(@Auth() auth: AuthContext) {
+    return this.auth.mfaDisable(auth);
+  }
+
+  @ClientAllowed()
+  @RequireRecentAuth()
+  @Post('mfa/recovery-codes')
+  @HttpCode(200)
+  regenerateRecoveryCodes(@Auth() auth: AuthContext) {
+    return this.auth.regenerateRecoveryCodes(auth);
+  }
+
+  // ───────── sessions (devices) ─────────
+
+  @ClientAllowed()
+  @Get('sessions')
+  sessions(@Auth() auth: AuthContext) {
+    return this.auth.listSessions(auth.organizationId, auth.userId, auth.sessionId);
+  }
+
+  @ClientAllowed()
+  @Post('sessions/revoke-others')
+  @HttpCode(200)
+  async revokeOthers(@Auth() auth: AuthContext) {
+    const result = await this.auth.revokeOtherSessions(auth);
+    this.realtime.disconnectUser(auth.userId, auth.sessionId);
+    return result;
+  }
+
+  @ClientAllowed()
+  @Post('sessions/:id/revoke')
+  @HttpCode(200)
+  async revokeSession(@Auth() auth: AuthContext, @Param('id') id: string) {
+    await this.auth.revokeSession(auth, id);
+    this.realtime.disconnectSession(id);
     return { ok: true };
   }
 

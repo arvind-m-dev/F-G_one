@@ -13,6 +13,7 @@
 | Directory & profiles | ✅ | List/grid, department filter, search, reporting line |
 | My profile | ✅ | Name, display name, pronouns, phone, timezone, avatar colour/photo URL, birthday privacy, password change |
 | Settings | ✅ | Theme, accent, text size, sidebar, density, Enter-to-send, time format |
+| Security (Settings) | ✅ | Two-step verification (authenticator app, QR code, 10 recovery codes shown once, replace codes, turn off unless Super Admin), signed-in devices with sign out one or all others, confirm-it-is-you dialog for sensitive actions. Sign-in asks for the code when it is on. |
 | ⌘K command palette | ✅ | People, channels, messages, navigation, theme |
 | Attendance | ✅ | Check in with Office/Home/Client site and a note, start/end breaks, check out (confirmed), live worked time and a day bar, late flag from policy, history with 7/30/90-day summary. Managers see their direct reports, HR/Admin see everyone. Times use the organization's time zone. |
 | Announcements | ✅ | Editorial feed, categories, search, reader, "I've read this" confirmations, banner for pending confirmations |
@@ -45,5 +46,10 @@
 | Session auth, invites, reset, lockout, CSRF origin check, rate limiting | ✅ (rate limiting uses the real client IP via `TRUST_PROXY`; verify on Render) |
 | Recent accounts on login (device-local) | ✅ |
 | Organization isolation | ✅ tested |
+| Permission engine (scoped grants, extra roles, ALLOW/DENY overrides, resolved per request) | ✅ backend only; the role editor UI arrives in Phase 4 |
+| Super Admin authority (flag, limit 1–4, nominate/accept/remove, last-admin protection) | ✅ API and tests; the Super Admins page arrives in Phase 3. Employees list shows a Super Admin badge. |
+| Admin device controls (list an employee's devices, sign them out everywhere) | ✅ API and tests; the buttons arrive with the Phase 3 user management screens. |
+| Super Admin requires two-step verification | ✅ Authority is paused until it is on; Settings → Security explains this to the Super Admin. |
+| Client accounts default-denied; suspended and archived statuses | ✅ enforced; client portal (5b) and suspend actions (3) not built |
 | Realtime with reconnection | ✅ Socket.IO with automatic reconnect and an indicator in the rail |
 | File storage, email notifications, notification inbox | ⬜ |

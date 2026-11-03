@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased: Super Admin control panel (branch `super-admin`)
+### Added (Phase 1, docs only)
+- `AUTH_AND_RBAC.md` (current-state audit), `SUPER_ADMIN_ARCHITECTURE.md` (target design), `SUPER_ADMIN_IMPLEMENTATION_PLAN.md` (phases 2a–8). No code changes.
+### Added (Phase 2a, permission engine)
+- Scoped permission grants per role (`RoleGrant`), additional roles per user (`UserRole`) and per-user ALLOW/DENY overrides. Explicit deny always wins; default deny.
+- Permission catalogue with modules, actions, supported scopes, plain-language help and sensitive flags (`@fg/shared` `authz.ts`).
+- `/auth/me` returns `grants`; `/roles` returns grants and the catalogue.
+### Added (Phase 2b, Super Admin authority)
+- Super Admin is a protected flag, not a role. Up to `settings.security.superAdminLimit` (max 4, pending invitations count). Nominate, accept (nominee signs in and confirms their password), revoke and remove endpoints, all password-confirmed and audited. The last active Super Admin cannot be removed, even by concurrent requests.
+- Account types (internal, client) and the suspended and archived statuses. Client accounts are blocked from internal routes and the realtime socket.
+### Added (Phase 2c, two-step verification, re-authentication and devices)
+- Two-step verification with any authenticator app (TOTP, RFC 6238) and 10 single-use recovery codes. Settings → Security turns it on with a QR code, shows recovery codes once, replaces them, or turns it off.
+- Sign-in asks for the code (or a recovery code) when it is on. The password-only half session can do nothing else, expires after 10 minutes, and is discarded after 5 wrong codes.
+- Re-authentication for sensitive actions (`@RequireRecentAuth`, 10 minutes). The web app asks for the password and code, then retries.
+- Signed-in devices in Settings → Security: sign out one device or all others. Admins can sign an employee out everywhere (`/employees/:id/sessions/revoke`).
+- Signing out, revoking a session, changing or resetting a password and enabling two-step verification close the affected live (socket) connections.
+### Security (Phase 2c)
+- Super Admin authority is active only with two-step verification on. Accepting a nomination requires it, and a Super Admin cannot turn it off.
+- Super Admin actions need a recent sign-in or re-authentication.
+- Authenticator secrets are encrypted at rest. Each code can be used once, enforced with a conditional write so two simultaneous requests cannot both use it.
+### Security
+- Re-issuing an activation link now requires authority over the account. Before this, HR could obtain the link for a pending higher-rank account.
+- Only Super Admins can manage Super Admin accounts or change security settings.
+### Changed (Phase 2b)
+- The **Super Admin role is renamed Administrator** (same permissions, assignable by Super Admins). Existing holders keep everything and gain the Super Admin flag.
+### Changed
+- Effective permissions are resolved per request from grants, so changes apply without signing out. Legacy permission checks are derived from grants with identical results for every existing role.
+- Attendance visibility and HR recipient lookup use the new engine.
+- `Role.permissions` column deprecated (no longer read or written).
+
 ## Unreleased: UI redesign (branch `ui-redesign`)
 ### Added (HR round)
 - Leave: types with yearly allowances, balances, requests with working-day counting, overlap and balance checks, cancellation, manager/HR approvals, privacy-aware "Who's away" calendar, admin requests/calendar/types.

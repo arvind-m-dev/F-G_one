@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { PERMISSION_LABELS } from '@fg/shared';
+import { legacyFromGrants, mergeGrants, PERMISSION_CATALOG, PERMISSION_LABELS, PERMISSION_MODULES, SCOPE_LABELS, type Scope } from '@fg/shared';
 import { Auth, AuthContext } from '../common/auth-context';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,15 +13,21 @@ export class RolesController {
     const roles = await this.prisma.role.findMany({
       where: { organizationId: auth.organizationId },
       orderBy: { rank: 'desc' },
-      include: { _count: { select: { users: { where: { status: { not: 'DEACTIVATED' } } } } } },
+      include: { grants: { select: { permission: true, scope: true } }, _count: { select: { users: { where: { status: { not: 'DEACTIVATED' } } } } } },
     });
     return {
-      roles: roles.map(({ _count, ...r }) => ({
+      roles: roles.map(({ _count, permissions: _legacyColumn, grants, ...r }) => ({
         ...r,
+        grants,
+        /** Legacy flat permissions derived from the grants (the column is deprecated). */
+        permissions: legacyFromGrants(mergeGrants(grants.map((g) => ({ permission: g.permission, scope: g.scope as Scope })))),
         memberCount: _count.users,
-        assignable: auth.roleKey === 'super_admin' || r.rank < auth.rank,
+        assignable: auth.isSuperAdmin || r.rank < auth.rank,
       })),
       permissionLabels: PERMISSION_LABELS,
+      catalog: PERMISSION_CATALOG,
+      modules: PERMISSION_MODULES,
+      scopeLabels: SCOPE_LABELS,
     };
   }
 }

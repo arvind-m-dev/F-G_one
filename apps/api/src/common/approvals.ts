@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { hasPermission, PERMISSIONS } from '@fg/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AuthContext } from './auth-context';
+import { usersWithLegacyPermission } from './authz';
 
 /**
  * Who may decide on someone's leave or attendance correction:
@@ -29,12 +30,8 @@ export function deciderScope(auth: AuthContext, perm: 'leave' | 'attendance') {
 }
 
 /** Active HR/admin users (employees.manage), excluding someone. */
-export async function hrUsers(prisma: PrismaService, organizationId: string, excludeId: string) {
-  const hr = await prisma.user.findMany({
-    where: { organizationId, status: 'ACTIVE', id: { not: excludeId }, role: { permissions: { has: PERMISSIONS.EMPLOYEES_MANAGE } } },
-    select: { id: true },
-  });
-  return hr.map((h) => h.id);
+export function hrUsers(prisma: PrismaService, organizationId: string, excludeId: string) {
+  return usersWithLegacyPermission(prisma, organizationId, PERMISSIONS.EMPLOYEES_MANAGE, excludeId);
 }
 
 /** People who should be told about a new request: the requester's manager, or HR if there is none. */

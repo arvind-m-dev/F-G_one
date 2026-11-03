@@ -6,6 +6,8 @@ export const employeeSelect = {
   id: true,
   email: true,
   status: true,
+  accountType: true,
+  isSuperAdmin: true,
   firstName: true,
   lastName: true,
   displayName: true,

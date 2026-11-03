@@ -28,6 +28,8 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { NotificationsService } from './notifications/notifications.service';
 import { OrganizationController } from './organization/organization.controller';
 import { PrismaModule } from './prisma/prisma.service';
+import { SuperAdminsController } from './super-admins/super-admins.controller';
+import { SuperAdminsService } from './super-admins/super-admins.service';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { RolesController } from './roles/roles.controller';
 import { SearchController } from './search/search.controller';
@@ -56,6 +58,7 @@ import { SearchController } from './search/search.controller';
     HolidaysController,
     LeaveController,
     ApprovalsController,
+    SuperAdminsController,
   ],
   providers: [
     AuditService,
@@ -67,6 +70,7 @@ import { SearchController } from './search/search.controller';
     AttendanceService,
     NotificationsService,
     LeaveService,
+    SuperAdminsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
   ],

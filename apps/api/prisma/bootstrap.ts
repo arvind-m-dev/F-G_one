@@ -8,7 +8,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { DEFAULT_ROLE_DEFINITIONS, organizationSettingsSchema } from '@fg/shared';
+import { DEFAULT_ROLE_DEFINITIONS, DEFAULT_ROLE_GRANTS, organizationSettingsSchema } from '@fg/shared';
 
 const need = (k: string) => {
   const v = process.env[k];
@@ -33,8 +33,9 @@ export async function bootstrap(prisma: PrismaClient) {
   for (const r of DEFAULT_ROLE_DEFINITIONS) {
     await prisma.role.upsert({
       where: { organizationId_key: { organizationId: org.id, key: r.key } },
-      update: { permissions: r.permissions, rank: r.rank, isSystem: true },
-      create: { organizationId: org.id, key: r.key, name: r.name, description: r.description, permissions: r.permissions, rank: r.rank, isSystem: true },
+      // Re-running bootstrap restores the system roles' default grants.
+      update: { rank: r.rank, isSystem: true, grants: { deleteMany: {}, create: DEFAULT_ROLE_GRANTS[r.key] } },
+      create: { organizationId: org.id, key: r.key, name: r.name, description: r.description, rank: r.rank, isSystem: true, grants: { create: DEFAULT_ROLE_GRANTS[r.key] } },
     });
   }
   for (const name of ['general', 'announcements']) {
@@ -52,10 +53,10 @@ export async function bootstrap(prisma: PrismaClient) {
   ]) {
     await prisma.leaveType.upsert({ where: { organizationId_code: { organizationId: org.id, code: t.code } }, update: {}, create: { ...t, organizationId: org.id } });
   }
-  const role = await prisma.role.findUniqueOrThrow({ where: { organizationId_key: { organizationId: org.id, key: 'super_admin' } } });
+  const role = await prisma.role.findUniqueOrThrow({ where: { organizationId_key: { organizationId: org.id, key: 'administrator' } } });
   if (await prisma.user.findUnique({ where: { email } })) throw new Error(`${email} already exists`);
   const user = await prisma.user.create({
-    data: { organizationId: org.id, email, firstName: need('ADMIN_FIRST'), lastName: need('ADMIN_LAST'), roleId: role.id, status: 'INVITED' },
+    data: { organizationId: org.id, email, firstName: need('ADMIN_FIRST'), lastName: need('ADMIN_LAST'), roleId: role.id, isSuperAdmin: true, status: 'INVITED' },
   });
   const token = randomBytes(32).toString('base64url');
   await prisma.invitation.create({

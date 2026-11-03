@@ -51,6 +51,26 @@ Channel 1─* Message 1─* Message (thread replies), 1─* MessageReaction
 
 Migration `…_attendance_announcements_notifications` also adds the new Home widgets to existing organizations' defaults.
 
+## Added (Super Admin Phase 2a: permission engine)
+* `Role` gains `color`, `icon`, `templateKey` and `archivedAt`. `Role.permissions` is **deprecated**: it is no longer read or written and is dropped in Phase 4.
+* `RoleGrant { roleId, permission, scope }` is unique per (role, permission). `permission` is a key from `PERMISSION_CATALOG` in `@fg/shared`.
+* `UserRole { userId, roleId, assignedById }` holds additional roles on top of `User.roleId`.
+* `UserPermissionOverride { organizationId, userId, permission, effect ALLOW|DENY, scope?, reason, grantedById }` is unique per (user, permission).
+* Enums: `PermissionScope` (CLIENT, OWN, ASSIGNED, PROJECT, TEAM, DEPARTMENT, ORG; the declaration order is the widening order) and `OverrideEffect`.
+* Migration `20261103091117_permission_engine` backfills `RoleGrant` from `Role.permissions` using `LEGACY_PERMISSION_MAP`, keeping the widest scope. It was verified on the dev database: 8 of 8 roles round-trip to identical permissions.
+
+## Added (Super Admin Phase 2b: authority)
+* `User.isSuperAdmin` (bool) is the system authority, changed only by `/super-admins` and the operator CLIs. `User.accountType` is `INTERNAL | CLIENT`.
+* `UserStatus` adds `SUSPENDED` (reversible) and `ARCHIVED`. Only `ACTIVE` users can sign in or keep a session.
+* `SuperAdminInvitation { organizationId, userId (nominee), invitedById, tokenHash, expiresAt, acceptedAt, revokedAt }`
+* `settings.security.superAdminLimit` (1–4, default 4) in the organization settings JSON
+* Migration `20261103095255_super_admin_authority` sets `isSuperAdmin` for every holder of the old `super_admin` role, then renames that role to the assignable **Administrator** (`administrator`, rank 90, grants unchanged). Verified on the dev database: 2 of 2 former Super Admins were flagged.
+
+## Added (Super Admin Phase 2c: two-step verification and sessions)
+* `User.mfaSecretEnc` (AES-256-GCM, key `MFA_ENCRYPTION_KEY`), `mfaPendingSecretEnc` (enrolment in progress), `mfaEnabledAt`, `mfaRecoveryCodes` (sha256 of unused codes) and `mfaLastStep` (last accepted TOTP step, so no code works twice).
+* `Session.mfaPending` (password accepted, code still owed), `mfaFailures` and `authenticatedAt` (last sign-in or re-authentication, used by `@RequireRecentAuth`).
+* Migration `20261103102615_mfa_and_sessions` is additive. Existing sessions get `authenticatedAt = now()` and `mfaPending = false`.
+
 ## Planned models (added by later milestones, no changes to existing tables)
 
 | Milestone | Models |

@@ -10,12 +10,24 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 ## Auth
 | Method | Path | Notes |
 |---|---|---|
-| 🌐 POST | `/auth/login` | `{ email, password }`. Limit 10/min. Locks for 15 min after 5 failures. Generic error message. |
-| POST | `/auth/logout` | Deletes the server session |
-| GET | `/auth/me` | `{ user, permissions, role, preferences, organization{branding, settings} }` |
+| 🌐 POST | `/auth/login` | `{ email, password }`. Limit 10/min. Locks for 15 min after 5 failures. Generic error message. Returns `{ ok, mfaRequired }`. With `mfaRequired: true` the cookie is a 10-minute half session that can only call `/auth/mfa/verify` and `/auth/logout`; everything else returns 401 `code: MFA_REQUIRED`. |
+| 🌐 POST | `/auth/mfa/verify` | `{ code }`: a 6-digit authenticator code or a recovery code. Replaces the half session with a new full session (new token). A code is never accepted twice. Five wrong codes discard the half session (401). Each failure is audited as `auth.mfa_failed`. |
+| POST | `/auth/logout` | Deletes the server session and closes its live connections |
+| GET | `/auth/me` | `{ user, permissions, grants, role, preferences, organization{branding, settings} }`. `grants` maps permission → widest scope (e.g. `{"attendance.view":"TEAM"}`). `permissions` are the legacy flat keys derived from it. Also `isSuperAdmin`, `accountType` (`INTERNAL` or `CLIENT`), `mfaEnabled` and `superAdminNeedsMfa` (holds the flag, but the authority is off until two-step verification is on). |
 | 🌐 POST | `/auth/forgot-password` | `{ email }`. Always returns 200 (no enumeration). Limit 5 per 15 min. |
 | 🌐 POST | `/auth/reset-password` | `{ token, password }`. Single use, 30-min expiry. Signs out all sessions. |
-| POST | `/auth/change-password` | `{ currentPassword, newPassword }`. Signs out other sessions. |
+| POST | `/auth/change-password` | `{ currentPassword, newPassword }`. Signs out other sessions and closes their live connections. |
+| POST | `/auth/reauth` | `{ password, code? }`. `code` is required when two-step verification is on. Marks the session as recently authenticated. Limit 10 per 15 min. Failures are audited as `auth.reauth_failed`. |
+| GET | `/auth/mfa` | `{ enabled, enabledAt, recoveryCodesLeft, required }`. `required` is true for Super Admins. |
+| POST | `/auth/mfa/setup` | 🔒 recent auth. Starts enrolment: `{ secret, otpauthUrl, qrSvg }`. Nothing changes until a code is confirmed. 409 if already on. |
+| POST | `/auth/mfa/enable` | `{ code }`. Confirms the first code and turns it on. Returns `{ recoveryCodes }` (10, shown once). Signs out other devices. |
+| POST | `/auth/mfa/disable` | 🔒 recent auth. 403 for Super Admins. |
+| POST | `/auth/mfa/recovery-codes` | 🔒 recent auth. Replaces the recovery codes and returns the new ones once. |
+| GET | `/auth/sessions` | Your signed-in devices: `{ id, ip, userAgent, createdAt, lastSeenAt, expiresAt, current }[]` |
+| POST | `/auth/sessions/:id/revoke` | Signs out one of your other devices and closes its live connection. 404 for anyone else's session. |
+| POST | `/auth/sessions/revoke-others` | Signs out every other device. Returns `{ count }`. |
+
+🔒 **recent auth** (`@RequireRecentAuth`, 10 minutes): the session must have signed in or called `/auth/reauth` within the window, otherwise 403 with `code: REAUTH_REQUIRED`. The web app then asks for the password (and code) and retries.
 | 🌐 GET | `/auth/invitations/:token` | Validates an invite: `{ email, firstName, organization }` |
 | 🌐 POST | `/auth/accept-invitation` | `{ token, password }`. Activates the account, auto-joins default channels and starts a session. |
 
@@ -37,15 +49,40 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 | POST | `/employees/:id/activate` | `employees.manage` | |
 | POST | `/employees/:id/invite` | `employees.manage` | Re-issues the invite and revokes earlier links |
 
+Admin device controls (Phase 2c), with the same rank and Super Admin authority checks as editing:
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/employees/:id/sessions` | `employees.manage`. The employee's signed-in devices. |
+| POST | `/employees/:id/sessions/revoke` | `employees.manage` + 🔒 recent auth. Signs them out everywhere and closes their live connections. Audited as `employee.sessions_revoked`. |
+
 ## Departments · Roles · Organization
 | Method | Path | Permission |
 |---|---|---|
 | GET | `/departments` | any |
 | POST / PATCH / DELETE | `/departments[/:id]` | `departments.manage` |
-| GET | `/roles` | any (`assignable` flag per role) |
+| GET | `/roles` | any. Each role has `grants[{permission, scope}]`, derived `permissions`, `assignable`, `archivedAt`, `color`, `icon`. The response also carries `catalog` (permission catalogue with supported scopes, labels, help and `sensitive`), `modules` and `scopeLabels`. |
 | 🌐 GET | `/public/branding` | Login-page branding for `DEFAULT_ORG_SLUG` |
 | GET | `/organization` | any |
 | PATCH | `/organization` | `settings.manage`. `{ name?, logoUrl?, primaryColor?, secondaryColor?, settings?: deep-partial }`, deep-merged and re-validated. |
+
+## Super Admins (Phase 2b, 2c)
+Super Admin is an authority flag (`User.isSuperAdmin`), not a role. Every route below except `accept` requires it (`@RequireSuperAdmin`); anyone else gets 403. **The authority is active only while two-step verification is on**; a flagged user without it gets 403 `code: MFA_SETUP_REQUIRED`. Every mutating route also needs 🔒 recent auth. Other tenants' records return 404. Sensitive actions take the caller's current `password`; a wrong password returns 403 and is audited as `superadmin.reauth_failed`. Concurrent changes run in SERIALIZABLE transactions, and a conflict returns 409.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/super-admins` | `{ limit, hardLimit, used, superAdmins[], pending[] }`. `used` = active Super Admins + pending invitations. |
+| POST | `/super-admins/invitations` | `{ userId, password }`. The nominee must be an active internal user. Returns 409 when `used >= limit`. Emails a 72-hour link and returns `{ id, expiresAt, url }`. The link only works for the nominee, signed in, with their own password. |
+| POST | `/super-admins/invitations/:id/revoke` | Frees the slot |
+| POST | `/super-admins/invitations/accept` | **Nominee** (any signed-in internal user): `{ token, password }`. Returns 404 for anyone else's, used, revoked or expired links. Returns 403 `MFA_SETUP_REQUIRED` until the nominee has two-step verification on. The limit is re-checked. |
+| POST | `/super-admins/:userId/remove` | `{ password }`. Returns 403 when targeting yourself and 409 for the last active Super Admin. Takes effect on the target's next request. |
+
+Related rules:
+* Only a Super Admin can edit, deactivate or re-issue the invite of a Super Admin account.
+* Deactivating a Super Admin requires removing the authority first.
+* `POST /employees/:id/invite` now applies the same rank and Super Admin checks as editing. This closes a gap where HR could obtain the activation link for a pending higher-rank account.
+* Changing `settings.security` (`superAdminLimit`, 1–4) requires a Super Admin.
+* **Client accounts** (`accountType = CLIENT`) are denied on every route except `GET /auth/me`, `POST /auth/logout` and `POST /auth/change-password` (`@ClientAllowed`), and they cannot open a realtime socket.
 
 ## Dashboard · Analytics · Search · Audit
 | Method | Path | Permission |

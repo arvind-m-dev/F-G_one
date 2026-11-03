@@ -4,6 +4,8 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public issues?: { path: string; message: string }[],
+    /** Machine-readable reason, e.g. REAUTH_REQUIRED, MFA_REQUIRED, MFA_SETUP_REQUIRED. */
+    public code?: string,
   ) {
     super(message);
   }
@@ -27,7 +29,7 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
     credentials: 'same-origin',
     signal: opts.signal,
   });
-  if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('/auth/login')) {
+  if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('/auth/login') && !path.startsWith('/auth/mfa/verify')) {
     const here = window.location.pathname;
     if (!['/login', '/forgot-password', '/reset-password'].includes(here) && !here.startsWith('/invite')) {
       try {
@@ -42,7 +44,7 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
     const msg = Array.isArray(data?.message) ? data.message[0] : (data?.message ?? res.statusText);
-    throw new ApiError(res.status, typeof msg === 'string' ? msg : 'Request failed', data?.issues);
+    throw new ApiError(res.status, typeof msg === 'string' ? msg : 'Request failed', data?.issues, typeof data?.code === 'string' ? data.code : undefined);
   }
   return data as T;
 }

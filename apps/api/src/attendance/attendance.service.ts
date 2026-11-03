@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, WorkLocation } from '@prisma/client';
 import { hasPermission, parseOrganizationSettings, PERMISSIONS, RT, type CorrectionInput } from '@fg/shared';
+import { userScopeWhere } from '../common/authz';
 import { approversFor, assertCanDecide, deciderScope } from '../common/approvals';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
@@ -174,11 +175,9 @@ export class AttendanceService {
     };
   }
 
-  /** Who the caller may see: everyone (attendance.view_all) or their direct reports (attendance.view_team). */
+  /** Who the caller may see, from the `attendance.view` grant: ORG = everyone, TEAM = direct reports. */
   private async scope(auth: AuthContext): Promise<Prisma.UserWhereInput> {
-    if (hasPermission(auth.permissions, PERMISSIONS.ATTENDANCE_VIEW_ALL)) return { organizationId: auth.organizationId };
-    if (hasPermission(auth.permissions, PERMISSIONS.ATTENDANCE_VIEW_TEAM)) return { organizationId: auth.organizationId, managerId: auth.userId };
-    throw new ForbiddenException('You do not have permission to view team attendance');
+    return userScopeWhere(auth, 'attendance.view', 'You do not have permission to view team attendance');
   }
 
   private async assertCanView(auth: AuthContext, userId: string) {

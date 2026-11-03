@@ -52,7 +52,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
 };
 
 export const SYSTEM_ROLES = {
-  SUPER_ADMIN: 'super_admin',
+  /** Ordinary assignable role. Super Admin authority is a separate flag (User.isSuperAdmin). */
+  ADMINISTRATOR: 'administrator',
   HR_ADMIN: 'hr_admin',
   MANAGER: 'manager',
   EMPLOYEE: 'employee',
@@ -89,7 +90,7 @@ export const DEFAULT_ROLE_DEFINITIONS: {
   permissions: Permission[];
   rank: number;
 }[] = [
-  { key: 'super_admin', name: 'Super Admin', description: 'Full control of the workspace', permissions: ALL_PERMISSIONS, rank: 100 },
+  { key: 'administrator', name: 'Administrator', description: 'Runs company administration. Super Admin authority is separate.', permissions: ALL_PERMISSIONS, rank: 90 },
   { key: 'hr_admin', name: 'Admin / HR', description: 'People operations and company administration', permissions: HR_PERMS, rank: 75 },
   { key: 'manager', name: 'Manager', description: 'Leads a team; approves leave and reviews updates', permissions: MANAGER_PERMS, rank: 50 },
   { key: 'employee', name: 'Employee', description: 'Standard workspace member', permissions: EMPLOYEE_PERMS, rank: 10 },

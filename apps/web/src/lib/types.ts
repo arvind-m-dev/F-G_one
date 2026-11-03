@@ -18,7 +18,10 @@ export interface Person {
 
 export interface Employee extends Person {
   email: string;
-  status: 'INVITED' | 'ACTIVE' | 'DEACTIVATED';
+  status: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED' | 'ARCHIVED';
+  accountType: 'INTERNAL' | 'CLIENT';
+  /** System authority, separate from the role. */
+  isSuperAdmin: boolean;
   displayName: string | null;
   employeeCode?: string | null;
   phone: string | null;
@@ -39,7 +42,15 @@ export interface Employee extends Person {
 export interface Me {
   user: Employee;
   permissions: string[];
+  /** Effective scoped grants: permission → widest scope (ORG, TEAM, ...). */
+  grants: Record<string, string>;
   role: { key: string; rank: number };
+  isSuperAdmin: boolean;
+  accountType: 'INTERNAL' | 'CLIENT';
+  /** Two-step verification is on for this account. */
+  mfaEnabled: boolean;
+  /** Holds the Super Admin flag, but the authority stays off until two-step verification is on. */
+  superAdminNeedsMfa: boolean;
   preferences: UserPreferences;
   organization: {
     id: string;

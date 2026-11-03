@@ -81,9 +81,14 @@ export class EmployeesService {
     return { ...toEmployee(rest, { privileged: privileged || id === auth.userId, online: this.realtime.isOnline(id) }), reports };
   }
 
-  /** Ensures the actor may manage someone holding `targetRank`, and may assign `roleId`. */
-  private async assertRoleAuthority(auth: AuthContext, opts: { targetRank?: number; roleId?: string }) {
-    const isSuper = auth.roleKey === 'super_admin';
+  /**
+   * Ensures the actor may manage the target and may assign `roleId`.
+   * - Only a Super Admin may manage a Super Admin.
+   * - Otherwise the target's role must rank below the actor's (Super Admins are exempt).
+   */
+  private async assertRoleAuthority(auth: AuthContext, opts: { targetRank?: number; targetIsSuperAdmin?: boolean; roleId?: string }) {
+    const isSuper = auth.isSuperAdmin;
+    if (opts.targetIsSuperAdmin && !isSuper) throw new ForbiddenException('Only a Super Admin can manage a Super Admin');
     if (opts.targetRank !== undefined && !isSuper && opts.targetRank >= auth.rank) {
       throw new ForbiddenException('You cannot manage a user with an equal or higher role');
     }
@@ -145,8 +150,10 @@ export class EmployeesService {
 
   /** Creates a single-use invitation. The link is returned to the (authorized) admin so it can be shared even without SMTP. */
   async issueInvitation(auth: AuthContext, userId: string, sendEmail = true) {
-    const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId: auth.organizationId }, include: { organization: true } });
+    const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId: auth.organizationId }, include: { organization: true, role: true } });
     if (!user) throw new NotFoundException('Employee not found');
+    // The invite link activates the account, so only someone allowed to manage the account may see it.
+    await this.assertRoleAuthority(auth, { targetRank: user.role.rank, targetIsSuperAdmin: user.isSuperAdmin });
     if (user.status !== 'INVITED') throw new BadRequestException('This employee has already activated their account');
     await this.prisma.invitation.updateMany({ where: { userId, acceptedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     const token = newToken();
@@ -174,7 +181,7 @@ export class EmployeesService {
 
   async update(auth: AuthContext, id: string, input: UpdateEmployeeInput) {
     const target = await this.loadTarget(auth, id);
-    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank });
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
     if (input.roleId && input.roleId !== target.roleId) {
       if (id === auth.userId) throw new ForbiddenException('You cannot change your own role');
       await this.assertRoleAuthority(auth, { roleId: input.roleId });
@@ -205,7 +212,11 @@ export class EmployeesService {
   async setActive(auth: AuthContext, id: string, active: boolean) {
     if (id === auth.userId) throw new ForbiddenException('You cannot change the status of your own account');
     const target = await this.loadTarget(auth, id);
-    await this.assertRoleAuthority(auth, { targetRank: target.role.rank });
+    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    if (!active && target.isSuperAdmin) {
+      // Removing a Super Admin goes through the protected process (limit and last-admin checks).
+      throw new ForbiddenException('Remove their Super Admin authority first (Super Admins page)');
+    }
     if (active) {
       if (target.status !== 'DEACTIVATED') throw new BadRequestException('Employee is not deactivated');
       // Accounts that never set a password return to INVITED and need a fresh invite.
@@ -223,5 +234,26 @@ export class EmployeesService {
       await this.audit.log(auth, 'employee.deactivated', 'user', id);
     }
     return this.get(auth, id);
+  }
+
+  async listSessions(auth: AuthContext, id: string) {
+    const target = await this.loadTarget(auth, id);
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    const rows = await this.prisma.session.findMany({
+      where: { userId: id, organizationId: auth.organizationId, mfaPending: false, expiresAt: { gt: new Date() } },
+      select: { id: true, ip: true, userAgent: true, createdAt: true, lastSeenAt: true, expiresAt: true },
+      orderBy: { lastSeenAt: 'desc' },
+    });
+    return rows.map((r) => ({ ...r, current: r.id === auth.sessionId }));
+  }
+
+  async revokeSessions(auth: AuthContext, id: string) {
+    if (id === auth.userId) throw new BadRequestException('To sign out your own devices, use your security settings');
+    const target = await this.loadTarget(auth, id);
+    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    const { count } = await this.prisma.session.deleteMany({ where: { userId: id, organizationId: auth.organizationId } });
+    this.realtime.disconnectUser(id);
+    await this.audit.log(auth, 'employee.sessions_revoked', 'user', id, { count });
+    return { count };
   }
 }
