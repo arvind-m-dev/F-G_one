@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased: admin overview and leave counts (branch `admin-counts-demo-mfa`)
+### Added
+- **Overview "Attendance today"**: checked in of total, late count, split bar and tiles (working, on a break, checked out, on leave, not checked in) linking to the filtered attendance board, and who has not checked in yet.
+- **Admin leave counts**: tiles for waiting for approval, out today, starting in 7 days, approved and declined. New `GET /leave/requests/summary`.
+- People in recent administrative activity and in "Waiting for a password" open the person's admin page.
+- **Demo two-step code** (remove before go-live): with `DEMO_MFA_CODE` (6 digits) and `DEMO_MFA_EMAILS` set, the listed accounts accept that code at sign-in and re-auth, and the sign-in screen shows it after a correct password. Other accounts are unaffected.
+- `MFA_BYPASS_LOCAL=true` skips the two-step code at sign-in and re-auth in local development. The API refuses to start with it in production.
+
 ## Unreleased: Super Admin Phase 3, user management (branch `phase-3-user-management`)
 ### Added
 - **Super Admins page** `/admin/super-admins`: limit and places used (change the limit), each Super Admin with two-step status and whether the authority works, pending nominations (withdraw), nominate with password and a one-time link, remove authority. Rules explained in plain language.

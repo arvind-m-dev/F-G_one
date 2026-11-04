@@ -48,10 +48,11 @@ export class AuthController {
   @HttpCode(200)
   @Throttle({ default: { limit: LOGIN_LIMIT, ttl: 60_000 } })
   async login(@Body(new ZodPipe(loginSchema)) body: z.infer<typeof loginSchema>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { token, expiresAt, mfaRequired } = await this.auth.login(body.email, body.password, meta(req));
+    const { token, expiresAt, mfaRequired, demoMfaCode } = await this.auth.login(body.email, body.password, meta(req));
     setSessionCookie(res, token, expiresAt);
     // With two-step verification on, this cookie only allows /auth/mfa/verify and sign out.
-    return { ok: true, mfaRequired };
+    // demoMfaCode is only set for listed demo accounts after a correct password (DEMO_MFA_CODE).
+    return { ok: true, mfaRequired, ...(demoMfaCode ? { demoMfaCode } : {}) };
   }
 
   /** Second sign-in step: an authenticator or recovery code. Issues a new session cookie. */

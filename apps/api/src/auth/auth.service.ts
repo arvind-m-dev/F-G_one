@@ -64,15 +64,15 @@ export class AuthService {
     if (user.status !== 'ACTIVE') throw new ForbiddenException('This account is not active. Contact your administrator.');
     if (user.organization.status !== 'ACTIVE') throw new ForbiddenException('This workspace is suspended.');
 
-    if (user.mfaEnabledAt && user.mfaSecretEnc) {
+    if (user.mfaEnabledAt && user.mfaSecretEnc && !env().MFA_BYPASS_LOCAL) {
       // Password is right; the second step is still owed. Failed-login counters reset only after it.
       const pending = await this.createSession(user.id, user.organizationId, 0, meta, { mfaPendingMinutes: MFA_PENDING_TTL_MIN });
-      return { ...pending, mfaRequired: true };
+      return { ...pending, mfaRequired: true, demoMfaCode: this.isDemoMfaAccount(user.email) ? env().DEMO_MFA_CODE : null };
     }
     await this.prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } });
     const token = await this.createSession(user.id, user.organizationId, parseOrganizationSettings(user.organization.settings).auth.sessionTtlHours, meta);
     await this.audit.log({ organizationId: user.organizationId, userId: user.id, ip: meta.ip }, 'auth.login', 'user', user.id);
-    return { ...token, mfaRequired: false };
+    return { ...token, mfaRequired: false, demoMfaCode: null };
   }
 
   async createSession(userId: string, organizationId: string, ttlHours: number, meta: ClientMeta, opts: { mfaPendingMinutes?: number } = {}) {
@@ -227,11 +227,18 @@ export class AuthService {
 
   // ───────── two-step verification ─────────
 
+  /** Demo accounts (DEMO_MFA_EMAILS) may use the fixed DEMO_MFA_CODE. Remove both env vars before go-live. */
+  isDemoMfaAccount(email: string) {
+    const e = env();
+    return !!e.DEMO_MFA_CODE && e.DEMO_MFA_EMAILS.includes(email.toLowerCase());
+  }
+
   /** Checks an authenticator code (no replay) or consumes a recovery code. Returns how the user proved it, or null. */
   private async checkSecondFactor(userId: string, code: string): Promise<'totp' | 'recovery' | null> {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { mfaSecretEnc: true, mfaLastStep: true, mfaEnabledAt: true } });
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, mfaSecretEnc: true, mfaLastStep: true, mfaEnabledAt: true } });
     if (!user.mfaEnabledAt || !user.mfaSecretEnc) return null;
     const trimmed = code.trim();
+    if (this.isDemoMfaAccount(user.email) && trimmed.replace(/\s/g, '') === env().DEMO_MFA_CODE) return 'totp';
     if (/^\d{6}$/.test(trimmed.replace(/\s/g, ''))) {
       const step = verifyTotp(decryptSecret(user.mfaSecretEnc), trimmed, user.mfaLastStep);
       if (step === null) return null;
@@ -318,7 +325,7 @@ export class AuthService {
       await this.audit.log(auth, 'auth.reauth_failed', 'user', auth.userId, { reason: 'password' });
       throw new BadRequestException('That password is not correct');
     }
-    if (auth.mfaEnabled) {
+    if (auth.mfaEnabled && !env().MFA_BYPASS_LOCAL) {
       if (!code) throw new BadRequestException('Enter the code from your authenticator app');
       if (!(await this.checkSecondFactor(auth.userId, code))) {
         await this.audit.log(auth, 'auth.reauth_failed', 'user', auth.userId, { reason: 'code' });

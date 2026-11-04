@@ -41,6 +41,12 @@ export class LeaveController {
     return this.leave.preview(auth, body);
   }
 
+  /** Request counts for the HR leave page. HR only (checked in the service). */
+  @Get('requests/summary')
+  summary(@Auth() auth: AuthContext) {
+    return this.leave.summary(auth);
+  }
+
   @Get('requests')
   list(@Auth() auth: AuthContext, @Query(new ZodPipe(leaveListSchema)) q: z.infer<typeof leaveListSchema>) {
     return this.leave.list(auth, q.scope, q.status);

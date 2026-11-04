@@ -25,6 +25,7 @@ function LoginFlow() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [demoCode, setDemoCode] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
   const pwRef = useRef<HTMLInputElement>(null);
@@ -55,8 +56,9 @@ function LoginFlow() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api<{ mfaRequired?: boolean }>('/auth/login', { body: { email, password } });
+      const res = await api<{ mfaRequired?: boolean; demoMfaCode?: string }>('/auth/login', { body: { email, password } });
       if (res.mfaRequired) {
+        setDemoCode(res.demoMfaCode ?? null);
         setPassword('');
         setBusy(false);
         setStep('code');
@@ -206,6 +208,11 @@ function LoginFlow() {
             </span>
             <h1 className="text-xl font-semibold tracking-tight">Two-step verification</h1>
             <p className="mt-1 text-sm text-muted">{useRecovery ? 'Enter one of the recovery codes you saved. Each code works once.' : 'Open your authenticator app and enter the 6-digit code for FG One.'}</p>
+            {demoCode && !useRecovery && (
+              <p className="mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[13px]">
+                Demo account: enter <span className="font-mono font-semibold tabular-nums">{demoCode}</span> as the code.
+              </p>
+            )}
             <div className="mt-6 space-y-4">
               <Field label={useRecovery ? 'Recovery code' : 'Code'} htmlFor="code">
                 <Input

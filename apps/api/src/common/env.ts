@@ -24,6 +24,28 @@ const envSchema = z.object({
    * Changing it makes every enrolled authenticator invalid.
    */
   MFA_ENCRYPTION_KEY: z.string().optional().default(''),
+  /**
+   * Local development only: skip the two-step verification code at sign-in and re-auth.
+   * The API refuses to start if this is set while NODE_ENV=production.
+   */
+  MFA_BYPASS_LOCAL: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
+  /**
+   * Demo only, remove before go-live: a fixed two-step code (for example 123456) accepted for the
+   * accounts listed in DEMO_MFA_EMAILS, in place of the authenticator code. Both must be set.
+   */
+  DEMO_MFA_CODE: z
+    .string()
+    .optional()
+    .default('')
+    .refine((v) => v === '' || /^\d{6}$/.test(v), 'DEMO_MFA_CODE must be 6 digits'),
+  DEMO_MFA_EMAILS: z
+    .string()
+    .optional()
+    .default('')
+    .transform((v) => v.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)),
   MAIL_FROM: z.string().default('FG One <no-reply@futuristglobal.com>'),
 });
 
@@ -36,6 +58,9 @@ export function env(): Env {
     if (!parsed.success) {
       // Fail fast with a readable message rather than at first use.
       throw new Error('Invalid environment configuration:\n' + JSON.stringify(parsed.error.flatten().fieldErrors, null, 2));
+    }
+    if (parsed.data.MFA_BYPASS_LOCAL && parsed.data.NODE_ENV === 'production') {
+      throw new Error('MFA_BYPASS_LOCAL must not be set in production.');
     }
     cached = parsed.data;
   }

@@ -1,5 +1,8 @@
 'use client';
+import Link from 'next/link';
+import { PERMISSIONS } from '@fg/shared';
 import { UserAvatar } from '@/components/user-avatar';
+import { useCan } from '@/lib/session';
 import { timeAgo } from '@/lib/utils';
 
 export interface AuditEntry {
@@ -84,17 +87,32 @@ export function describeAudit(e: AuditEntry) {
 }
 
 export function AuditList({ items, compact }: { items: AuditEntry[]; compact?: boolean }) {
+  const can = useCan();
+  const canOpen = can(PERMISSIONS.EMPLOYEES_MANAGE);
   return (
     <ul className="divide-y">
       {items.map((e) => (
         <li key={e.id} className="flex items-center gap-3 px-5 py-2.5">
           {e.actor ? (
-            <UserAvatar person={{ ...e.actor, name: `${e.actor.firstName} ${e.actor.lastName}` }} size="xs" showPresence={false} />
+            canOpen ? (
+              <Link href={`/admin/employees/${e.actor.id}`} aria-label={`Open ${e.actor.firstName} ${e.actor.lastName}`} className="shrink-0 rounded-full">
+                <UserAvatar person={{ ...e.actor, name: `${e.actor.firstName} ${e.actor.lastName}` }} size="xs" showPresence={false} />
+              </Link>
+            ) : (
+              <UserAvatar person={{ ...e.actor, name: `${e.actor.firstName} ${e.actor.lastName}` }} size="xs" showPresence={false} />
+            )
           ) : (
             <span className="size-6 rounded-full bg-surface-2" />
           )}
           <p className="min-w-0 flex-1 truncate text-sm">
-            <b className="font-semibold">{e.actor ? `${e.actor.firstName} ${e.actor.lastName}` : 'System'}</b> <span className="text-muted">{describeAudit(e)}</span>
+            {e.actor && canOpen ? (
+              <Link href={`/admin/employees/${e.actor.id}`} className="font-semibold hover:underline">
+                {e.actor.firstName} {e.actor.lastName}
+              </Link>
+            ) : (
+              <b className="font-semibold">{e.actor ? `${e.actor.firstName} ${e.actor.lastName}` : 'System'}</b>
+            )}{' '}
+            <span className="text-muted">{describeAudit(e)}</span>
           </p>
           {!compact && e.ip && <span className="hidden font-mono text-xs text-muted md:block">{e.ip}</span>}
           <span className="shrink-0 text-xs text-muted" title={new Date(e.createdAt).toLocaleString()}>
