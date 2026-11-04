@@ -13,7 +13,7 @@ export class RolesController {
     const roles = await this.prisma.role.findMany({
       where: { organizationId: auth.organizationId },
       orderBy: { rank: 'desc' },
-      include: { grants: { select: { permission: true, scope: true } }, _count: { select: { users: { where: { status: { not: 'DEACTIVATED' } } } } } },
+      include: { grants: { select: { permission: true, scope: true } }, _count: { select: { users: { where: { status: { notIn: ['DEACTIVATED', 'ARCHIVED'] } } } } } },
     });
     return {
       roles: roles.map(({ _count, permissions: _legacyColumn, grants, ...r }) => ({

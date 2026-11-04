@@ -167,12 +167,18 @@ model User {
   statusExpiresAt DateTime?
   lastSeenAt      DateTime?
 
-  lastLoginAt   DateTime?
-  failedLogins  Int       @default(0)
-  lockedUntil   DateTime?
-  deactivatedAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  lastLoginAt      DateTime?
+  failedLogins     Int       @default(0)
+  lockedUntil      DateTime?
+  deactivatedAt    DateTime?
+  /// Set while status is SUSPENDED (reversible block). Cleared on unsuspend or deactivation.
+  suspendedAt      DateTime?
+  /// Optional note from the admin who suspended the account (shown to admins only).
+  suspensionReason String?
+  /// Set while status is ARCHIVED (hidden from lists and pickers, history kept).
+  archivedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   sessions              Session[]
   resetTokens           PasswordResetToken[]

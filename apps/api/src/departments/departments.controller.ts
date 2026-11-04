@@ -26,7 +26,8 @@ export class DepartmentsController {
   }
 
   private async checkHead(auth: AuthContext, headId?: string | null) {
-    if (headId && !(await this.prisma.user.count({ where: { id: headId, organizationId: auth.organizationId } }))) {
+    // Only people who can still work here can head a department (not suspended, deactivated or archived).
+    if (headId && !(await this.prisma.user.count({ where: { id: headId, organizationId: auth.organizationId, status: { in: ['ACTIVE', 'INVITED'] } } }))) {
       throw new BadRequestException('Unknown department head');
     }
   }
@@ -48,7 +49,7 @@ export class DepartmentsController {
   async update(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(departmentSchema.partial())) body: Partial<DepartmentInput>) {
     const existing = await this.prisma.department.findFirst({ where: { id, organizationId: auth.organizationId } });
     if (!existing) throw new NotFoundException('Department not found');
-    await this.checkHead(auth, body.headId);
+    if (body.headId !== existing.headId) await this.checkHead(auth, body.headId); // keeping the current head is always fine
     if (body.name && body.name !== existing.name && (await this.prisma.department.count({ where: { organizationId: auth.organizationId, name: body.name } }))) {
       throw new ConflictException('A department with this name already exists');
     }

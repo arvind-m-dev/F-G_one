@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PRESENCE_KEYS, REACTION_KEYS } from './presence';
 import { isTimeZone } from './settings';
+import { CATALOG_BY_KEY, SCOPES } from './authz';
 
 /** Request contracts shared by the API (validation) and the web app (forms). */
 
@@ -112,7 +113,8 @@ export type DepartmentInput = z.infer<typeof departmentSchema>;
 export const listEmployeesQuerySchema = z.object({
   q: z.string().trim().max(100).optional(),
   departmentId: z.string().max(40).optional(),
-  status: z.enum(['INVITED', 'ACTIVE', 'DEACTIVATED', 'ALL']).default('ACTIVE'),
+  /** ALL leaves out archived accounts; ask for ARCHIVED explicitly. */
+  status: z.enum(['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED', 'ARCHIVED', 'ALL']).default('ACTIVE'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -320,3 +322,46 @@ export type ReauthInput = z.infer<typeof reauthSchema>;
 /** An admin changes someone's work email. It must use a company domain; the person is signed out everywhere. */
 export const changeEmployeeEmailSchema = z.object({ email: emailSchema });
 export type ChangeEmployeeEmailInput = z.infer<typeof changeEmployeeEmailSchema>;
+
+// ───────── user management (Super Admin Phase 3) ─────────
+
+/** Suspend an account (reversible). The reason is shown to admins only. */
+export const suspendEmployeeSchema = z.object({ reason: z.string().trim().max(300).nullable().optional() });
+export type SuspendEmployeeInput = z.infer<typeof suspendEmployeeSchema>;
+
+/** One exception for one person. DENY removes the permission whatever their roles say; ALLOW adds it at `scope`. */
+export const permissionOverrideSchema = z
+  .object({
+    permission: z.string().min(1).max(80).refine((p) => !!CATALOG_BY_KEY[p], 'Unknown permission'),
+    effect: z.enum(['ALLOW', 'DENY']),
+    scope: z.enum(SCOPES).nullable().optional(),
+  })
+  .refine((o) => o.effect === 'DENY' || !o.scope || !CATALOG_BY_KEY[o.permission] || CATALOG_BY_KEY[o.permission]!.scopes.includes(o.scope), {
+    path: ['scope'],
+    message: 'This permission is not available at that reach',
+  });
+export type PermissionOverrideInput = z.infer<typeof permissionOverrideSchema>;
+
+const accessFields = {
+  extraRoleIds: z
+    .array(z.string().min(1).max(40))
+    .max(20)
+    .default([])
+    .refine((ids) => new Set(ids).size === ids.length, 'Each extra role can only be added once'),
+  overrides: z
+    .array(permissionOverrideSchema)
+    .max(60)
+    .default([])
+    .refine((os) => new Set(os.map((o) => o.permission)).size === os.length, 'Add at most one exception per permission'),
+};
+
+/** Replace one person's access: main role, extra roles and exceptions. */
+export const updateEmployeeAccessSchema = z.object({ roleId: z.string().min(1).max(40).optional(), ...accessFields });
+export type UpdateEmployeeAccessInput = z.infer<typeof updateEmployeeAccessSchema>;
+
+/** Account creation wizard: person, access and password in one request (created atomically). */
+export const createAccountSchema = createEmployeeSchema.extend(accessFields);
+export type CreateAccountInput = z.infer<typeof createAccountSchema>;
+/** Wizard step 1 (the person) and step 3 (the password) validate these slices of the same contract. */
+export const accountPersonSchema = createEmployeeSchema.pick({ firstName: true, lastName: true, email: true, designation: true, departmentId: true, managerId: true, employeeCode: true, joinedAt: true });
+export const accountPasswordSchema = createEmployeeSchema.pick({ password: true });

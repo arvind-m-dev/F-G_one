@@ -15,7 +15,10 @@ test('admin opens a new employee page, changes their email and password, and the
   await add.getByLabel('First name').fill('Tessa');
   await add.getByLabel('Last name').fill(`Three${stamp % 1000}`);
   await add.getByLabel('Work email').fill(email);
+  await add.getByRole('button', { name: 'Next' }).click(); // access: keep the default role
+  await add.getByRole('button', { name: 'Next' }).click();
   await add.getByLabel(/^(Temporary )?password$/i).fill(firstPassword);
+  await add.getByRole('button', { name: 'Next' }).click(); // review
   await add.getByRole('button', { name: 'Create account' }).click();
   await expect(add.getByLabel('Sign-in message')).toContainText(firstPassword);
   await add.getByRole('button', { name: 'Open their page' }).click();
@@ -28,7 +31,9 @@ test('admin opens a new employee page, changes their email and password, and the
   // Tabs are kept in the URL.
   await page.getByRole('tab', { name: 'Employment' }).click();
   await expect(page).toHaveURL(/tab=employment/);
-  await expect(page.getByText('What they can do')).toBeVisible();
+  await page.getByRole('tab', { name: 'Access' }).click();
+  await expect(page).toHaveURL(/tab=access/);
+  await expect(page.getByRole('complementary', { name: 'What they can do' })).toBeVisible();
   await page.getByRole('tab', { name: 'Attendance' }).click();
   await expect(page.getByText('No attendance in the last 30 days')).toBeVisible();
   await page.reload();
