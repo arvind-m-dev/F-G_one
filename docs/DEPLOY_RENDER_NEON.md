@@ -34,7 +34,7 @@ Keep this string private; it is the `DATABASE_URL` for the next steps.
 
 ## 2. Set up email (Resend)
 
-Invitations and password resets are sent by email. Without SMTP the API only logs emails, but admins can still copy invite links from the admin UI.
+FG One sends no invitation emails: administrators create every account with a password (see [ACCOUNT_PROVISIONING.md](ACCOUNT_PROVISIONING.md)). Email is only used for **Forgot password** reset links. Without SMTP the API only logs those emails, so you can skip this step and add it later.
 
 1. Sign up at [resend.com](https://resend.com) (free: 3,000 emails/month, 100/day).
 2. **Domains → Add domain:** add `futuristglobal.com` and create the DNS records it shows (SPF/MX and DKIM; DMARC recommended). Wait until the domain shows **Verified**. Unverified domains can't send, and missing DMARC sends mail to spam.
@@ -46,7 +46,7 @@ Invitations and password resets are sent by email. Without SMTP the API only log
 
    The username is literally `resend`. The sender (`MAIL_FROM`, default `no-reply@futuristglobal.com`) must be on the verified domain.
 
-Microsoft 365 or any other SMTP provider works the same way; only `SMTP_URL` changes. If you invite more than 100 people on one day, invite in batches or copy the invite links from the admin UI.
+Microsoft 365 or any other SMTP provider works the same way; only `SMTP_URL` changes.
 
 ---
 
@@ -73,7 +73,7 @@ Microsoft 365 or any other SMTP provider works the same way; only `SMTP_URL` cha
 
 ## 4. Create the organization and first Super Admin
 
-Production never uses the demo seed. Instead, run the bootstrap script **once from your own machine** against Neon (the production image doesn't include the TypeScript tooling):
+Production never uses the demo seed. Instead, run the bootstrap command **once from your own machine** against Neon (the production image doesn't include the TypeScript tooling):
 
 ```bash
 pnpm install && pnpm --filter @fg/shared build
@@ -81,18 +81,42 @@ pnpm install && pnpm --filter @fg/shared build
 
 ```bash
 DATABASE_URL='postgresql://...neon.tech/fgone?sslmode=require' \
-WEB_ORIGIN=https://fg-one-web.onrender.com \
 ORG_NAME="Futurist Global" ORG_SLUG=futurist-global ORG_DOMAIN=futuristglobal.com \
 ADMIN_EMAIL=it@futuristglobal.com ADMIN_FIRST=IT ADMIN_LAST=Admin \
-pnpm --filter @fg/api db:bootstrap
+CONFIRM_BOOTSTRAP=yes pnpm --filter @fg/api superadmin:bootstrap
 ```
 
-It creates the organization, the system roles, `#general` and `#announcements`, the default leave types (Casual 12, Sick 8, Earned 15, Unpaid), and an invited Super Admin, then prints a **one-time invitation link**. Open it, set a password, and you're in. Invite everyone else from **Administration → Employees**.
+It prints the database host first, so check it is Neon. Then it creates:
 
-`ORG_SLUG` must match `DEFAULT_ORG_SLUG` on the API (`futurist-global` by default).
+* the organization (email domain `ORG_DOMAIN`), the system roles, `#general` and `#announcements`, and the default leave types (Casual 12, Sick 8, Earned 15, Unpaid)
+* the first **Super Admin** with the Administrator role and a **temporary password, printed once** (20 random characters). Nothing stores it, so copy it now. To choose it yourself instead, add `ADMIN_PASSWORD='...'` (10+ characters with upper and lower case and a number).
+
+Then:
+
+1. Sign in at `/login` with that email and the temporary password.
+2. Choose your own password (the app asks straight away).
+3. Turn on two-step verification in **Settings → Security**. Super Admin powers stay switched off until you have done both.
+4. Add everyone else from **Administration → Employees → Add an employee**. You set each person's password and give it to them; there are no invitation links.
+
+Notes:
+
+* Without `CONFIRM_BOOTSTRAP=yes` it only shows what it would do.
+* It is **closed after the first success**: once the organization has a Super Admin who can sign in, running it again changes nothing and says "already initialized". It is safe to re-run.
+* `ORG_SLUG` must match `DEFAULT_ORG_SLUG` on the API (`futurist-global` by default).
+* `db:bootstrap` is an older name for the same command.
+
+### If a Super Admin is locked out
+Lost phone (authenticator) or forgotten password? Run the recovery command from a machine with database access. It sets a new temporary password (printed once), turns off their two-step verification so they set it up again, signs them out everywhere, writes an audit entry and notifies every other Super Admin in the app.
+
+```bash
+DATABASE_URL='postgresql://...neon.tech/fgone?sslmode=require' \
+CONFIRM_RECOVER=yes pnpm --filter @fg/api superadmin:recover --email it@futuristglobal.com
+```
+
+It works only for existing Super Admins whose account is active. For everyone else, an administrator sets a new password in the admin portal. See [ACCOUNT_PROVISIONING.md](ACCOUNT_PROVISIONING.md).
 
 ### If the database already holds demo data
-`db:bootstrap` refuses to touch an existing organization. To remove seeded demo accounts first, use the **reset** script. It deletes the organization and everything in it, then runs the bootstrap.
+Bootstrap does nothing while the demo Super Admin (`admin@futuristglobal.com`) exists. To remove the seeded demo accounts first, use the **reset** script. It deletes the organization and everything in it, then runs the bootstrap.
 
 1. **Back up first:**
 
@@ -106,12 +130,12 @@ It creates the organization, the system roles, `#general` and `#announcements`, 
    DATABASE_URL='postgresql://...neon.tech/fgone?sslmode=require' ORG_SLUG=futurist-global pnpm --filter @fg/api db:reset-org
    ```
 
-3. **Real run:** add `CONFIRM_RESET` with the same slug, plus the bootstrap values from above.
+3. **Real run:** add `CONFIRM_RESET` with the same slug, plus the bootstrap values from above. It checks those values before deleting anything, then prints the new Super Admin's temporary password once.
 
    ```bash
    DATABASE_URL='postgresql://...neon.tech/fgone?sslmode=require' ORG_SLUG=futurist-global CONFIRM_RESET=futurist-global \
    ORG_NAME="Futurist Global" ORG_DOMAIN=futuristglobal.com ADMIN_EMAIL=it@futuristglobal.com ADMIN_FIRST=IT ADMIN_LAST=Admin \
-   WEB_ORIGIN=https://fg-one-web.onrender.com pnpm --filter @fg/api db:reset-org
+   pnpm --filter @fg/api db:reset-org
    ```
 
 Do this **before** sharing the public URL. The demo accounts share one known password.
@@ -121,10 +145,10 @@ Do this **before** sharing the public URL. The demo accounts share one known pas
 ## 5. Smoke test
 
 - [ ] `/login` loads and shows the company name
-- [ ] Sign in with the Super Admin account
-- [ ] Invite a test employee; the email arrives (or copy the link from the admin UI)
+- [ ] Sign in with the Super Admin account, choose a new password and turn on two-step verification
+- [ ] Add a test employee with a password, then sign in as them in a private window
 - [ ] Open chat in two browsers: messages, typing indicators and status changes appear live
-- [ ] Sign out, then use **Forgot password** and receive the reset email
+- [ ] If you set up SMTP: sign out, use **Forgot password** and receive the reset email
 - [ ] Open `https://<fg-one-web>/api/health` and check that `clientIp` is **your own public IP** (compare with any "what is my IP" site). If it shows a Render address instead, see the rate-limiting section below.
 
 ---

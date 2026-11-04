@@ -6,7 +6,7 @@
     "build": "nest build",
     "dev": "nest start --watch --preserveWatchOutput",
     "start": "node dist/main.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
@@ -14,6 +14,8 @@
     "db:seed-fill": "ts-node --transpile-only prisma/seed-fill.ts",
     "test": "jest --runInBand",
     "test:e2e": "jest --runInBand test",
+    "superadmin:bootstrap": "ts-node --transpile-only prisma/bootstrap.ts",
+    "superadmin:recover": "ts-node --transpile-only prisma/recover.ts",
     "db:bootstrap": "ts-node --transpile-only prisma/bootstrap.ts",
     "db:reset-org": "ts-node --transpile-only prisma/reset-org.ts"
   },
