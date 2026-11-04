@@ -78,7 +78,23 @@ describe('authentication', () => {
     await request(app.getHttpServer()).post('/api/auth/login').set('Origin', 'https://evil.example').send({ email: 'employee@futuristglobal.com', password: PASSWORD }).expect(403);
   });
 
-  it('password reset: single-use token, signs out other sessions, no enumeration', async () => {
+  const selfService = (on: boolean) =>
+    prisma.organization.update({ where: { id: fg.org.id }, data: { settings: { auth: { allowedEmailDomains: ['futuristglobal.com'], selfServicePassword: on } } } });
+
+  it('with admin-managed passwords (default) there is no self-service reset, and older links stop working', async () => {
+    await selfService(true);
+    mail.testOutbox.length = 0;
+    await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'employee@futuristglobal.com' }).expect(200);
+    const token = mail.testOutbox[0]!.text.match(/token=([\w-]+)/)![1];
+    await selfService(false);
+    mail.testOutbox.length = 0;
+    await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'employee@futuristglobal.com' }).expect(200);
+    expect(mail.testOutbox).toHaveLength(0);
+    await request(app.getHttpServer()).post('/api/auth/reset-password').send({ token, password: 'Brand-New-Pass-42' }).expect(400);
+  });
+
+  it('password reset (self-service on): single-use token, signs out other sessions, no enumeration', async () => {
+    await selfService(true);
     const existing = await login(app, 'manager@futuristglobal.com');
     mail.testOutbox.length = 0;
     await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'ghost@futuristglobal.com' }).expect(200);
@@ -95,11 +111,13 @@ describe('authentication', () => {
   });
 
   it('expired reset tokens are rejected', async () => {
+    await selfService(true);
     mail.testOutbox.length = 0;
     await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'employee@futuristglobal.com' }).expect(200);
     const token = mail.testOutbox[0]!.text.match(/token=([\w-]+)/)![1];
     await prisma.passwordResetToken.updateMany({ where: { userId: fg.users.employee.id, usedAt: null }, data: { expiresAt: new Date(Date.now() - 1000) } });
     await request(app.getHttpServer()).post('/api/auth/reset-password').send({ token, password: 'Brand-New-Pass-42' }).expect(400);
+    await selfService(false);
   });
 });
 

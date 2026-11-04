@@ -172,8 +172,10 @@ export class AuthService {
 
   /** Always resolves the same way whether or not the email exists (no account enumeration). */
   async requestPasswordReset(email: string, meta: ClientMeta) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({ where: { email }, include: { organization: { select: { settings: true } } } });
     if (!user || user.status !== 'ACTIVE') return;
+    // With admin-managed passwords there is no self-service reset; the same reply is returned (no enumeration).
+    if (!parseOrganizationSettings(user.organization.settings).auth.selfServicePassword) return;
     // Invalidate older outstanding tokens.
     await this.prisma.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
     const token = newToken();
@@ -190,8 +192,9 @@ export class AuthService {
   }
 
   async resetPassword(token: string, password: string, meta: ClientMeta) {
-    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
-    if (!record || record.usedAt || record.expiresAt < new Date() || record.user.status !== 'ACTIVE') {
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: { include: { organization: { select: { settings: true } } } } } });
+    // Links issued before the organization switched to admin-managed passwords stop working too.
+    if (!record || record.usedAt || record.expiresAt < new Date() || record.user.status !== 'ACTIVE' || !parseOrganizationSettings(record.user.organization.settings).auth.selfServicePassword) {
       throw new BadRequestException('This reset link is invalid or has expired.');
     }
     const passwordHash = await hashPassword(password);
