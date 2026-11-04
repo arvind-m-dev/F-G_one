@@ -43,6 +43,34 @@ export function parseDateOnly(s: string) {
   return new Date(y!, (m ?? 1) - 1, d ?? 1);
 }
 
+/** Calendar date (YYYY-MM-DD) in an IANA time zone, optionally shifted by whole days. Attendance and leave use the organization's. */
+export function dateInZone(tz: string | undefined, at: Date = new Date(), addDays = 0) {
+  let s: string;
+  try {
+    s = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+  } catch {
+    s = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+  }
+  if (!addDays) return s;
+  const d = new Date(`${s}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + addDays);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Minutes since midnight in an IANA time zone. */
+export function minutesInZone(tz: string | undefined, at: Date = new Date()) {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at);
+  } catch {
+    parts = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at);
+  }
+  return Number(parts.find((p) => p.type === 'hour')?.value ?? 0) * 60 + Number(parts.find((p) => p.type === 'minute')?.value ?? 0);
+}
+
+/** Weekday (0 = Sunday) in an IANA time zone. */
+export const weekdayInZone = (tz: string | undefined, at: Date = new Date()) => new Date(`${dateInZone(tz, at)}T12:00:00Z`).getUTCDay();
+
 export function greeting(date = new Date()) {
   const h = date.getHours();
   if (h < 12) return 'Good morning';

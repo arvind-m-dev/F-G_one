@@ -65,6 +65,16 @@ export const WIDGET_LABELS: Record<WidgetKey, string> = {
   orgStats: 'Company snapshot',
 };
 
+/** True when the runtime knows this IANA time zone (an unknown one would break every date calculation). */
+export function isTimeZone(tz: string) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
 
 export const organizationSettingsSchema = z.object({
@@ -97,7 +107,7 @@ export const organizationSettingsSchema = z.object({
       allowedLocations: z.array(z.enum(['WFO', 'WFH', 'ON_DUTY'])).min(1).default(['WFO', 'WFH', 'ON_DUTY']),
       workingDays: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5]),
       /** IANA time zone that defines the attendance day and "late" */
-      timezone: z.string().min(1).max(60).default('Asia/Kolkata'),
+      timezone: z.string().min(1).max(60).refine(isTimeZone, 'Choose a valid time zone').default('Asia/Kolkata'),
       breaksEnabled: z.boolean().default(true),
       /** Allow checking in again after checking out on the same day (split shifts). */
       multipleSessions: z.boolean().default(false),

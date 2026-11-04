@@ -16,7 +16,12 @@ const requestInclude = {
   approver: { select: { id: true, firstName: true, lastName: true } },
 } satisfies Prisma.LeaveRequestInclude;
 type RequestRow = Prisma.LeaveRequestGetPayload<{ include: typeof requestInclude }>;
+type Db = Prisma.TransactionClient;
+type Settings = ReturnType<typeof parseOrganizationSettings>;
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Serializes leave changes for one person, so two requests sent at once can't both pass the overlap and balance checks. */
+const lockPerson = (tx: Db, userId: string) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`leave:${userId}`}))`;
 
 @Injectable()
 export class LeaveService {
@@ -44,16 +49,14 @@ export class LeaveService {
     };
   }
 
-  private async settings(organizationId: string) {
-    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  private async settings(organizationId: string, db: Db = this.prisma) {
+    const org = await db.organization.findUniqueOrThrow({ where: { id: organizationId } });
     return parseOrganizationSettings(org.settings);
   }
 
-  /** Leave year containing today, from the policy's start month. */
-  private async leaveYear(organizationId: string) {
-    const s = await this.settings(organizationId);
-    const today = localDate(s.attendance.timezone);
-    const [y, m] = today.split('-').map(Number);
+  /** Leave year containing a date (default: today in the organization's time zone), from the policy's start month. */
+  private leaveYear(s: Settings, at = localDate(s.attendance.timezone)) {
+    const [y, m] = at.split('-').map(Number);
     const startYear = m! >= s.leave.yearStartMonth ? y! : y! - 1;
     const start = `${startYear}-${String(s.leave.yearStartMonth).padStart(2, '0')}-01`;
     const endD = new Date(Date.UTC(startYear + 1, s.leave.yearStartMonth - 1, 1) - 86400_000);
@@ -85,17 +88,23 @@ export class LeaveService {
   }
 
   // ───── balances ─────
-  async balances(auth: AuthContext, userId: string) {
-    if (userId !== auth.userId && !hasPermission(auth.permissions, PERMISSIONS.EMPLOYEES_MANAGE)) {
-      const report = await this.prisma.user.count({ where: { id: userId, organizationId: auth.organizationId, managerId: auth.userId } });
-      if (!report) throw new ForbiddenException('You cannot view this person’s leave');
+  async balances(auth: AuthContext, userId: string, at?: string) {
+    if (userId !== auth.userId) {
+      // Other tenants' people (and ids that don't exist) are not found, never an empty balance.
+      const person = await this.prisma.user.findFirst({ where: { id: userId, organizationId: auth.organizationId }, select: { managerId: true } });
+      if (!person) throw new NotFoundException('Employee not found');
+      if (!hasPermission(auth.permissions, PERMISSIONS.EMPLOYEES_MANAGE) && person.managerId !== auth.userId) throw new ForbiddenException('You cannot view this person’s leave');
     }
-    const year = await this.leaveYear(auth.organizationId);
+    return this.computeBalances(this.prisma, auth.organizationId, userId, this.leaveYear(await this.settings(auth.organizationId), at));
+  }
+
+  /** Allowance, approved and pending days per active type in one leave year. */
+  private async computeBalances(db: Db, organizationId: string, userId: string, year: { start: string; end: string }) {
     const [types, used] = await Promise.all([
-      this.listTypes(auth),
-      this.prisma.leaveRequest.groupBy({
+      db.leaveType.findMany({ where: { organizationId, active: true }, orderBy: { name: 'asc' } }),
+      db.leaveRequest.groupBy({
         by: ['typeId', 'status'],
-        where: { userId, organizationId: auth.organizationId, status: { in: ['APPROVED', 'PENDING'] }, startDate: { gte: toDbDate(year.start), lte: toDbDate(year.end) } },
+        where: { userId, organizationId, status: { in: ['APPROVED', 'PENDING'] }, startDate: { gte: toDbDate(year.start), lte: toDbDate(year.end) } },
         _sum: { days: true },
       }),
     ]);
@@ -118,10 +127,10 @@ export class LeaveService {
    * How a date range splits into leave days, weekly days off and holidays.
    * With `countDaysOffInside` (sandwich rule), days off between the first and last leave day also count as leave.
    */
-  private async breakdown(organizationId: string, body: LeaveRequestInput, s: Awaited<ReturnType<LeaveService['settings']>>) {
-    const { dates } = await countWorkingDays(this.prisma, organizationId, body.startDate, body.endDate);
+  private async breakdown(organizationId: string, body: LeaveRequestInput, s: Settings, db: Db = this.prisma) {
+    const { dates } = await countWorkingDays(db, organizationId, body.startDate, body.endDate);
     const working = new Set(dates);
-    const offHolidays = await this.prisma.holiday.findMany({
+    const offHolidays = await db.holiday.findMany({
       where: { organizationId, type: { in: ['MANDATORY', 'COMPANY'] }, date: { gte: toDbDate(body.startDate), lte: toDbDate(body.endDate) } },
       orderBy: { date: 'asc' },
     });
@@ -141,38 +150,46 @@ export class LeaveService {
     return { days, calendarDays, workingDays: dates.length, weekends, holidays, sandwichDays };
   }
 
-  /** Type, half-day, working-day, overlap and balance checks shared by requesting and recording leave. */
-  private async validateLeave(auth: AuthContext, userId: string, body: LeaveRequestInput, self: boolean) {
-    const s = await this.settings(auth.organizationId);
-    const type = await this.prisma.leaveType.findFirst({ where: { id: body.typeId, organizationId: auth.organizationId, active: true } });
+  /**
+   * Type, half-day, working-day, overlap and balance checks shared by requesting and recording leave.
+   * Runs inside the caller's transaction, after `lockPerson`.
+   */
+  private async validateLeave(db: Db, organizationId: string, userId: string, body: LeaveRequestInput, self: boolean) {
+    const s = await this.settings(organizationId, db);
+    const type = await db.leaveType.findFirst({ where: { id: body.typeId, organizationId, active: true } });
     if (!type) throw new BadRequestException('Choose a valid leave type');
     if (body.halfDay !== 'NONE' && !s.leave.allowHalfDay) throw new BadRequestException('Half-day leave is not enabled');
-    const { days } = await this.breakdown(auth.organizationId, body, s);
+    const { days } = await this.breakdown(organizationId, body, s, db);
     if (!days) throw new BadRequestException('Those dates are weekends or holidays — no leave needed');
 
-    const overlap = await this.prisma.leaveRequest.findFirst({
-      where: { userId, status: { in: ['PENDING', 'APPROVED'] }, startDate: { lte: toDbDate(body.endDate) }, endDate: { gte: toDbDate(body.startDate) } },
+    const overlap = await db.leaveRequest.findFirst({
+      where: { userId, organizationId, status: { in: ['PENDING', 'APPROVED'] }, startDate: { lte: toDbDate(body.endDate) }, endDate: { gte: toDbDate(body.startDate) } },
     });
     if (overlap) throw new ConflictException(self ? 'You already have leave requested for some of these dates' : 'They already have leave on some of these dates');
 
     if (type.annualAllowance > 0) {
-      const bal = (await this.balances(auth, userId)).items.find((b) => b.type.id === type.id);
+      // The balance of the leave year the request starts in, which is not always the current one.
+      const bal = (await this.computeBalances(db, organizationId, userId, this.leaveYear(s, body.startDate))).items.find((b) => b.type.id === type.id);
       if (bal && bal.remaining !== null && days > bal.remaining) throw new BadRequestException(`Not enough ${type.name} balance: ${bal.remaining} day(s) left, ${days} requested`);
     }
     return { s, type, days };
   }
 
   async create(auth: AuthContext, body: LeaveRequestInput) {
-    const { s, type, days } = await this.validateLeave(auth, auth.userId, body, true);
-    const approvers = s.leave.requireManagerApproval ? await approversFor(this.prisma, auth.organizationId, auth.userId) : await hrUsers(this.prisma, auth.organizationId, auth.userId);
-    // Nobody else can approve (e.g. the only admin, with no manager): approve it so it doesn't wait forever.
-    const selfApproved = approvers.length === 0;
-    const r = await this.prisma.leaveRequest.create({
-      data: {
-        organizationId: auth.organizationId, userId: auth.userId, typeId: type.id, startDate: toDbDate(body.startDate), endDate: toDbDate(body.endDate), halfDay: body.halfDay, days, reason: body.reason || null,
-        ...(selfApproved ? { status: 'APPROVED' as const, decidedAt: new Date(), decisionNote: 'Approved automatically: nobody else can approve this request' } : {}),
-      },
-      include: requestInclude,
+    const { r, type, days, approvers, selfApproved } = await this.prisma.$transaction(async (tx) => {
+      await lockPerson(tx, auth.userId);
+      const { s, type, days } = await this.validateLeave(tx, auth.organizationId, auth.userId, body, true);
+      const approvers = s.leave.requireManagerApproval ? await approversFor(tx, auth.organizationId, auth.userId) : await hrUsers(tx, auth.organizationId, auth.userId);
+      // Nobody else can approve (e.g. the only admin, with no manager): approve it so it doesn't wait forever.
+      const selfApproved = approvers.length === 0;
+      const r = await tx.leaveRequest.create({
+        data: {
+          organizationId: auth.organizationId, userId: auth.userId, typeId: type.id, startDate: toDbDate(body.startDate), endDate: toDbDate(body.endDate), halfDay: body.halfDay, days, reason: body.reason || null,
+          ...(selfApproved ? { status: 'APPROVED' as const, decidedAt: new Date(), decisionNote: 'Approved automatically: nobody else can approve this request' } : {}),
+        },
+        include: requestInclude,
+      });
+      return { r, type, days, approvers, selfApproved };
     });
     await this.audit.log(auth, 'leave.requested', 'leave_request', r.id, { type: type.code, days, selfApproved });
     if (selfApproved) return this.serialize(r, true);
@@ -193,14 +210,18 @@ export class LeaveService {
     if (body.userId === auth.userId) throw new BadRequestException('Use Request time off for your own leave');
     const person = await this.prisma.user.findFirst({ where: { id: body.userId, organizationId: auth.organizationId }, select: { id: true, managerId: true } });
     if (!person) throw new NotFoundException('Employee not found');
-    const { type, days } = await this.validateLeave(auth, person.id, body, false);
     const actor = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { firstName: true, lastName: true } });
-    const r = await this.prisma.leaveRequest.create({
-      data: {
-        organizationId: auth.organizationId, userId: person.id, typeId: type.id, startDate: toDbDate(body.startDate), endDate: toDbDate(body.endDate), halfDay: body.halfDay, days, reason: body.reason || null,
-        status: 'APPROVED', approverId: auth.userId, decidedAt: new Date(), decisionNote: `Recorded by ${actor.firstName} ${actor.lastName}`,
-      },
-      include: requestInclude,
+    const { r, type, days } = await this.prisma.$transaction(async (tx) => {
+      await lockPerson(tx, person.id);
+      const { type, days } = await this.validateLeave(tx, auth.organizationId, person.id, body, false);
+      const r = await tx.leaveRequest.create({
+        data: {
+          organizationId: auth.organizationId, userId: person.id, typeId: type.id, startDate: toDbDate(body.startDate), endDate: toDbDate(body.endDate), halfDay: body.halfDay, days, reason: body.reason || null,
+          status: 'APPROVED', approverId: auth.userId, decidedAt: new Date(), decisionNote: `Recorded by ${actor.firstName} ${actor.lastName}`,
+        },
+        include: requestInclude,
+      });
+      return { r, type, days };
     });
     await this.audit.log(auth, 'leave.recorded', 'leave_request', r.id, { userId: person.id, type: type.code, days });
     const dates = `${body.startDate}${body.endDate !== body.startDate ? ` to ${body.endDate}` : ''}`;
@@ -247,11 +268,13 @@ export class LeaveService {
     if (!r) throw new NotFoundException('Request not found');
     await assertCanDecide(this.prisma, auth, r.userId, 'leave');
     if (r.status !== 'PENDING') throw new ConflictException(`This request is already ${r.status.toLowerCase()}`);
-    const u = await this.prisma.leaveRequest.update({
-      where: { id },
+    // Only one decision wins when two approvers act at once, or the person cancels meanwhile.
+    const res = await this.prisma.leaveRequest.updateMany({
+      where: { id, organizationId: auth.organizationId, status: 'PENDING' },
       data: { status: decision, approverId: auth.userId, decisionNote: note || null, decidedAt: new Date() },
-      include: requestInclude,
     });
+    if (!res.count) throw new ConflictException('This request was already decided or cancelled');
+    const u = await this.prisma.leaveRequest.findUniqueOrThrow({ where: { id }, include: requestInclude });
     await this.audit.log(auth, decision === 'APPROVED' ? 'leave.approved' : 'leave.rejected', 'leave_request', id, { userId: r.userId, days: r.days });
     void this.notifications.notify({
       organizationId: auth.organizationId,
@@ -271,9 +294,14 @@ export class LeaveService {
     const s = await this.settings(auth.organizationId);
     const today = localDate(s.attendance.timezone);
     if (r.status === 'PENDING' || (r.status === 'APPROVED' && ymd(r.startDate) > today)) {
-      const u = await this.prisma.leaveRequest.update({ where: { id }, data: { status: 'CANCELLED' }, include: requestInclude });
+      const res = await this.prisma.leaveRequest.updateMany({ where: { id, status: r.status }, data: { status: 'CANCELLED' } });
+      if (!res.count) throw new ConflictException('This request changed meanwhile. Refresh and try again');
+      const u = await this.prisma.leaveRequest.findUniqueOrThrow({ where: { id }, include: requestInclude });
       await this.audit.log(auth, 'leave.cancelled', 'leave_request', id, { wasApproved: r.status === 'APPROVED' });
-      if (r.approverId) void this.notifications.notify({ organizationId: auth.organizationId, userIds: [r.approverId], actorId: auth.userId, type: 'leave', title: `${r.user.firstName} cancelled their ${r.type.name}`, body: `${ymd(r.startDate)} to ${ymd(r.endDate)}`, link: '/app/leave?tab=team' });
+      // Tell whoever approved it, or for a pending request the people it was waiting on.
+      const tell = r.approverId ? [r.approverId] : await approversFor(this.prisma, auth.organizationId, auth.userId);
+      if (tell.length)
+        void this.notifications.notify({ organizationId: auth.organizationId, userIds: tell, actorId: auth.userId, type: 'leave', title: `${r.user.firstName} cancelled their ${r.type.name}`, body: `${ymd(r.startDate)} to ${ymd(r.endDate)}`, link: r.approverId ? '/app/leave?tab=team' : '/app/approvals' });
       return this.serialize(u, true);
     }
     throw new BadRequestException('Only pending or upcoming leave can be cancelled');

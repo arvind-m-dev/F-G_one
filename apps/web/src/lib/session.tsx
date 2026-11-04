@@ -5,6 +5,7 @@ import { hasPermission, parseOrganizationSettings, type ModuleKey, type Permissi
 import { useTheme } from 'next-themes';
 import { api } from './api';
 import type { Me } from './types';
+import { dateInZone } from './utils';
 
 const SessionContext = createContext<Me | null>(null);
 
@@ -77,4 +78,11 @@ export function useClock() {
     h24,
     time: (d: string | Date, tz?: string) => new Date(d).toLocaleTimeString(undefined, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !h24, timeZone: tz }),
   };
+}
+
+/** "Today" for attendance and leave: the organization's calendar day, which can differ from the browser's. */
+export function useOrgToday() {
+  const me = useSession();
+  const tz = me.organization.settings.attendance.timezone;
+  return { tz, today: (addDays = 0) => dateInZone(tz, new Date(), addDays) };
 }

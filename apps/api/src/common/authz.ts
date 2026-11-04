@@ -1,7 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { grantScope, legacyFromGrants, LEGACY_PERMISSION_MAP, resolveGrants, type Permission, type Scope } from '@fg/shared';
-import type { PrismaService } from '../prisma/prisma.service';
 import type { AuthContext } from './auth-context';
 
 /**
@@ -38,7 +37,7 @@ export function userScopeWhere(auth: AuthContext, permission: string, message = 
  * Active users in an organization who hold a legacy permission after full resolution
  * (primary + extra roles, overrides). Used to find notification recipients such as HR.
  */
-export async function usersWithLegacyPermission(prisma: PrismaService, organizationId: string, permission: Permission, excludeId?: string): Promise<string[]> {
+export async function usersWithLegacyPermission(prisma: Prisma.TransactionClient, organizationId: string, permission: Permission, excludeId?: string): Promise<string[]> {
   const needed = LEGACY_PERMISSION_MAP[permission].map((g) => g.permission);
   const roleHas = { grants: { some: { permission: { in: needed } } } };
   const candidates = await prisma.user.findMany({

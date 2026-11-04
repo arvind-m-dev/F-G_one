@@ -33,8 +33,14 @@ import type { Correction, Holiday, LeaveBalance, LeaveRequest, LeaveType } from 
 
 export const useLeaveTypes = (all = false) => useQuery({ queryKey: ['leave-types', all], queryFn: () => api<LeaveType[]>('/leave/types', { query: { include: all ? 'all' : 'active' } }) });
 /** Your balances, or someone else's (HR, managers) when `userId` is given. */
-export const useLeaveBalances = (userId?: string, enabled = true) =>
-  useQuery({ queryKey: ['leave-balances', userId ?? 'me'], queryFn: () => api<{ year: { start: string; end: string }; items: LeaveBalance[] }>('/leave/balances', { query: userId ? { userId } : {} }), enabled });
+/** Balances in the leave year containing `at` (default: the current one). */
+export const useLeaveBalances = (userId?: string, enabled = true, at?: string) =>
+  useQuery({
+    queryKey: ['leave-balances', userId ?? 'me', at ?? 'now'],
+    queryFn: () => api<{ year: { start: string; end: string }; items: LeaveBalance[] }>('/leave/balances', { query: { ...(userId ? { userId } : {}), ...(at ? { at } : {}) } }),
+    enabled,
+    placeholderData: (p) => p,
+  });
 export const useLeaveRequests = (scope: 'mine' | 'approvals' | 'all', status = 'ALL', enabled = true) =>
   useQuery({ queryKey: ['leave-requests', scope, status], queryFn: () => api<LeaveRequest[]>('/leave/requests', { query: { scope, status } }), enabled, placeholderData: (p) => p });
 export const useHolidays = (year: number) => useQuery({ queryKey: ['holidays', year], queryFn: () => api<{ year: number; items: Holiday[] }>('/holidays', { query: { year } }), placeholderData: (p) => p });

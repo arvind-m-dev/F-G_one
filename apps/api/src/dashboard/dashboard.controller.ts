@@ -3,6 +3,7 @@ import { parseOrganizationSettings, PERMISSIONS } from '@fg/shared';
 import { ChatService } from '../chat/chat.service';
 import { Auth, AuthContext, RequirePermissions } from '../common/auth-context';
 import { fmtDateOnly, startOfUtcDay } from '../common/dates';
+import { localDate, toDbDate } from '../common/tz';
 import { personSelect, toPerson } from '../employees/employee.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -28,10 +29,11 @@ export class DashboardController {
   /** Everything the personal dashboard needs, in one round-trip, scoped to the caller. */
   @Get('dashboard')
   async dashboard(@Auth() auth: AuthContext) {
-    const today = startOfUtcDay();
     const me = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { departmentId: true, managerId: true } });
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: auth.organizationId } });
     const settings = parseOrganizationSettings(org.settings);
+    // "Today" is the organization's calendar day, so holidays and celebrations don't shift around midnight UTC.
+    const today = toDbDate(localDate(settings.attendance.timezone));
 
     const teamFilter = [
       ...(me.departmentId ? [{ departmentId: me.departmentId }] : []),
@@ -92,7 +94,7 @@ export class DashboardController {
     ]);
     const onlineIds = new Set(this.realtime.onlineIds());
     return {
-      workday: { start: settings.attendance.workdayStart, end: settings.attendance.workdayEnd, workingDays: settings.attendance.workingDays },
+      workday: { start: settings.attendance.workdayStart, end: settings.attendance.workdayEnd, workingDays: settings.attendance.workingDays, timezone: settings.attendance.timezone },
       team: team.map((t) => toPerson(t, onlineIds.has(t.id))),
       announcements,
       holidays: holidays.map((h) => ({ ...h, date: fmtDateOnly(h.date) })),

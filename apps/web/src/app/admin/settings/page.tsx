@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { MODULE_KEYS, MODULE_LABELS, PERMISSIONS, WIDGET_KEYS, WIDGET_LABELS, type OrganizationSettings } from '@fg/shared';
 import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { LOCATION_ICON } from '@/components/attendance/attendance-panel';
 import { BrandMark } from '@/components/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -54,6 +55,7 @@ export default function SettingsPage() {
   };
 
   const save = async () => {
+    if (!s.attendance.workdayStart || !s.attendance.workdayEnd || s.attendance.workdayEnd <= s.attendance.workdayStart) return toast.error('Attendance policy: the workday must end after it starts');
     setSaving(true);
     try {
       await api('/organization', { method: 'PATCH', body: { name, logoUrl: logoUrl || null, primaryColor: primary, secondaryColor: secondary, settings: s } });
@@ -197,7 +199,7 @@ export default function SettingsPage() {
               <Field label="Workday starts" htmlFor="ws">
                 <Input id="ws" type="time" value={s.attendance.workdayStart} onChange={(e) => patch('attendance', { workdayStart: e.target.value })} />
               </Field>
-              <Field label="Workday ends" htmlFor="we">
+              <Field label="Workday ends" htmlFor="we" error={s.attendance.workdayEnd <= s.attendance.workdayStart ? 'The workday must end after it starts' : undefined}>
                 <Input id="we" type="time" value={s.attendance.workdayEnd} onChange={(e) => patch('attendance', { workdayEnd: e.target.value })} />
               </Field>
               <Field label="Grace period (minutes)" htmlFor="grace">
@@ -210,7 +212,16 @@ export default function SettingsPage() {
                 {DAYS.map((d, i) => {
                   const on = s.attendance.workingDays.includes(i);
                   return (
-                    <button key={d} onClick={() => patch('attendance', { workingDays: on ? s.attendance.workingDays.filter((x) => x !== i) : [...s.attendance.workingDays, i].sort() })} className={cn('h-9 w-12 rounded-lg border text-sm font-medium transition', on ? 'border-primary bg-primary text-white' : 'text-muted')} aria-pressed={on}>
+                    <button
+                      key={d}
+                      onClick={() => {
+                        // At least one working day: with none, nobody could check in or take leave.
+                        if (on && s.attendance.workingDays.length === 1) return toast.error('Keep at least one working day');
+                        patch('attendance', { workingDays: on ? s.attendance.workingDays.filter((x) => x !== i) : [...s.attendance.workingDays, i].sort() });
+                      }}
+                      className={cn('h-9 w-12 rounded-lg border text-sm font-medium transition', on ? 'border-primary bg-primary text-white' : 'text-muted')}
+                      aria-pressed={on}
+                    >
                       {d}
                     </button>
                   );
@@ -220,11 +231,22 @@ export default function SettingsPage() {
             <div>
               <p className="mb-2 text-sm font-medium">Allowed work locations</p>
               <div className="flex flex-wrap gap-2">
-                {([['WFO', '🏢 Work from office'], ['WFH', '🏠 Work from home'], ['ON_DUTY', '🚗 On duty / client site']] as const).map(([k, label]) => {
+                {([['WFO', 'Work from office'], ['WFH', 'Work from home'], ['ON_DUTY', 'On duty / client site']] as const).map(([k, label]) => {
                   const on = s.attendance.allowedLocations.includes(k);
+                  const Icon = LOCATION_ICON[k];
                   return (
-                    <button key={k} onClick={() => patch('attendance', { allowedLocations: on ? s.attendance.allowedLocations.filter((x) => x !== k) : [...s.attendance.allowedLocations, k] })} className={cn('rounded-full border px-3 py-1.5 text-sm transition', on ? 'border-primary bg-primary-soft text-primary' : 'text-muted')} aria-pressed={on}>
-                      {label}
+                    <button
+                      key={k}
+                      onClick={() => {
+                        if (on && s.attendance.allowedLocations.length === 1) return toast.error('Keep at least one work location');
+                        const next = on ? s.attendance.allowedLocations.filter((x) => x !== k) : [...s.attendance.allowedLocations, k];
+                        // Automatic check-in must use a location that is still allowed.
+                        patch('attendance', { allowedLocations: next, ...(next.includes(s.attendance.autoCheckInLocation) ? {} : { autoCheckInLocation: next[0]! }) });
+                      }}
+                      className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition', on ? 'border-primary bg-primary-soft text-primary' : 'text-muted')}
+                      aria-pressed={on}
+                    >
+                      <Icon className="size-4" aria-hidden /> {label}
                     </button>
                   );
                 })}

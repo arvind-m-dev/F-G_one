@@ -50,15 +50,26 @@ export default function ApprovalsPage() {
   const corrections = useCorrections('approvals', can);
   const [pending, setPending] = useState<Decision | null>(null);
   const [note, setNote] = useState('');
+  const refresh = () => {
+    for (const k of ['leave-requests', 'corrections', 'approvals-count', 'leave-calendar', 'attendance-board', 'leave-balances']) void qc.invalidateQueries({ queryKey: [k] });
+  };
+  const close = () => {
+    setPending(null);
+    setNote('');
+  };
   const decide = useMutation({
     mutationFn: (d: Decision) => api(d.kind === 'leave' ? `/leave/requests/${d.id}/decision` : `/attendance/corrections/${d.id}/decision`, { body: { decision: d.decision, note: note || null } }),
     onSuccess: (_r, d) => {
       toast.success(`${d.decision === 'APPROVED' ? 'Approved' : 'Declined'} — ${d.who} has been notified`);
-      setPending(null);
-      setNote('');
-      for (const k of ['leave-requests', 'corrections', 'approvals-count', 'leave-calendar', 'attendance-board']) void qc.invalidateQueries({ queryKey: [k] });
+      close();
+      refresh();
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    // Already decided by someone else, or cancelled: close and show the current list.
+    onError: (e) => {
+      toast.error(errorMessage(e));
+      close();
+      refresh();
+    },
   });
 
   return (
@@ -74,6 +85,8 @@ export default function ApprovalsPage() {
             <SectionTitle icon={<TreePalm />}>Leave requests {leave.data?.length ? `(${leave.data.length})` : ''}</SectionTitle>
             {leave.isPending ? (
               <Skeleton className="h-24" />
+            ) : leave.isError ? (
+              <p role="alert" className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-danger">{errorMessage(leave.error)}</p>
             ) : !leave.data?.length ? (
               <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted">No leave waiting for you.</p>
             ) : (
@@ -96,6 +109,8 @@ export default function ApprovalsPage() {
             <SectionTitle icon={<ClipboardCheck />}>Attendance corrections {corrections.data?.length ? `(${corrections.data.length})` : ''}</SectionTitle>
             {corrections.isPending ? (
               <Skeleton className="h-24" />
+            ) : corrections.isError ? (
+              <p role="alert" className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-danger">{errorMessage(corrections.error)}</p>
             ) : !corrections.data?.length ? (
               <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted">No corrections waiting for you.</p>
             ) : (
@@ -116,12 +131,12 @@ export default function ApprovalsPage() {
           </section>
         </div>
       )}
-      <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)} title={pending?.decision === 'APPROVED' ? 'Approve request?' : 'Decline request?'} description={`${pending?.who} will get a notification with your note.`} className="max-w-md">
+      <Dialog open={!!pending} onOpenChange={(o) => !o && close()} title={pending?.decision === 'APPROVED' ? 'Approve request?' : 'Decline request?'} description={`${pending?.who} will get a notification with your note.`} className="max-w-md">
         <Field label="Note (optional)" htmlFor="d-note">
           <Textarea id="d-note" rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder={pending?.decision === 'APPROVED' ? 'e.g. Enjoy your break' : 'e.g. Release week — can we move it?'} />
         </Field>
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setPending(null)}>
+          <Button variant="ghost" onClick={close}>
             Back
           </Button>
           <Button variant={pending?.decision === 'APPROVED' ? 'primary' : 'danger'} loading={decide.isPending} onClick={() => pending && decide.mutate(pending)}>
