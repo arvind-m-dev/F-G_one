@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { PERMISSIONS } from '@fg/shared';
-import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
@@ -46,10 +46,10 @@ function DeptDialog({ dept, open, onOpenChange }: { dept: Department | null; ope
     <Dialog open={open} onOpenChange={onOpenChange} title={dept ? `Edit ${dept.name}` : 'New department'}>
       <div className="space-y-4">
         <Field label="Name" htmlFor="d-name">
-          <Input id="d-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+          <Input id="d-name" value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
         </Field>
         <Field label="Description" htmlFor="d-desc">
-          <Textarea id="d-desc" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <Textarea id="d-desc" rows={2} maxLength={240} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </Field>
         <Field label="Department head" htmlFor="d-head">
           <Select id="d-head" value={form.headId} onChange={(e) => setForm({ ...form, headId: e.target.value })}>
@@ -65,7 +65,7 @@ function DeptDialog({ dept, open, onOpenChange }: { dept: Department | null; ope
           <p className="mb-1.5 text-sm font-medium">Colour</p>
           <div className="flex gap-2">
             {COLORS.map((c) => (
-              <button key={c} onClick={() => setForm({ ...form, color: c })} className={cn('size-7 rounded-full transition hover:scale-110', form.color === c && 'ring-2 ring-primary ring-offset-2 ring-offset-surface')} style={{ background: c }} aria-label={`Colour ${c}`} />
+              <button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={cn('size-7 rounded-full transition hover:scale-110', form.color === c && 'ring-2 ring-primary ring-offset-2 ring-offset-surface')} style={{ background: c }} aria-label={`Colour ${c}`} aria-pressed={form.color === c} />
             ))}
           </div>
         </div>
@@ -112,8 +112,10 @@ export default function DepartmentsPage() {
       />
       {depts.isPending ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40" />)}</div>
-      ) : depts.data?.length === 0 ? (
-        <EmptyState icon={<Building2 />} title="No departments yet" />
+      ) : depts.isError ? (
+        <LoadError what="departments" error={depts.error} onRetry={() => depts.refetch()} />
+      ) : depts.data.length === 0 ? (
+        <EmptyState icon={<Building2 />} title="No departments yet" description="Create one to group people into teams." />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {depts.data?.map((d, i) => (
@@ -124,7 +126,8 @@ export default function DepartmentsPage() {
                   <span className="grid size-10 place-items-center rounded-xl" style={{ background: `${d.color}22`, color: d.color }}>
                     <Building2 className="size-5" />
                   </span>
-                  <div className="flex opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                  {/* Always visible on touch screens, which have no hover. */}
+                  <div className="flex transition [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-within:opacity-100">
                     <Button variant="ghost" size="icon-sm" onClick={() => { setEditing(d); setOpen(true); }} aria-label={`Edit ${d.name}`}>
                       <Pencil />
                     </Button>
@@ -144,7 +147,7 @@ export default function DepartmentsPage() {
                   ) : (
                     <span className="text-muted">No head assigned</span>
                   )}
-                  <Link href={`/app/people`} className="flex items-center gap-1 font-medium text-primary">
+                  <Link href={`/app/people?dept=${d.id}`} className="flex items-center gap-1 font-medium text-primary" aria-label={`${d.memberCount} ${d.memberCount === 1 ? 'person' : 'people'} in ${d.name}`}>
                     <Users className="size-3.5" /> {d.memberCount}
                   </Link>
                 </div>
@@ -158,7 +161,11 @@ export default function DepartmentsPage() {
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
         title={`Delete ${deleting?.name}?`}
-        description={`${deleting?.memberCount ?? 0} member(s) will be left without a department. This cannot be undone.`}
+        description={
+          deleting?.announcementCount
+            ? `${deleting.announcementCount} announcement${deleting.announcementCount === 1 ? ' is' : 's are'} addressed to this department. Delete them or send them to everyone first.`
+            : `${deleting?.memberCount ?? 0} ${deleting?.memberCount === 1 ? 'person' : 'people'} will be left without a department. This cannot be undone.`
+        }
         confirmLabel="Delete"
         danger
         loading={del.isPending}

@@ -5,6 +5,7 @@ import {
   ArrowLeftRight,
   Bell,
   CalendarDays,
+  Check,
   ClipboardCheck,
   TreePalm,
   Clock,
@@ -183,7 +184,7 @@ function ThemeMenu() {
         ).map(([v, Icon, label]) => (
           <DropdownItem key={v} onSelect={() => changeTheme(v)}>
             <Icon /> {label}
-            {theme === v && <span className="ml-auto text-primary">●</span>}
+            {theme === v && <Check className="ml-auto text-primary" aria-label="Selected" />}
           </DropdownItem>
         ))}
       </DropdownContent>
@@ -204,14 +205,12 @@ function UserMenu({ portal }: { portal: Portal }) {
   const isAdmin = ADMIN_PERMS.some((p) => can(p));
 
   const logout = async () => {
-    try {
-      await api('/auth/logout', { method: 'POST' });
-    } finally {
-      qc.clear();
-      clearPersistedCache();
-      router.replace('/login');
-      toast.success('Signed out');
-    }
+    // Even if the server can't be reached, forget everything on this device.
+    await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
+    qc.clear();
+    clearPersistedCache();
+    router.replace('/login');
+    toast.success('Signed out');
   };
 
   return (

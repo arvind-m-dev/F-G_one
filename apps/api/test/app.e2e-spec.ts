@@ -78,7 +78,12 @@ describe('authentication', () => {
     await request(app.getHttpServer()).post('/api/auth/login').set('Origin', 'https://evil.example').send({ email: 'employee@futuristglobal.com', password: PASSWORD }).expect(403);
   });
 
+  /** Email reset links exist only when people choose their own passwords (settings.auth.selfServicePassword). */
+  const selfService = (on: boolean) =>
+    prisma.organization.update({ where: { id: fg.org.id }, data: { settings: { auth: { allowedEmailDomains: ['futuristglobal.com'], selfServicePassword: on } } } });
+
   it('password reset: single-use token, signs out other sessions, no enumeration', async () => {
+    await selfService(true);
     const existing = await login(app, 'manager@futuristglobal.com');
     mail.testOutbox.length = 0;
     await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'ghost@futuristglobal.com' }).expect(200);
@@ -92,14 +97,17 @@ describe('authentication', () => {
     await login(app, 'manager@futuristglobal.com', 'Brand-New-Pass-42');
     // restore
     await prisma.user.update({ where: { id: fg.users.manager.id }, data: { passwordHash: (await prisma.user.findUniqueOrThrow({ where: { id: fg.users.employee.id } })).passwordHash } });
+    await selfService(false);
   });
 
   it('expired reset tokens are rejected', async () => {
+    await selfService(true);
     mail.testOutbox.length = 0;
     await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'employee@futuristglobal.com' }).expect(200);
     const token = mail.testOutbox[0]!.text.match(/token=([\w-]+)/)![1];
     await prisma.passwordResetToken.updateMany({ where: { userId: fg.users.employee.id, usedAt: null }, data: { expiresAt: new Date(Date.now() - 1000) } });
     await request(app.getHttpServer()).post('/api/auth/reset-password').send({ token, password: 'Brand-New-Pass-42' }).expect(400);
+    await selfService(false);
   });
 });
 

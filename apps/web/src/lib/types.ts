@@ -118,6 +118,8 @@ export interface Department {
   headId: string | null;
   head: { id: string; firstName: string; lastName: string; avatarColor: string; avatarUrl: string | null } | null;
   memberCount: number;
+  /** Announcements addressed only to this department. */
+  announcementCount?: number;
 }
 
 export interface Role {

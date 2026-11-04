@@ -8,7 +8,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { toast } from 'sonner';
 import { PERMISSIONS } from '@fg/shared';
 import { AuditList, type AuditEntry } from '@/components/admin/audit-list';
-import { Forbidden } from '@/components/admin/page-header';
+import { Forbidden, LoadError } from '@/components/admin/page-header';
 import { PageHeader } from '@/components/shell/page';
 import { Button } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
@@ -106,7 +106,9 @@ export default function AdminOverview() {
         }
       />
 
-      {!d ? (
+      {q.isError && !d ? (
+        <LoadError what="the overview" error={q.error} onRetry={() => q.refetch()} />
+      ) : !d ? (
         <div className="space-y-6">
           <Skeleton className="h-28" />
           <div className="grid gap-8 lg:grid-cols-2">
@@ -210,6 +212,7 @@ export default function AdminOverview() {
               </section>
               <section>
                 <SectionTitle icon={<CalendarDays />}>Upcoming holidays</SectionTitle>
+                {dash.data && !dash.data.holidays.length && <p className="text-[13px] text-muted">No holidays coming up.</p>}
                 <ul className="space-y-1.5 text-[13px]">
                   {(dash.data?.holidays ?? []).slice(0, 3).map((h) => (
                     <li key={h.id} className="flex justify-between gap-3">
@@ -221,6 +224,7 @@ export default function AdminOverview() {
               </section>
               <section>
                 <SectionTitle icon={<Megaphone />}>Live announcements</SectionTitle>
+                {dash.data && !dash.data.announcements.length && <p className="text-[13px] text-muted">No announcements right now.</p>}
                 <ul className="space-y-2 text-[13px]">
                   {(dash.data?.announcements ?? []).slice(0, 3).map((a) => (
                     <li key={a.id}>

@@ -1,22 +1,25 @@
 'use client';
 import * as Tabs from '@radix-ui/react-tabs';
-import { useQueryClient } from '@tanstack/react-query';
-import { Blocks, CalendarCheck2, Clock, LayoutDashboard, Palette, ShieldCheck, X } from 'lucide-react';
-import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Blocks, Building2, CalendarCheck2, Car, Clock, House, LayoutDashboard, Palette, ShieldCheck, X } from 'lucide-react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { MODULE_KEYS, MODULE_LABELS, PERMISSIONS, WIDGET_KEYS, WIDGET_LABELS, type OrganizationSettings } from '@fg/shared';
-import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
 import { BrandMark } from '@/components/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field, Input, Select } from '@/components/ui/input';
-import { Badge, Switch } from '@/components/ui/misc';
+import { Badge, Skeleton, Switch } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
+import type { Me } from '@/lib/types';
 import { useCan, useSession } from '@/lib/session';
+import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
 
 /** Modules that ship in the current milestone; the rest can be pre-configured now. */
-const LIVE_MODULES = new Set(['chat', 'holidays', 'announcements', 'recognition', 'attendance']);
+const LIVE_MODULES = new Set(['chat', 'holidays', 'announcements', 'recognition', 'attendance', 'leave']);
+const TAB_KEYS = ['branding', 'modules', 'dashboard', 'attendance', 'leave', 'auth'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -32,11 +35,38 @@ function Row({ title, description, children }: { title: string; description?: st
   );
 }
 
-export default function SettingsPage() {
-  const me = useSession();
+type Org = Me['organization'];
+
+/**
+ * Loads a fresh copy of the settings first: the signed-in session can be restored from this tab's
+ * cache after a refresh, and editing from that could save older values over newer ones.
+ */
+function SettingsPage() {
   const can = useCan();
+  const allowed = can(PERMISSIONS.SETTINGS_MANAGE);
+  const org = useQuery({ queryKey: ['organization-settings'], queryFn: () => api<Org>('/organization'), enabled: allowed, gcTime: 0, staleTime: Infinity, refetchOnWindowFocus: false });
+  if (!allowed) return <Forbidden />;
+  if (org.isPending || org.isError) {
+    return (
+      <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
+        <PageHeader title="Company settings" description="Branding, modules and policies for your whole workspace." />
+        {org.isError ? (
+          <LoadError what="company settings" error={org.error} onRetry={() => org.refetch()} />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+            <Skeleton className="h-64" />
+            <Skeleton className="h-96" />
+          </div>
+        )}
+      </div>
+    );
+  }
+  return <SettingsForm org={org.data} />;
+}
+
+function SettingsForm({ org }: { org: Org }) {
+  const me = useSession();
   const qc = useQueryClient();
-  const org = me.organization;
   const [name, setName] = useState(org.name);
   const [logoUrl, setLogoUrl] = useState(org.logoUrl ?? '');
   const [primary, setPrimary] = useState(org.primaryColor);
@@ -44,8 +74,19 @@ export default function SettingsPage() {
   const [s, setS] = useState<OrganizationSettings>(org.settings);
   const [domainDraft, setDomainDraft] = useState('');
   const [saving, setSaving] = useState(false);
-
-  if (!can(PERMISSIONS.SETTINGS_MANAGE)) return <Forbidden />;
+  const [get, setUrl] = useUrlState({ tab: 'branding' });
+  const tab = TAB_KEYS.includes(get('tab')) ? get('tab') : 'branding';
+  // Unsaved colour previews must not stay applied after leaving the page.
+  const saved = useRef({ accent: me.preferences.accent, primary: me.organization.primaryColor, secondary: me.organization.secondaryColor });
+  saved.current = { accent: me.preferences.accent, primary: me.organization.primaryColor, secondary: me.organization.secondaryColor };
+  useEffect(
+    () => () => {
+      const { accent, primary, secondary } = saved.current;
+      document.documentElement.style.setProperty('--brand', accent || primary);
+      document.documentElement.style.setProperty('--brand-2', secondary);
+    },
+    [],
+  );
 
   const patch = <K extends keyof OrganizationSettings>(k: K, v: Partial<OrganizationSettings[K]>) => setS((prev) => ({ ...prev, [k]: { ...prev[k], ...v } }));
   const preview = (p: string, sec: string) => {
@@ -56,7 +97,9 @@ export default function SettingsPage() {
   const save = async () => {
     setSaving(true);
     try {
-      await api('/organization', { method: 'PATCH', body: { name, logoUrl: logoUrl || null, primaryColor: primary, secondaryColor: secondary, settings: s } });
+      const updated = await api<Org>('/organization', { method: 'PATCH', body: { name, logoUrl: logoUrl || null, primaryColor: primary, secondaryColor: secondary, settings: s } });
+      qc.setQueryData(['organization-settings'], updated);
+      setS(updated.settings);
       await qc.invalidateQueries({ queryKey: ['me'] });
       await qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Company settings saved');
@@ -87,7 +130,7 @@ export default function SettingsPage() {
           </Button>
         }
       />
-      <Tabs.Root defaultValue="branding" className="grid gap-4 lg:grid-cols-[240px_1fr]" orientation="vertical">
+      <Tabs.Root value={tab} onValueChange={(v) => setUrl({ tab: v })} className="grid gap-4 lg:grid-cols-[240px_1fr]" orientation="vertical">
         <Tabs.List className="flex gap-1 overflow-x-auto lg:flex-col" aria-label="Settings sections">
           {tabs.map((t) => (
             <Tabs.Trigger
@@ -153,7 +196,7 @@ export default function SettingsPage() {
           </Tabs.Content>
 
           <Tabs.Content value="modules" className="divide-y outline-none">
-            <p className="pb-3 text-sm text-muted">Turn features on or off for the whole company. Disabled modules disappear from navigation and their APIs stay protected.</p>
+            <p className="pb-3 text-sm text-muted">Turn features on or off for the whole company. Turned-off features disappear from everyone&apos;s navigation and home page.</p>
             {MODULE_KEYS.map((k) => (
               <Row key={k} title={MODULE_LABELS[k]} description={LIVE_MODULES.has(k) ? undefined : 'Arrives in an upcoming milestone — you can pre-configure it now.'}>
                 <div className="flex items-center gap-3">
@@ -220,11 +263,22 @@ export default function SettingsPage() {
             <div>
               <p className="mb-2 text-sm font-medium">Allowed work locations</p>
               <div className="flex flex-wrap gap-2">
-                {([['WFO', '🏢 Work from office'], ['WFH', '🏠 Work from home'], ['ON_DUTY', '🚗 On duty / client site']] as const).map(([k, label]) => {
+                {([['WFO', Building2, 'Work from office'], ['WFH', House, 'Work from home'], ['ON_DUTY', Car, 'On duty / client site']] as const).map(([k, Icon, label]) => {
                   const on = s.attendance.allowedLocations.includes(k);
                   return (
-                    <button key={k} onClick={() => patch('attendance', { allowedLocations: on ? s.attendance.allowedLocations.filter((x) => x !== k) : [...s.attendance.allowedLocations, k] })} className={cn('rounded-full border px-3 py-1.5 text-sm transition', on ? 'border-primary bg-primary-soft text-primary' : 'text-muted')} aria-pressed={on}>
-                      {label}
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        // At least one place to work from must stay allowed.
+                        if (on && s.attendance.allowedLocations.length === 1) return void toast.error('Keep at least one work location');
+                        const allowedLocations = on ? s.attendance.allowedLocations.filter((x) => x !== k) : [...s.attendance.allowedLocations, k];
+                        patch('attendance', { allowedLocations, ...(allowedLocations.includes(s.attendance.autoCheckInLocation) ? {} : { autoCheckInLocation: allowedLocations[0] }) });
+                      }}
+                      className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition', on ? 'border-primary bg-primary-soft text-primary' : 'text-muted')}
+                      aria-pressed={on}
+                    >
+                      <Icon className="size-4" /> {label}
                     </button>
                   );
                 })}
@@ -371,5 +425,13 @@ export default function SettingsPage() {
         </Card>
       </Tabs.Root>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <SettingsPage />
+    </Suspense>
   );
 }

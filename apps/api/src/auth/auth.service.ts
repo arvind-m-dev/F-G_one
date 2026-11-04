@@ -47,7 +47,7 @@ export class AuthService {
       throw invalid;
     }
     if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new ForbiddenException('Too many failed attempts. Try again in a few minutes or reset your password.');
+      throw new ForbiddenException('Too many failed attempts. Try again in 15 minutes or ask your administrator for help.');
     }
     const ok = await verifyPassword(user.passwordHash, password);
     if (!ok) {
@@ -172,8 +172,10 @@ export class AuthService {
 
   /** Always resolves the same way whether or not the email exists (no account enumeration). */
   async requestPasswordReset(email: string, meta: ClientMeta) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({ where: { email }, include: { organization: { select: { settings: true } } } });
     if (!user || user.status !== 'ACTIVE') return;
+    // With admin-managed passwords (the default), only an administrator sets a new one: no email link.
+    if (!parseOrganizationSettings(user.organization.settings).auth.selfServicePassword) return;
     // Invalidate older outstanding tokens.
     await this.prisma.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
     const token = newToken();
@@ -190,13 +192,18 @@ export class AuthService {
   }
 
   async resetPassword(token: string, password: string, meta: ClientMeta) {
-    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: { include: { organization: { select: { settings: true } } } } } });
     if (!record || record.usedAt || record.expiresAt < new Date() || record.user.status !== 'ACTIVE') {
+      throw new BadRequestException('This reset link is invalid or has expired.');
+    }
+    // A link issued before the company switched to admin-managed passwords stops working.
+    if (!parseOrganizationSettings(record.user.organization.settings).auth.selfServicePassword) {
       throw new BadRequestException('This reset link is invalid or has expired.');
     }
     const passwordHash = await hashPassword(password);
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash, failedLogins: 0, lockedUntil: null } }),
+      // They chose this password themselves, so any temporary-password flag is cleared.
+      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash, failedLogins: 0, lockedUntil: null, mustChangePassword: false } }),
       this.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
       this.prisma.session.deleteMany({ where: { userId: record.userId } }), // sign out everywhere
     ]);

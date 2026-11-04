@@ -8,8 +8,10 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { PERMISSIONS } from '@fg/shared';
 import { UserAvatar } from '@/components/user-avatar';
-import { api } from '@/lib/api';
-import { useCan } from '@/lib/session';
+import { toast } from 'sonner';
+import { api, errorMessage } from '@/lib/api';
+import { useApprovalsCount } from '@/lib/hooks';
+import { useCan, useModule, useSession, useUpdatePreferences } from '@/lib/session';
 import type { Person } from '@/lib/types';
 import { timeAgo } from '@/lib/utils';
 
@@ -35,7 +37,12 @@ const groupCls = '[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-3 [&
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const router = useRouter();
   const can = useCan();
+  const mod = useModule();
+  const me = useSession();
+  const approvals = useApprovalsCount();
+  const savePrefs = useUpdatePreferences();
   const { setTheme, resolvedTheme } = useTheme();
+  const isAdmin = [PERMISSIONS.ANALYTICS_VIEW, PERMISSIONS.EMPLOYEES_MANAGE, PERMISSIONS.DEPARTMENTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE, PERMISSIONS.AUDIT_READ].some((p) => can(p));
   const [q, setQ] = useState('');
   const term = useDebounced(q.trim());
   const results = useQuery({ queryKey: ['search', term], queryFn: () => api<SearchResult>('/search', { query: { q: term } }), enabled: term.length >= 2 });
@@ -58,8 +65,12 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   };
 
   const openDm = async (id: string) => {
-    const c = await api<{ id: string }>('/dm', { body: { userIds: [id] } });
-    go(`/app/chat/${c.id}`);
+    try {
+      const c = await api<{ id: string }>('/dm', { body: { userIds: [id] } });
+      go(`/app/chat/${c.id}`);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   };
 
   return (
@@ -76,6 +87,11 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </div>
             <Command.List className="scrollbar-thin max-h-[60vh] overflow-y-auto p-2">
               {term.length >= 2 && results.isFetching && !results.data && <div className="px-3 py-6 text-center text-sm text-muted">Searching…</div>}
+              {term.length >= 2 && results.isError && !results.data && (
+                <div role="alert" className="px-3 py-6 text-center text-sm text-danger">
+                  Search isn&apos;t working right now. {errorMessage(results.error)}
+                </div>
+              )}
               {term.length >= 2 && results.data && !results.data.people.length && !results.data.channels.length && !results.data.messages.length && (
                 <div className="px-3 py-8 text-center text-sm text-muted">No results for “{term}”</div>
               )}
@@ -88,15 +104,17 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                           <UserAvatar person={p} size="xs" />
                           <span className="font-medium">{p.name}</span>
                           <span className="truncate text-xs text-muted">{p.designation}</span>
-                          <button
-                            className="ml-auto rounded-md px-2 py-0.5 text-xs text-primary hover:bg-primary/10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void openDm(p.id);
-                            }}
-                          >
-                            Message
-                          </button>
+                          {p.id !== me.user.id && mod('chat') && (
+                            <button
+                              className="ml-auto rounded-md px-2 py-0.5 text-xs text-primary hover:bg-primary/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void openDm(p.id);
+                              }}
+                            >
+                              Message
+                            </button>
+                          )}
                         </Command.Item>
                       ))}
                     </Command.Group>
@@ -134,40 +152,56 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   <Command.Item onSelect={() => go('/app/home')} className={itemCls}>
                     <House /> Home
                   </Command.Item>
+                  {mod('chat') && (
                   <Command.Item onSelect={() => go('/app/chat')} className={itemCls}>
                     <MessagesSquare /> Chat
                   </Command.Item>
+                  )}
                   <Command.Item onSelect={() => go('/app/people')} className={itemCls}>
                     <Users /> Directory
                   </Command.Item>
+                  {mod('attendance') && (
                   <Command.Item onSelect={() => go('/app/attendance')} className={itemCls}>
                     <LogIn /> Check in or out
                   </Command.Item>
+                  )}
+                  {mod('attendance') && (
                   <Command.Item onSelect={() => go('/app/attendance?range=30')} className={itemCls}>
                     <Clock /> My attendance history
                   </Command.Item>
+                  )}
+                  {mod('announcements') && (
                   <Command.Item onSelect={() => go('/app/announcements')} className={itemCls}>
                     <Megaphone /> Announcements
                   </Command.Item>
+                  )}
+                  {mod('leave') && (
                   <Command.Item onSelect={() => go('/app/leave?request=1')} className={itemCls}>
                     <TreePalm /> Request time off
                   </Command.Item>
+                  )}
+                  {mod('leave') && (
                   <Command.Item onSelect={() => go('/app/leave?tab=team')} className={itemCls}>
                     <TreePalm /> Who&apos;s away
                   </Command.Item>
+                  )}
+                  {mod('holidays') && (
                   <Command.Item onSelect={() => go('/app/holidays')} className={itemCls}>
                     <CalendarDays /> Holiday calendar
                   </Command.Item>
+                  )}
+                  {approvals.data?.canApprove && (
                   <Command.Item onSelect={() => go('/app/approvals')} className={itemCls}>
                     <ClipboardCheck /> Approvals
                   </Command.Item>
+                  )}
                   <Command.Item onSelect={() => go('/app/profile')} className={itemCls}>
                     <UserCircle2 /> My profile
                   </Command.Item>
                   <Command.Item onSelect={() => go('/app/settings')} className={itemCls}>
                     <Settings /> Settings
                   </Command.Item>
-                  {can(PERMISSIONS.ANALYTICS_VIEW) && (
+                  {isAdmin && (
                     <Command.Item onSelect={() => go('/admin')} className={itemCls}>
                       <ShieldCheck /> Admin portal
                     </Command.Item>
@@ -179,7 +213,10 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   )}
                   <Command.Item
                     onSelect={() => {
-                      setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+                      const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+                      setTheme(next);
+                      // Save it like the theme menu does, so it sticks on the next visit.
+                      void savePrefs({ theme: next }).catch(() => undefined);
                       onOpenChange(false);
                     }}
                     className={itemCls}
