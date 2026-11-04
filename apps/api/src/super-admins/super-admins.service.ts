@@ -190,8 +190,11 @@ export class SuperAdminsService {
     await this.serializable(async (tx) => {
       const target = await tx.user.findFirst({ where: { id: userId, organizationId: auth.organizationId, isSuperAdmin: true } });
       if (!target) throw new NotFoundException('Super Admin not found');
-      const remaining = await tx.user.count({ where: { ...this.activeWhere(auth.organizationId), id: { not: userId } } });
-      if (remaining < 1) throw new ConflictException('You cannot remove the last active Super Admin.');
+      // Only working Super Admins count here: a paused one (no two-step verification, or a temporary password) cannot act.
+      const remaining = await tx.user.count({
+        where: { ...this.activeWhere(auth.organizationId), id: { not: userId }, mfaEnabledAt: { not: null }, mfaSecretEnc: { not: null }, mustChangePassword: false },
+      });
+      if (remaining < 1) throw new ConflictException('You cannot remove the last working Super Admin. Another Super Admin must have two-step verification on first.');
       await tx.user.update({ where: { id: userId }, data: { isSuperAdmin: false } });
     });
     await this.audit.log(auth, 'superadmin.removed', 'user', userId);

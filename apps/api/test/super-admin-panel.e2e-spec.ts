@@ -147,3 +147,21 @@ describe('Overview: access and security', () => {
     await prisma.userPermissionOverride.deleteMany({ where: { userId: fg.users.manager.id } });
   });
 });
+
+describe('last working Super Admin', () => {
+  it('two working Super Admins removing each other at once cannot leave only a paused one', async () => {
+    await prisma.user.updateMany({ where: { organizationId: fg.org.id, isSuperAdmin: true }, data: { isSuperAdmin: false } });
+    await prisma.superAdminInvitation.updateMany({ where: { organizationId: fg.org.id, acceptedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+    await addUser(fg.org, 'paused.last@futuristglobal.com', fg.roles.administrator.id, { isSuperAdmin: true }); // no two-step verification
+    const a = await addUser(fg.org, 'working.a@futuristglobal.com', fg.roles.administrator.id, { isSuperAdmin: true, ...mfaFields() });
+    const b = await addUser(fg.org, 'working.b@futuristglobal.com', fg.roles.administrator.id, { isSuperAdmin: true, ...mfaFields() });
+    const [sa, sb] = [await login(app, a.email), await login(app, b.email)];
+    const [ra, rb] = await Promise.all([
+      sa.post(`/api/super-admins/${b.id}/remove`).send({ password: PASSWORD }),
+      sb.post(`/api/super-admins/${a.id}/remove`).send({ password: PASSWORD }),
+    ]);
+    expect([ra.status, rb.status].filter((s) => s === 200).length).toBeLessThanOrEqual(1);
+    const working = await prisma.user.count({ where: { organizationId: fg.org.id, isSuperAdmin: true, status: 'ACTIVE', mfaEnabledAt: { not: null } } });
+    expect(working).toBeGreaterThanOrEqual(1);
+  });
+});
