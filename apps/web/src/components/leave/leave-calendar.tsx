@@ -1,12 +1,13 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LeaveStatusBadge } from '@/components/leave/request-leave-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Skeleton, Tooltip } from '@/components/ui/misc';
+import { EmptyState, Skeleton, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
-import { api } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
+import { useOrgToday } from '@/lib/session';
 import type { LeaveRequest } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
@@ -125,8 +126,13 @@ function layoutWeek(week: (string | null)[], leaves: LeaveRequest[]) {
 /** Month grid of who is away. Colleagues see dates only; reasons stay private. */
 export function LeaveCalendar() {
   const [get, set] = useUrlState({ month: '', leave: '' });
-  const q = useQuery({ queryKey: ['leave-calendar', get('month')], queryFn: () => api<Calendar>('/leave/calendar', { query: { month: get('month') || undefined } }), placeholderData: (p) => p });
+  const todayStr = useOrgToday().today();
+  // An edited link with a month that doesn't exist shows this month instead of an error.
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(get('month')) ? get('month') : '';
+  const q = useQuery({ queryKey: ['leave-calendar', month], queryFn: () => api<Calendar>('/leave/calendar', { query: { month: month || undefined } }), placeholderData: (p) => p });
   const cal = q.data;
+  if (q.isError && !cal)
+    return <EmptyState icon={<CalendarDays />} title="The calendar couldn't be loaded" description={errorMessage(q.error)} action={<Button variant="outline" onClick={() => void q.refetch()}>Try again</Button>} />;
   if (!cal) return <Skeleton className="h-96" />;
   const [y, m] = cal.month.split('-').map(Number);
   const first = new Date(Date.UTC(y!, m! - 1, 1));
@@ -135,7 +141,6 @@ export function LeaveCalendar() {
   const cells: (string | null)[] = [...Array(lead).fill(null), ...Array.from({ length: daysIn }, (_, i) => `${cal.month}-${String(i + 1).padStart(2, '0')}`)];
   while (cells.length % 7) cells.push(null);
   const weeks = Array.from({ length: cells.length / 7 }, (_, w) => cells.slice(w * 7, w * 7 + 7));
-  const todayStr = new Date().toLocaleDateString('en-CA');
   const label = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
   return (
@@ -148,7 +153,7 @@ export function LeaveCalendar() {
         <Button variant="outline" size="icon-sm" aria-label="Next month" onClick={() => set({ month: shiftMonth(cal.month, 1) })}>
           <ChevronRight />
         </Button>
-        {get('month') && (
+        {month && (
           <Button variant="ghost" size="sm" onClick={() => set({ month: null })}>
             This month
           </Button>

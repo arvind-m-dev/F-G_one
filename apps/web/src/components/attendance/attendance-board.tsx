@@ -9,7 +9,7 @@ import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDuration } from '@/lib/hooks';
-import { useClock } from '@/lib/session';
+import { useClock, useOrgToday } from '@/lib/session';
 import type { AttendanceBoard as Board, AttendanceRecord } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
@@ -47,8 +47,10 @@ function StateBadge({ r, leave }: { r: AttendanceRecord | null; leave?: { type: 
 export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
   const { time: clockTime } = useClock();
   const [get, set] = useUrlState({ date: '', show: 'all', q: '' });
-  const date = get('date');
-  const show = get('show') as Filter;
+  const orgToday = useOrgToday().today();
+  // A date that isn't YYYY-MM-DD (an edited link) shows today instead of an error.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(get('date')) ? get('date') : '';
+  const show = (FILTERS.some(([k]) => k === get('show')) ? get('show') : 'all') as Filter;
   const [q, setQ] = useState(get('q'));
   const board = useQuery({ queryKey: ['attendance-board', date], queryFn: () => api<Board>('/attendance/board', { query: { date: date || undefined } }), placeholderData: (p) => p, refetchInterval: 60_000 });
   const [exporting, setExporting] = useState(false);
@@ -102,12 +104,12 @@ export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
           <input
             type="date"
             value={d?.date ?? date}
-            max={d?.isToday ? d.date : undefined}
-            onChange={(e) => set({ date: e.target.value })}
+            max={orgToday}
+            onChange={(e) => set({ date: e.target.value && e.target.value <= orgToday ? e.target.value : null })}
             className="h-9 bg-transparent px-1 text-sm outline-none"
             aria-label="Date"
           />
-          <button className="grid size-9 place-items-center text-muted hover:text-foreground disabled:opacity-30" aria-label="Next day" disabled={d?.isToday} onClick={() => d && set({ date: shiftDay(d.date, 1) })}>
+          <button className="grid size-9 place-items-center text-muted hover:text-foreground disabled:opacity-30" aria-label="Next day" disabled={!d || d.date >= orgToday} onClick={() => d && set({ date: shiftDay(d.date, 1) === orgToday ? null : shiftDay(d.date, 1) })}>
             <ChevronRight className="size-4" />
           </button>
         </div>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
+import { useOrgToday } from '@/lib/session';
 
 export interface CorrectionPrefill {
   date: string;
@@ -18,6 +19,7 @@ export interface CorrectionPrefill {
 /** Ask a manager/HR to fix a day (forgot to check in/out, wrong times or location). */
 export function CorrectionDialog({ prefill, onClose }: { prefill: CorrectionPrefill | null; onClose: () => void }) {
   const qc = useQueryClient();
+  const org = useOrgToday();
   const [form, setForm] = useState({ date: '', checkIn: '09:30', checkOut: '18:30', location: 'WFO' as 'WFO' | 'WFH' | 'ON_DUTY', reason: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -30,6 +32,9 @@ export function CorrectionDialog({ prefill, onClose }: { prefill: CorrectionPref
   const submit = async () => {
     const parsed = correctionSchema.safeParse({ ...form, checkOut: form.checkOut || null });
     if (!parsed.success) return setErrors(Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.'), i.message])));
+    // Only today can be left open (still working); a past day needs the time you finished.
+    if (!parsed.data.checkOut && parsed.data.date < org.today()) return setErrors({ checkOut: 'Add the time you finished' });
+    setErrors({});
     setSaving(true);
     try {
       await api('/attendance/corrections', { body: parsed.data });
@@ -46,13 +51,13 @@ export function CorrectionDialog({ prefill, onClose }: { prefill: CorrectionPref
     <Dialog open={!!prefill} onOpenChange={(o) => !o && onClose()} title="Request a correction" description="Forgot to check in or out, or picked the wrong place? Tell us what really happened.">
       <div className="space-y-4">
         <Field label="Day" htmlFor="c-date" error={errors.date}>
-          <Input id="c-date" type="date" max={new Date().toLocaleDateString('en-CA')} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+          <Input id="c-date" type="date" min={org.today(-60)} max={org.today()} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Started at" htmlFor="c-in" error={errors.checkIn}>
             <Input id="c-in" type="time" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
           </Field>
-          <Field label="Finished at" htmlFor="c-out" error={errors.checkOut} hint="Leave empty if still working">
+          <Field label="Finished at" htmlFor="c-out" error={errors.checkOut} hint={form.date === org.today() ? 'Leave empty if still working' : undefined}>
             <Input id="c-out" type="time" value={form.checkOut ?? ''} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
           </Field>
         </div>

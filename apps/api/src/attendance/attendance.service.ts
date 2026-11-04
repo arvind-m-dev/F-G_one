@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { Prisma, WorkLocation } from '@prisma/client';
-import { hasPermission, parseOrganizationSettings, PERMISSIONS, RT, type CorrectionInput } from '@fg/shared';
+import { daysBetween, MAX_RANGE_DAYS, parseOrganizationSettings, RT, type CorrectionInput } from '@fg/shared';
 import { userScopeWhere } from '../common/authz';
 import { approversFor, assertCanDecide, deciderScope } from '../common/approvals';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -185,10 +185,12 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     if (current && current.date.toISOString().slice(0, 10) === date) {
       // Checked out earlier today. Reopen when split shifts are allowed, or when the system closed the shift for you.
       if (!policy.multipleSessions && !current.autoCheckOutReason) throw new ConflictException('You have already checked in today');
-      await this.prisma.$transaction([
-        this.prisma.attendanceBreak.create({ data: { recordId: current.id, kind: 'AWAY', startAt: current.checkOutAt!, endAt: now } }),
-        this.prisma.attendanceRecord.update({ where: { id: current.id }, data: { checkOutAt: null, checkOutRemarks: null, autoCheckOutReason: null, lastActiveAt: now } }),
-      ]);
+      await this.prisma.$transaction(async (tx) => {
+        // Reopen only the check-out we read, so a double tap doesn't store the gap twice.
+        const res = await tx.attendanceRecord.updateMany({ where: { id: current.id, checkOutAt: current.checkOutAt }, data: { checkOutAt: null, checkOutRemarks: null, autoCheckOutReason: null, lastActiveAt: now } });
+        if (!res.count) throw new ConflictException('You are already checked in');
+        await tx.attendanceBreak.create({ data: { recordId: current.id, kind: 'AWAY', startAt: current.checkOutAt!, endAt: now } });
+      });
     } else {
       const late = localMinutes(policy.timezone, now) > hhmm(policy.workdayStart) + policy.graceMinutes;
       try {
@@ -311,8 +313,14 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   async startBreak(auth: AuthContext) {
     const { r, policy } = await this.openRecord(auth);
     if (!policy.breaksEnabled) throw new BadRequestException('Breaks are not tracked for your company');
-    if (r.breaks.some((b) => !b.endAt)) throw new ConflictException('You are already on a break');
-    await this.prisma.attendanceBreak.create({ data: { recordId: r.id, startAt: new Date() } });
+    // Two taps (or two tabs) at once must not open two breaks: check again while holding the record's row lock.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "AttendanceRecord" WHERE id = ${r.id} FOR UPDATE`;
+      const [open, rec] = await Promise.all([tx.attendanceBreak.count({ where: { recordId: r.id, endAt: null } }), tx.attendanceRecord.findUniqueOrThrow({ where: { id: r.id }, select: { checkOutAt: true } })]);
+      if (rec.checkOutAt) throw new BadRequestException('You are checked out');
+      if (open) throw new ConflictException('You are already on a break');
+      await tx.attendanceBreak.create({ data: { recordId: r.id, startAt: new Date() } });
+    });
     this.changed(auth);
     return this.today(auth);
   }
@@ -321,7 +329,8 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     const { r } = await this.openRecord(auth);
     const open = r.breaks.find((b) => !b.endAt);
     if (!open) throw new BadRequestException('You are not on a break');
-    await this.prisma.attendanceBreak.update({ where: { id: open.id }, data: { endAt: new Date() } });
+    const res = await this.prisma.attendanceBreak.updateMany({ where: { id: open.id, endAt: null }, data: { endAt: new Date() } });
+    if (!res.count) throw new BadRequestException('You are not on a break');
     this.changed(auth);
     return this.today(auth);
   }
@@ -329,10 +338,12 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
   async checkOut(auth: AuthContext, remarks?: string | null) {
     const { r } = await this.openRecord(auth);
     const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.attendanceBreak.updateMany({ where: { recordId: r.id, endAt: null }, data: { endAt: now } }),
-      this.prisma.attendanceRecord.update({ where: { id: r.id }, data: { checkOutAt: now, checkOutRemarks: remarks || null } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      // Only the first of two simultaneous check-outs counts; the second would move the time.
+      const res = await tx.attendanceRecord.updateMany({ where: { id: r.id, checkOutAt: null }, data: { checkOutAt: now, checkOutRemarks: remarks || null } });
+      if (!res.count) throw new ConflictException('You have already checked out');
+      await tx.attendanceBreak.updateMany({ where: { recordId: r.id, endAt: null }, data: { endAt: now } });
+    });
     this.changed(auth);
     return this.today(auth);
   }
@@ -341,9 +352,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     if (userId !== auth.userId) await this.assertCanView(auth, userId);
     const policy = await this.policy(auth.organizationId);
     await this.autoClose(auth.organizationId, policy, userId);
-    const end = to ?? localDate(policy.timezone);
-    const start = from ?? addDays(end, -29);
-    if (start > end) throw new BadRequestException('"from" must be before "to"');
+    const { start, end } = this.range(policy, from, to);
     const rows = await this.prisma.attendanceRecord.findMany({
       where: { userId, organizationId: auth.organizationId, date: { gte: toDbDate(start), lte: toDbDate(end) } },
       include: recordInclude,
@@ -369,6 +378,15 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /** A date range in the organization's time zone (default: the last 30 days), at most MAX_RANGE_DAYS long. */
+  private range(policy: Policy, from?: string, to?: string) {
+    const end = to ?? localDate(policy.timezone);
+    const start = from ?? addDays(end, -29);
+    if (start > end) throw new BadRequestException('"from" must be on or before "to"');
+    if (daysBetween(start, end) >= MAX_RANGE_DAYS) throw new BadRequestException(`Choose at most ${MAX_RANGE_DAYS} days`);
+    return { start, end };
+  }
+
   /** Who the caller may see, from the `attendance.view` grant: ORG = everyone, TEAM = direct reports. */
   private async scope(auth: AuthContext): Promise<Prisma.UserWhereInput> {
     return userScopeWhere(auth, 'attendance.view', 'You do not have permission to view team attendance');
@@ -376,6 +394,9 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
 
   private async assertCanView(auth: AuthContext, userId: string) {
     const scope = await this.scope(auth);
+    // Someone outside the organization (or an id that doesn't exist) is not found.
+    const exists = await this.prisma.user.count({ where: { id: userId, organizationId: auth.organizationId } });
+    if (!exists) throw new NotFoundException('Employee not found');
     const ok = await this.prisma.user.count({ where: { ...scope, id: userId } });
     if (!ok) throw new ForbiddenException('You cannot view this person’s attendance');
   }
@@ -424,8 +445,7 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     const scope = await this.scope(auth);
     const policy = await this.policy(auth.organizationId);
     await this.autoClose(auth.organizationId, policy);
-    const end = to ?? localDate(policy.timezone);
-    const start = from ?? addDays(end, -29);
+    const { start, end } = this.range(policy, from, to);
     const rows = await this.prisma.attendanceRecord.findMany({
       where: { organizationId: auth.organizationId, user: scope, date: { gte: toDbDate(start), lte: toDbDate(end) } },
       include: { ...recordInclude, user: { select: { firstName: true, lastName: true, email: true, employeeCode: true, department: { select: { name: true } } } } },
@@ -436,8 +456,8 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     // Prefix values that spreadsheet apps would treat as formulas.
     const cell = (v: unknown) => {
       let s = String(v ?? '');
-      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      if (/^[=+\-@\t\r＝＋－＠]/.test(s)) s = `'${s}`;
+      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const header = ['Date', 'Employee', 'Email', 'Employee code', 'Department', 'Location', 'Check in', 'Check out', 'Break (min)', 'Worked (min)', 'Late', 'Checked in automatically', 'Checked out automatically', 'Remarks'];
     const lines = rows.map((r) => {
@@ -454,13 +474,25 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
 
   async requestCorrection(auth: AuthContext, body: CorrectionInput) {
     const policy = await this.policy(auth.organizationId);
-    if (body.date > localDate(policy.timezone)) throw new BadRequestException('You can only correct today or past days');
-    if (body.date < addDays(localDate(policy.timezone), -60)) throw new BadRequestException('Corrections are limited to the last 60 days');
-    const dup = await this.prisma.attendanceCorrection.count({ where: { userId: auth.userId, date: toDbDate(body.date), status: 'PENDING' } });
-    if (dup) throw new ConflictException('You already have a pending correction for that day');
-    const c = await this.prisma.attendanceCorrection.create({
-      data: { organizationId: auth.organizationId, userId: auth.userId, date: toDbDate(body.date), checkIn: body.checkIn, checkOut: body.checkOut ?? null, location: body.location, reason: body.reason },
-      include: { user: { select: { firstName: true, lastName: true } } },
+    const today = localDate(policy.timezone);
+    if (body.date > today) throw new BadRequestException('You can only correct today or past days');
+    if (body.date < addDays(today, -60)) throw new BadRequestException('Corrections are limited to the last 60 days');
+    if (body.date === today) {
+      const nowHm = localMinutes(policy.timezone);
+      if (hhmm(body.checkIn) > nowHm || (body.checkOut && hhmm(body.checkOut) > nowHm)) throw new BadRequestException('Those times are later than now');
+    } else if (!body.checkOut) {
+      // A past day without an end would leave an open shift that never finishes.
+      throw new BadRequestException('Add the time you finished for a past day');
+    }
+    const c = await this.prisma.$transaction(async (tx) => {
+      // One pending correction per day, also when the form is sent twice at once.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`correction:${auth.userId}:${body.date}`}))`;
+      const dup = await tx.attendanceCorrection.count({ where: { userId: auth.userId, date: toDbDate(body.date), status: 'PENDING' } });
+      if (dup) throw new ConflictException('You already have a pending correction for that day');
+      return tx.attendanceCorrection.create({
+        data: { organizationId: auth.organizationId, userId: auth.userId, date: toDbDate(body.date), checkIn: body.checkIn, checkOut: body.checkOut ?? null, location: body.location, reason: body.reason },
+        include: { user: { select: { firstName: true, lastName: true } } },
+      });
     });
     await this.audit.log(auth, 'attendance.correction_requested', 'attendance_correction', c.id, { date: body.date });
     void this.notifications.notify({
@@ -516,18 +548,24 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
     const policy = await this.policy(auth.organizationId);
     const day = c.date.toISOString().slice(0, 10);
     await this.prisma.$transaction(async (tx) => {
-      await tx.attendanceCorrection.update({ where: { id }, data: { status: decision, reviewerId: auth.userId, reviewNote: note || null, decidedAt: new Date() } });
+      // Only one of two simultaneous decisions applies.
+      const res = await tx.attendanceCorrection.updateMany({ where: { id, status: 'PENDING' }, data: { status: decision, reviewerId: auth.userId, reviewNote: note || null, decidedAt: new Date() } });
+      if (!res.count) throw new ConflictException('This correction was already decided');
       if (decision === 'APPROVED') {
         const checkInAt = localToUtc(day, c.checkIn, policy.timezone);
         const checkOutAt = c.checkOut ? localToUtc(day, c.checkOut, policy.timezone) : null;
         const [h, m] = c.checkIn.split(':').map(Number);
         const late = h! * 60 + m! > hhmm(policy.workdayStart) + policy.graceMinutes;
         const remarks = `Corrected: ${c.reason}`.slice(0, 200);
-        await tx.attendanceRecord.upsert({
+        const rec = await tx.attendanceRecord.upsert({
           where: { userId_date: { userId: c.userId, date: c.date } },
           update: { checkInAt, checkOutAt, location: c.location, late, remarks, autoCheckOutReason: null },
           create: { organizationId: auth.organizationId, userId: c.userId, date: c.date, checkInAt, checkOutAt, location: c.location, late, remarks },
         });
+        // Breaks recorded outside the corrected hours no longer apply; ones that overlap an edge are trimmed to it.
+        await tx.attendanceBreak.deleteMany({ where: { recordId: rec.id, OR: [{ endAt: { lte: checkInAt } }, ...(checkOutAt ? [{ startAt: { gte: checkOutAt } }] : [])] } });
+        await tx.attendanceBreak.updateMany({ where: { recordId: rec.id, startAt: { lt: checkInAt } }, data: { startAt: checkInAt } });
+        if (checkOutAt) await tx.attendanceBreak.updateMany({ where: { recordId: rec.id, OR: [{ endAt: null }, { endAt: { gt: checkOutAt } }] }, data: { endAt: checkOutAt } });
       }
     });
     await this.audit.log(auth, decision === 'APPROVED' ? 'attendance.corrected' : 'attendance.correction_rejected', 'attendance_correction', id, { userId: c.userId, date: day, checkIn: c.checkIn, checkOut: c.checkOut });

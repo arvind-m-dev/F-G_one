@@ -13,6 +13,7 @@ import { Badge, EmptyState, InfoHint, Skeleton } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDays, fmtRange, useLeaveBalances, useLeaveRequests } from '@/lib/hooks';
 import type { LeaveRequest } from '@/lib/types';
+import { useOrgToday } from '@/lib/session';
 import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +23,7 @@ function MyLeave() {
   const requests = useLeaveRequests('mine');
   const [get, set] = useUrlState({ request: '', leave: '' });
   const [cancelling, setCancelling] = useState<LeaveRequest | null>(null);
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = useOrgToday().today();
   const cancel = useMutation({
     mutationFn: (id: string) => api(`/leave/requests/${id}/cancel`, { method: 'POST' }),
     onSuccess: () => {
@@ -46,6 +47,8 @@ function MyLeave() {
       </div>
       {balances.isPending ? (
         <Skeleton className="h-28" />
+      ) : balances.isError ? (
+        <EmptyState icon={<TreePalm />} title="Balances couldn't be loaded" description={errorMessage(balances.error)} action={<Button variant="outline" onClick={() => void balances.refetch()}>Try again</Button>} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {balances.data?.items.map((b) => {
@@ -79,6 +82,8 @@ function MyLeave() {
         <SectionTitle icon={<TreePalm />}>My requests</SectionTitle>
         {requests.isPending ? (
           <Skeleton className="h-40" />
+        ) : requests.isError ? (
+          <EmptyState icon={<TreePalm />} title="Your requests couldn't be loaded" description={errorMessage(requests.error)} action={<Button variant="outline" onClick={() => void requests.refetch()}>Try again</Button>} />
         ) : !requests.data?.length ? (
           <EmptyState icon={<TreePalm />} title="No leave requests yet" description="When you request time off it shows up here with its status." action={<Button variant="outline" onClick={() => set({ request: '1' })}>Request time off</Button>} />
         ) : (

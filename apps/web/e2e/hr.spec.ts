@@ -15,8 +15,9 @@ test('leave: employee requests, manager approves from Approvals, employee sees i
   await emp.goto('/app/leave');
   await emp.getByRole('button', { name: 'Request time off' }).first().click();
   const day = weekday(21);
-  await emp.getByLabel('From').fill(day);
-  await emp.getByLabel('To').fill(day);
+  // Scoped to the dialog: the check-in reminder's "Hide for today" button also matches "To".
+  await emp.getByRole('dialog').getByLabel('From', { exact: true }).fill(day);
+  await emp.getByRole('dialog').getByLabel('To', { exact: true }).fill(day);
   await emp.getByLabel('Reason (optional)').fill('Dentist appointment');
   await expect(emp.getByText(/This uses 1 day/)).toBeVisible();
   await emp.getByRole('button', { name: 'Send request' }).click();

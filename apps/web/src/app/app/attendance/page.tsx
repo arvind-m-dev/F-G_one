@@ -10,9 +10,9 @@ import { AttendancePanel, DayBar, LOCATION_ICON, LOCATION_LABEL } from '@/compon
 import { PageHeader } from '@/components/shell/page';
 import { SectionTitle } from '@/components/ui/card';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
-import { api } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
 import { fmtDuration, useCorrections } from '@/lib/hooks';
-import { useCan, useClock } from '@/lib/session';
+import { useCan, useClock, useOrgToday } from '@/lib/session';
 import type { AttendanceHistory } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn, parseDateOnly } from '@/lib/utils';
@@ -25,21 +25,21 @@ const RANGES = [
 
 function History() {
   const { time: clockTime } = useClock();
+  const org = useOrgToday();
   const [get, set] = useUrlState({ range: '30' });
-  const range = get('range');
-  const to = new Date();
-  const from = new Date(Date.now() - (Number(range) - 1) * 86400_000);
-  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // Unknown values in the URL fall back to 30 days.
+  const range = RANGES.some(([v]) => v === get('range')) ? get('range') : '30';
   const hist = useQuery({
     queryKey: ['attendance-history', range],
-    queryFn: () => api<AttendanceHistory>('/attendance/me', { query: { from: ymd(from), to: ymd(to) } }),
+    // Days are the organization's calendar days, not the browser's.
+    queryFn: () => api<AttendanceHistory>('/attendance/me', { query: { from: org.today(-(Number(range) - 1)), to: org.today() } }),
     placeholderData: (p) => p,
   });
   const s = hist.data?.summary;
   const [fix, setFix] = useState<CorrectionPrefill | null>(null);
   const tz = hist.data?.timezone;
   const hm = (t: string | null) => (t ? new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t)) : null);
-  const yesterday = new Date(Date.now() - 86400_000).toLocaleDateString('en-CA');
+  const yesterday = org.today(-1);
   const time = (t: string | Date) => clockTime(t, hist.data?.timezone);
   return (
     <section className="mt-10">
@@ -81,6 +81,8 @@ function History() {
       )}
       {hist.isPending ? (
         <Skeleton className="h-64" />
+      ) : hist.isError ? (
+        <EmptyState icon={<CalendarClock />} title="Your history couldn't be loaded" description={errorMessage(hist.error)} action={<Button variant="outline" onClick={() => void hist.refetch()}>Try again</Button>} />
       ) : !hist.data?.items.length ? (
         <EmptyState icon={<CalendarClock />} title="No attendance yet" description="Your days appear here after you check in." />
       ) : (

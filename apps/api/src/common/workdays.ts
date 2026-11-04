@@ -1,9 +1,9 @@
 import { parseOrganizationSettings } from '@fg/shared';
-import type { PrismaService } from '../prisma/prisma.service';
+import type { Prisma } from '@prisma/client';
 import { addDays, toDbDate } from './tz';
 
 /** Working days between two dates (inclusive), using the organization's working days and holidays. */
-export async function countWorkingDays(prisma: PrismaService, organizationId: string, start: string, end: string) {
+export async function countWorkingDays(prisma: Prisma.TransactionClient, organizationId: string, start: string, end: string) {
   const org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
   const workingDays = parseOrganizationSettings(org.settings).attendance.workingDays;
   const holidays = await prisma.holiday.findMany({ where: { organizationId, date: { gte: toDbDate(start), lte: toDbDate(end) } } });
