@@ -325,7 +325,8 @@ export class LeaveService {
         status: { in: isHr ? ['APPROVED', 'PENDING'] : ['APPROVED'] },
         startDate: { lte: toDbDate(end) },
         endDate: { gte: toDbDate(start) },
-        user: people,
+        // Archived people are hidden from everyday views; their history stays on their record.
+        user: { ...people, status: { not: 'ARCHIVED' } },
       },
       include: requestInclude,
       orderBy: { startDate: 'asc' },

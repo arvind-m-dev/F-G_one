@@ -814,6 +814,8 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
       avatarColor: p.color,
       status: p.status ?? 'ACTIVE',
       deactivatedAt: p.status === 'DEACTIVATED' ? new Date(now - (p.statusDaysAgo ?? 0) * 86400_000) : null,
+      suspendedAt: p.status === 'SUSPENDED' ? new Date(now - (p.statusDaysAgo ?? 0) * 86400_000) : null,
+      suspensionReason: p.status === 'SUSPENDED' ? 'Pending a policy review' : null,
       passwordHash,
       presence: p.status ? 'offline' : (p.presence ?? 'available'),
       statusText: p.status ? null : (p.statusText ?? null),
@@ -863,6 +865,41 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
   return { org, counts };
 }
 
+/** Email of the Super Admin that browser tests sign in as. Created only when SEED_E2E_TOTP is set. */
+export const E2E_SUPER_ADMIN_EMAIL = 'e2e.superadmin@futuristglobal.com';
+
+/**
+ * Browser tests need a Super Admin whose authority is active, which needs two-step verification.
+ * The demo Super Admin (admin@) has none, and Super Admins cannot turn it off again, so tests use this
+ * extra account instead. Its authenticator secret comes from SEED_E2E_TOTP (base32, the same value the
+ * tests get as E2E_TOTP_SECRET). Never set it for a shared or production database.
+ */
+async function seedE2eSuperAdmin(organizationId: string, password: string, secret: string) {
+  if (!/^[A-Z2-7]{16,64}$/.test(secret)) throw new Error('SEED_E2E_TOTP must be a base32 secret (16-64 characters A-Z and 2-7)');
+  const { encryptSecret } = await import('../src/auth/mfa');
+  const role = await prisma.role.findUniqueOrThrow({ where: { organizationId_key: { organizationId, key: 'administrator' } } });
+  const dept = await prisma.department.findFirst({ where: { organizationId, name: 'Management' } });
+  await prisma.user.create({
+    data: {
+      organizationId,
+      email: E2E_SUPER_ADMIN_EMAIL,
+      firstName: 'Esha',
+      lastName: 'Kapoor',
+      designation: 'IT Security (automated tests)',
+      roleId: role.id,
+      departmentId: dept?.id ?? null,
+      isSuperAdmin: true,
+      status: 'ACTIVE',
+      passwordHash: await hash(password, { memoryCost: 19456, timeCost: 2, parallelism: 1 }),
+      mfaSecretEnc: encryptSecret(secret),
+      mfaEnabledAt: new Date(),
+      avatarColor: '#0ea5e9',
+      joinedAt: new Date(Date.now() - 400 * 86400_000),
+    },
+  });
+  console.log(`  e2e Super Admin: ${E2E_SUPER_ADMIN_EMAIL} (two-step verification on, secret from SEED_E2E_TOTP)`);
+}
+
 async function main() {
   if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed demo data in production');
   const password = process.env.SEED_PASSWORD;
@@ -870,6 +907,7 @@ async function main() {
   const started = Date.now();
   const fg = await seedOrg({ name: 'Futurist Global', slug: process.env.DEFAULT_ORG_SLUG || 'futurist-global', domain: 'futuristglobal.com', password });
   await seedOrg({ name: 'Acme Test Co', slug: 'acme-test', domain: 'acme.test', password, minimal: true });
+  if (process.env.SEED_E2E_TOTP) await seedE2eSuperAdmin(fg.org.id, password, process.env.SEED_E2E_TOTP);
   console.log(`Seeded Futurist Global and Acme Test Co in ${((Date.now() - started) / 1000).toFixed(1)} s:`);
   console.log(Object.entries(fg.counts ?? {}).map(([k, v]) => `  ${k}: ${v}`).join('\n'));
   console.log(`  Sign in with ${DEMO_EMAILS.join(' / ')} using SEED_PASSWORD.`);

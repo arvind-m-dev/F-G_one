@@ -73,6 +73,10 @@ Migration `…_attendance_announcements_notifications` also adds the new Home wi
 * `Session.mfaPending` (password accepted, code still owed), `mfaFailures` and `authenticatedAt` (last sign-in or re-authentication, used by `@RequireRecentAuth`).
 * Migration `20261103102615_mfa_and_sessions` is additive. Existing sessions get `authenticatedAt = now()` and `mfaPending = false`.
 
+## Added (Super Admin Phase 3)
+* `User.suspendedAt`, `suspensionReason`, `archivedAt` (migration `20261104120000_user_suspend_archive`, additive).
+* New audit actions: `employee.suspended`, `employee.unsuspended`, `employee.archived`, `employee.restored`, `employee.access_changed` (diff), `superadmin.limit_changed`.
+
 ## Planned models (added by later milestones, no changes to existing tables)
 
 | Milestone | Models |

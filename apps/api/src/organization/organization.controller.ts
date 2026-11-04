@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, NotFoundException, Patch } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Patch } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { organizationSettingsSchema, parseOrganizationSettings, PERMISSIONS, updateOrganizationSchema, UpdateOrganizationInput } from '@fg/shared';
 import { AuditService } from '../audit/audit.service';
@@ -59,6 +59,13 @@ export class OrganizationController {
     const settings = body.settings
       ? organizationSettingsSchema.parse(deepMerge(parseOrganizationSettings(org.settings), body.settings))
       : undefined;
+    if (settings && settings.security.superAdminLimit < current.security.superAdminLimit) {
+      // Lowering the limit below the Super Admins who already hold the authority would leave the organization over it.
+      const active = await this.prisma.user.count({ where: { organizationId: org.id, isSuperAdmin: true, status: 'ACTIVE', accountType: 'INTERNAL' } });
+      if (settings.security.superAdminLimit < active) {
+        throw new ConflictException(`There are already ${active} Super Admins. Remove one before lowering the limit to ${settings.security.superAdminLimit}.`);
+      }
+    }
     const updated = await this.prisma.organization.update({
       where: { id: org.id },
       data: {
@@ -73,6 +80,9 @@ export class OrganizationController {
       fields: Object.keys(body),
       settingsSections: body.settings ? Object.keys(body.settings) : [],
     });
+    if (settings && settings.security.superAdminLimit !== current.security.superAdminLimit) {
+      await this.audit.log(auth, 'superadmin.limit_changed', 'organization', org.id, { from: current.security.superAdminLimit, to: settings.security.superAdminLimit });
+    }
     return { ...updated, settings: parseOrganizationSettings(updated.settings) };
   }
 }

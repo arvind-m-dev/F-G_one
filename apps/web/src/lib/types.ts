@@ -132,6 +132,23 @@ export interface Role {
   isSystem: boolean;
   memberCount: number;
   assignable: boolean;
+  /** What the role allows: permission at a scope (from the catalogue). */
+  grants: { permission: string; scope: string }[];
+  archivedAt: string | null;
+}
+
+/** One person's exception: ALLOW adds a permission at `scope`, DENY removes it whatever their roles say. */
+export interface AccessOverride {
+  permission: string;
+  effect: 'ALLOW' | 'DENY';
+  scope: string | null;
+}
+
+/** Main role, extra roles and exceptions (what the Access section and the creation wizard edit). */
+export interface AccessValue {
+  roleId: string;
+  extraRoleIds: string[];
+  overrides: AccessOverride[];
 }
 
 export interface Paged<T> {

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
+  Archive,
   AtSign,
   BadgeCheck,
   Briefcase,
@@ -15,23 +16,23 @@ import {
   LogOut,
   MessageSquare,
   MoreHorizontal,
+  PauseCircle,
   Pencil,
   RotateCw,
   ShieldCheck,
   ShieldOff,
   Smartphone,
-  UserCheck,
   UserRound,
   Users,
-  UserX,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
-import { PERMISSION_CATALOG, PERMISSION_MODULES, PERMISSIONS, SCOPE_LABELS, type Scope } from '@fg/shared';
+import { PERMISSIONS, type Scope } from '@fg/shared';
 import { AuditList, type AuditEntry } from '@/components/admin/audit-list';
-import { AccountStatusDialog, ChangeEmailDialog, EditEmployeeDialog, SetPasswordDialog } from '@/components/admin/employee-dialogs';
+import { EmployeeAccess } from '@/components/admin/employee-access';
+import { AccountStatusDialog, ChangeEmailDialog, EditEmployeeDialog, SetPasswordDialog, STATUS_ACTION_META, statusActions, type StatusAction } from '@/components/admin/employee-dialogs';
 import { STATUS_LABEL, STATUS_TONE } from '@/components/admin/employee-status';
 import { Forbidden, PageHeader } from '@/components/admin/page-header';
 import { LOCATION_LABEL } from '@/components/attendance/attendance-panel';
@@ -80,6 +81,9 @@ interface Overview {
     lastSeenAt: string | null;
     createdAt: string;
     deactivatedAt: string | null;
+    suspendedAt: string | null;
+    suspensionReason: string | null;
+    archivedAt: string | null;
     lockedUntil: string | null;
     failedLogins: number;
   };
@@ -114,6 +118,7 @@ interface Overview {
 const TABS = [
   { v: 'overview', label: 'Overview', icon: UserRound },
   { v: 'employment', label: 'Employment', icon: Briefcase },
+  { v: 'access', label: 'Access', icon: ShieldCheck },
   { v: 'attendance', label: 'Attendance', icon: Clock },
   { v: 'leave', label: 'Leave', icon: CalendarDays },
   { v: 'devices', label: 'Devices', icon: Laptop },
@@ -144,7 +149,7 @@ function EmployeePage() {
   const [editing, setEditing] = useState(false);
   const [changingEmail, setChangingEmail] = useState(false);
   const [settingPassword, setSettingPassword] = useState(false);
-  const [status, setStatus] = useState<'deactivate' | 'activate' | null>(null);
+  const [status, setStatus] = useState<StatusAction | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   if (!can(PERMISSIONS.EMPLOYEES_MANAGE)) return <Forbidden />;
@@ -246,15 +251,14 @@ function EmployeePage() {
                     <LogOut /> Sign out everywhere
                   </DropdownItem>
                   <DropdownSeparator />
-                  {e.status === 'DEACTIVATED' ? (
-                    <DropdownItem onSelect={() => setStatus('activate')}>
-                      <UserCheck /> Reactivate
-                    </DropdownItem>
-                  ) : (
-                    <DropdownItem danger onSelect={() => setStatus('deactivate')}>
-                      <UserX /> Deactivate
-                    </DropdownItem>
-                  )}
+                  {statusActions(e.status).map((a) => {
+                    const meta = STATUS_ACTION_META[a];
+                    return (
+                      <DropdownItem key={a} danger={meta.danger} onSelect={() => setStatus(a)}>
+                        <meta.icon /> {meta.label}
+                      </DropdownItem>
+                    );
+                  })}
                 </DropdownContent>
               </DropdownMenu>
             )}
@@ -302,7 +306,8 @@ function EmployeePage() {
 
       <div role="tabpanel" id="employee-panel" aria-labelledby={`tab-${tab}`}>
         {tab === 'overview' && <OverviewTab o={o} go={(t) => set({ tab: t })} />}
-        {tab === 'employment' && <EmploymentTab o={o} />}
+        {tab === 'employment' && <EmploymentTab o={o} go={(t) => set({ tab: t })} />}
+        {tab === 'access' && <EmployeeAccess userId={e.id} firstName={e.firstName} />}
         {tab === 'attendance' && <AttendanceTab o={o} />}
         {tab === 'leave' && <LeaveTab o={o} />}
         {tab === 'devices' && <DevicesTab o={o} self={self} onSignOut={() => setSigningOut(true)} />}
@@ -378,6 +383,9 @@ function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
   const att = o.attendance;
   const pending = o.leave.requests.filter((r) => r.status === 'PENDING').length;
   const attention: { icon: React.ReactNode; text: string; tone: 'warning' | 'danger' }[] = [];
+  if (a.status === 'SUSPENDED')
+    attention.push({ icon: <PauseCircle />, text: `Suspended${a.suspendedAt ? ` since ${fmtWhen(a.suspendedAt)}` : ''}: they can't sign in until the suspension is lifted.${a.suspensionReason ? ` Reason: ${a.suspensionReason}` : ''}`, tone: 'danger' });
+  if (a.status === 'ARCHIVED') attention.push({ icon: <Archive />, text: `Archived${a.archivedAt ? ` on ${fmtDate(a.archivedAt)}` : ''}. Hidden from lists and pickers; their history is kept. Restore them to make changes.`, tone: 'warning' });
   if (a.lockedUntil) attention.push({ icon: <LockKeyhole />, text: `Sign-in is locked until ${fmtWhen(a.lockedUntil)} after too many wrong passwords. Setting a new password unlocks it.`, tone: 'danger' });
   if (!a.hasPassword) attention.push({ icon: <KeyRound />, text: 'No password yet. Set one so they can sign in.', tone: 'warning' });
   if (a.mustChangePassword) attention.push({ icon: <KeyRound />, text: 'They will choose their own password at next sign-in.', tone: 'warning' });
@@ -402,7 +410,10 @@ function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
           <SectionTitle icon={<ShieldCheck />}>Account</SectionTitle>
           <Card className="p-5">
             <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-              <Fact label="Status">{STATUS_LABEL[a.status]}{a.deactivatedAt ? ` since ${fmtDate(a.deactivatedAt)}` : ''}</Fact>
+              <Fact label="Status">
+                {STATUS_LABEL[a.status]}
+                {a.status === 'SUSPENDED' && a.suspendedAt ? ` since ${fmtDate(a.suspendedAt)}` : a.status === 'ARCHIVED' && a.archivedAt ? ` since ${fmtDate(a.archivedAt)}` : a.status === 'DEACTIVATED' && a.deactivatedAt ? ` since ${fmtDate(a.deactivatedAt)}` : ''}
+              </Fact>
               <Fact label="Last sign-in">{a.lastLoginAt ? <span title={fmtWhen(a.lastLoginAt)}>{timeAgo(a.lastLoginAt)}</span> : 'Never'}</Fact>
               <Fact label="Last active">{a.lastSeenAt ? <span title={fmtWhen(a.lastSeenAt)}>{timeAgo(a.lastSeenAt)}</span> : 'Never'}</Fact>
               <Fact label="Two-step verification">
@@ -513,11 +524,8 @@ function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
   );
 }
 
-function EmploymentTab({ o }: { o: Overview }) {
+function EmploymentTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
   const e = o.employee;
-  const modules = Object.entries(PERMISSION_MODULES)
-    .map(([key, label]) => ({ key, label, items: PERMISSION_CATALOG.filter((c) => c.module === key && o.access.grants[c.key]) }))
-    .filter((m) => m.items.length);
   return (
     <div className="space-y-8">
       <section>
@@ -538,60 +546,34 @@ function EmploymentTab({ o }: { o: Overview }) {
       </section>
 
       <section>
-        <SectionTitle icon={<ShieldCheck />}>Role and access</SectionTitle>
-        <Card className="divide-y">
-          <div className="flex flex-wrap items-center gap-2 p-5 text-sm">
-            <span className="text-muted">Role:</span>
-            <Badge tone="brand">{o.access.role.name}</Badge>
-            {o.access.extraRoles.length > 0 && <span className="ml-2 text-muted">Also:</span>}
-            {o.access.extraRoles.map((r) => (
-              <Badge key={r.id} tone={r.archived ? 'muted' : 'default'}>
-                {r.name}
-                {r.archived ? ' (archived)' : ''}
-              </Badge>
-            ))}
-            {o.account.isSuperAdmin && (
-              <Badge tone="brand">
-                <ShieldCheck className="size-3" aria-hidden /> Super Admin{o.account.superAdminActive ? '' : ' (paused)'}
-              </Badge>
-            )}
-          </div>
+        <SectionTitle
+          icon={<ShieldCheck />}
+          action={
+            <button className="text-xs text-muted hover:text-foreground" onClick={() => go('access')}>
+              Manage access
+            </button>
+          }
+        >
+          Role
+        </SectionTitle>
+        <Card className="flex flex-wrap items-center gap-2 p-5 text-sm">
+          <Badge tone="brand">{o.access.role.name}</Badge>
+          {o.access.extraRoles.map((r) => (
+            <Badge key={r.id} tone={r.archived ? 'muted' : 'default'}>
+              + {r.name}
+              {r.archived ? ' (archived)' : ''}
+            </Badge>
+          ))}
           {o.access.overrides.length > 0 && (
-            <div className="p-5">
-              <p className="mb-2 text-xs font-medium text-muted">Exceptions for this person</p>
-              <ul className="space-y-1 text-sm">
-                {o.access.overrides.map((x) => (
-                  <li key={x.id}>
-                    <Badge tone={x.effect === 'DENY' ? 'danger' : 'success'}>{x.effect === 'DENY' ? 'Blocked' : 'Allowed'}</Badge>{' '}
-                    {PERMISSION_CATALOG.find((c) => c.key === x.permission)?.label ?? x.permission}
-                    {x.reason && <span className="text-muted"> · {x.reason}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <span className="text-muted">
+              · {o.access.overrides.length} exception{o.access.overrides.length === 1 ? '' : 's'}
+            </span>
           )}
-          <div className="p-5">
-            <p className="mb-3 text-xs font-medium text-muted">What they can do</p>
-            {modules.length ? (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {modules.map((m) => (
-                  <div key={m.key}>
-                    <p className="mb-1.5 text-[13px] font-semibold">{m.label}</p>
-                    <ul className="space-y-1">
-                      {m.items.map((c) => (
-                        <li key={c.key} className="text-[13px] leading-snug">
-                          {c.label}
-                          <span className="block text-xs text-muted">{SCOPE_LABELS[o.access.grants[c.key]!]}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted">No permissions beyond their own account.</p>
-            )}
-          </div>
+          {o.account.isSuperAdmin && (
+            <Badge tone="brand">
+              <ShieldCheck className="size-3" aria-hidden /> Super Admin{o.account.superAdminActive ? '' : ' (paused)'}
+            </Badge>
+          )}
         </Card>
       </section>
     </div>

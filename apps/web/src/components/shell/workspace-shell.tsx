@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Check,
   ClipboardCheck,
+  Crown,
   TreePalm,
   Clock,
   Megaphone,
@@ -64,16 +65,29 @@ interface NavItem {
   badge?: number;
   exact?: boolean;
   perm?: Permission;
+  /** Extra visibility rule on top of `perm`. */
+  show?: boolean;
 }
 interface NavGroup {
   label?: string;
   items: NavItem[];
 }
 
-export const ADMIN_PERMS: Permission[] = [PERMISSIONS.ANALYTICS_VIEW, PERMISSIONS.EMPLOYEES_MANAGE, PERMISSIONS.DEPARTMENTS_MANAGE, PERMISSIONS.SETTINGS_MANAGE, PERMISSIONS.AUDIT_READ];
+/** Anyone holding a permission behind an admin page may open the admin portal (each page and route checks its own). */
+export const ADMIN_PERMS: Permission[] = [
+  PERMISSIONS.ANALYTICS_VIEW,
+  PERMISSIONS.EMPLOYEES_MANAGE,
+  PERMISSIONS.DEPARTMENTS_MANAGE,
+  PERMISSIONS.SETTINGS_MANAGE,
+  PERMISSIONS.AUDIT_READ,
+  PERMISSIONS.ATTENDANCE_VIEW_ALL,
+  PERMISSIONS.HOLIDAYS_MANAGE,
+  PERMISSIONS.ANNOUNCEMENTS_MANAGE,
+];
 
 function useNav(portal: Portal): NavGroup[] {
   const can = useCan();
+  const me = useSession();
   const mod = useModule();
   const channels = useChannels(portal === 'app' && mod('chat'));
   const unread = (channels.data ?? []).reduce((n, c) => n + (c.muted ? 0 : c.unread), 0);
@@ -103,10 +117,12 @@ function useNav(portal: Portal): NavGroup[] {
         items: [
           { href: '/admin/settings', label: 'System settings', icon: SlidersHorizontal, perm: PERMISSIONS.SETTINGS_MANAGE },
           { href: '/admin/audit', label: 'Audit logs', icon: ScrollText, perm: PERMISSIONS.AUDIT_READ },
+          // The authority flag, not a permission. A paused (no two-step verification) Super Admin sees why on the page.
+          { href: '/admin/super-admins', label: 'Super Admins', icon: Crown, show: me.isSuperAdmin || me.superAdminNeedsMfa },
         ],
       },
     ];
-    return g.map((x) => ({ ...x, items: x.items.filter((i) => !i.perm || can(i.perm)) })).filter((x) => x.items.length);
+    return g.map((x) => ({ ...x, items: x.items.filter((i) => (!i.perm || can(i.perm)) && i.show !== false) })).filter((x) => x.items.length);
   }
   return [
     {

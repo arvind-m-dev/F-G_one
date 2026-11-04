@@ -1,6 +1,6 @@
 'use client';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Activity, Building2, CalendarDays, Copy, MailPlus, Megaphone, Palette, ScrollText, ShieldCheck, UserPlus } from 'lucide-react';
+import { Activity, Ban, Building2, CalendarDays, Copy, Crown, MailPlus, Megaphone, Palette, ScrollText, ShieldAlert, ShieldCheck, UserPlus } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -30,6 +30,16 @@ interface Overview {
   activity: { date: string; messages: number }[];
   hiring: { month: string; joiners: number }[];
   recentAudit: AuditEntry[];
+  /** Only for people who manage accounts (and Super Admins). */
+  access: AccessSummary | null;
+}
+type PersonLink = { id: string; name: string; avatarUrl: string | null; avatarColor: string };
+interface AccessSummary {
+  accounts: { active: number; suspended: number; deactivated: number; archived: number; waitingForPassword: number };
+  suspended: PersonLink[];
+  locked: { count: number; people: (PersonLink & { lockedUntil: string })[] };
+  adminsWithoutMfa: { count: number; people: (PersonLink & { roleName: string; isSuperAdmin: boolean })[] };
+  superAdmins: { active: number; pending: number; used: number; limit: number } | null;
 }
 interface Dash {
   holidays: { id: string; name: string; date: string; type: string }[];
@@ -64,6 +74,121 @@ function PendingInvites() {
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function PeopleLinks<T extends PersonLink>({ people, more, detail }: { people: T[]; more: number; detail?: (p: T) => string }) {
+  return (
+    <ul className="mt-2 flex flex-wrap gap-1.5">
+      {people.map((p) => (
+        <li key={p.id}>
+          <Link href={`/admin/employees/${p.id}`} className="flex items-center gap-1.5 rounded-full border bg-surface py-0.5 pr-2.5 pl-0.5 text-xs transition hover:bg-surface-2">
+            <UserAvatar person={p} size="xs" showPresence={false} />
+            <span className="font-medium">{p.name}</span>
+            {detail && <span className="text-muted">{detail(p)}</span>}
+          </Link>
+        </li>
+      ))}
+      {more > 0 && <li className="self-center text-xs text-muted">and {more} more</li>}
+    </ul>
+  );
+}
+
+/** Who can sign in, and the security gaps an admin should close. Each number links to where it can be acted on. */
+function AccessAndSecurity({ a }: { a: AccessSummary }) {
+  const states: { label: string; value: number; dot: string; href?: string }[] = [
+    { label: 'Active', value: a.accounts.active, dot: 'bg-success', href: '/admin/employees?status=ACTIVE' },
+    { label: 'Waiting for a password', value: a.accounts.waitingForPassword, dot: 'bg-warning', href: '/admin/employees?status=INVITED' },
+    { label: 'Suspended', value: a.accounts.suspended, dot: 'bg-danger' },
+    { label: 'Deactivated', value: a.accounts.deactivated, dot: 'bg-subtle', href: '/admin/employees?status=DEACTIVATED' },
+    ...(a.accounts.archived ? [{ label: 'Archived', value: a.accounts.archived, dot: 'bg-border-strong' }] : []),
+  ];
+  const sa = a.superAdmins;
+  const checks: { ok: boolean; info?: boolean; title: string; body: React.ReactNode }[] = [
+    {
+      ok: a.adminsWithoutMfa.count === 0,
+      title: a.adminsWithoutMfa.count === 0 ? 'Everyone with admin access uses two-step verification' : `${a.adminsWithoutMfa.count} ${a.adminsWithoutMfa.count === 1 ? 'person' : 'people'} with admin access ${a.adminsWithoutMfa.count === 1 ? 'does' : 'do'} not use two-step verification`,
+      body:
+        a.adminsWithoutMfa.count > 0 ? (
+          <>
+            <p className="text-xs text-muted">Ask them to turn it on in Settings, Security. A stolen password is then not enough to get in.</p>
+            <PeopleLinks people={a.adminsWithoutMfa.people} more={a.adminsWithoutMfa.count - a.adminsWithoutMfa.people.length} detail={(p) => (p.isSuperAdmin ? 'Super Admin' : p.roleName)} />
+          </>
+        ) : null,
+    },
+    {
+      ok: a.locked.count === 0,
+      title: a.locked.count === 0 ? 'No accounts are locked' : `${a.locked.count} ${a.locked.count === 1 ? 'account is' : 'accounts are'} locked after too many wrong passwords`,
+      body:
+        a.locked.count > 0 ? (
+          <>
+            <p className="text-xs text-muted">They unlock by themselves. To let someone in sooner, open their page and set a new password.</p>
+            <PeopleLinks people={a.locked.people} more={a.locked.count - a.locked.people.length} detail={(p) => `until ${new Date(p.lockedUntil).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`} />
+          </>
+        ) : null,
+    },
+    ...(a.accounts.suspended > 0
+      ? [{ ok: true, info: true, title: `${a.accounts.suspended} suspended ${a.accounts.suspended === 1 ? 'account' : 'accounts'} cannot sign in`, body: <PeopleLinks people={a.suspended} more={a.accounts.suspended - a.suspended.length} /> }]
+      : []),
+  ];
+  return (
+    <section aria-labelledby="access-title">
+      <SectionTitle icon={<ShieldCheck />} action={sa && <Link href="/admin/super-admins" className="text-xs text-muted hover:text-foreground">Super Admins</Link>}>
+        <span id="access-title">Access and security</span>
+      </SectionTitle>
+      <div className="rounded-xl border">
+        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-t-xl border-b bg-border sm:grid-cols-4">
+          {states.slice(0, 4).map((s) => {
+            const inner = (
+              <>
+                <dt className="flex items-center gap-1.5 text-xs text-muted">
+                  <span className={`size-1.5 rounded-full ${s.dot}`} /> {s.label}
+                </dt>
+                <dd className="mt-0.5 text-lg font-semibold tabular-nums">{s.value}</dd>
+              </>
+            );
+            return s.href ? (
+              <Link key={s.label} href={s.href} className="bg-surface px-3.5 py-2.5 transition hover:bg-surface-2" aria-label={`${s.label}: ${s.value}. Open the list`}>
+                {inner}
+              </Link>
+            ) : (
+              <div key={s.label} className="bg-surface px-3.5 py-2.5">
+                {inner}
+              </div>
+            );
+          })}
+        </dl>
+        <ul className="divide-y">
+          {checks.map((c) => (
+            <li key={c.title} className="flex gap-3 px-3.5 py-3">
+              {c.info ? <Ban className="mt-0.5 size-4 shrink-0 text-muted" /> : c.ok ? <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" /> : <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />}
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium">{c.title}</p>
+                {c.body}
+              </div>
+            </li>
+          ))}
+          {sa && (
+            <li className="flex gap-3 px-3.5 py-3">
+              <Crown className="mt-0.5 size-4 shrink-0 text-muted" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium">
+                  {sa.active} Super Admin{sa.active === 1 ? '' : 's'}
+                  {sa.pending ? `, ${sa.pending} waiting to accept` : ''} · {sa.used} of {sa.limit} places used
+                </p>
+                {sa.active < 2 && <p className="text-xs text-muted">With only one, your company is stuck if that person loses access. Consider nominating a second.</p>}
+              </div>
+              <Link href="/admin/super-admins" className="self-center text-xs font-medium text-primary hover:underline">
+                Manage
+              </Link>
+            </li>
+          )}
+          {a.accounts.archived > 0 && (
+            <li className="px-3.5 py-2.5 text-xs text-muted">{a.accounts.archived} archived {a.accounts.archived === 1 ? 'account is' : 'accounts are'} kept for history and cannot sign in.</li>
+          )}
+        </ul>
+      </div>
     </section>
   );
 }
@@ -160,6 +285,7 @@ export default function AdminOverview() {
 
           <div className="mt-10 grid gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0 space-y-10">
+              {d.access && <AccessAndSecurity a={d.access} />}
               {can(PERMISSIONS.EMPLOYEES_MANAGE) && <PendingInvites />}
               {can(PERMISSIONS.AUDIT_READ) && (
                 <section>

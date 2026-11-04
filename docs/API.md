@@ -51,6 +51,21 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 | POST | `/employees/:id/email` | `employees.manage` + recent sign-in | `{ email }`. Company domain, globally unique (409). Same rank rules; not your own. Signs them out everywhere. Audited `employee.email_changed` with from/to. |
 | POST | `/employees/:id/password` | `employees.manage` + recent sign-in | `{ password }`. Sets a new password (shown once to hand over), signs the employee out everywhere and activates an account still waiting for a password. With `selfServicePassword` on it is temporary and must be changed at next sign-in. Rank and Super Admin checks as editing. Not for your own account. Audited `employee.password_set`. |
 
+Account lifecycle and access (Phase 3), all `employees.manage` with rank and Super Admin checks, never on yourself, other tenants 404:
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/employees/:id/suspend` | 🔒 recent auth. `{ reason? }`. From ACTIVE or INVITED. Signs out, closes sockets. |
+| POST | `/employees/:id/unsuspend` | Back to ACTIVE (INVITED without a password). |
+| POST | `/employees/:id/archive` | 🔒 recent auth. Only from DEACTIVATED. |
+| POST | `/employees/:id/restore` | ARCHIVED → DEACTIVATED. |
+| GET | `/employees/:id/access` | `{ roleId, extraRoleIds, overrides, grants, editable, readOnlyReason, ... }` |
+| PUT | `/employees/:id/access` | 🔒 recent auth. `{ roleId?, extraRoleIds[], overrides[{permission, effect, scope?}] }`. Ceiling rules (`packages/shared/src/access.ts`). Audited with a diff. |
+
+`POST /employees` also takes `extraRoleIds` and `overrides` (created in one transaction). The `status` filter accepts SUSPENDED and ARCHIVED; ALL leaves out archived.
+
+Super Admins (Phase 3): `GET /super-admins` adds `activeCount`, `pendingCount` and per person `email`, `mfaEnabled`, `authorityActive`. `POST /super-admins/invitations/check { token }` lets the nominee see their nomination without accepting (404 otherwise). Lowering `settings.security.superAdminLimit` below the current count returns 409. `GET /admin/overview` includes `access` (account counts, locked, admins without two-step verification, Super Admins vs limit).
+
 Admin device controls (Phase 2c), with the same rank and Super Admin authority checks as editing:
 
 | Method | Path | Notes |

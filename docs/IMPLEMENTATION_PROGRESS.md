@@ -14,10 +14,11 @@
 | 3 Nov 2026 | **Super Admin Phase 2b, authority:** `isSuperAdmin` flag, limit, nominate/accept/revoke/remove, last-admin protection, Administrator role, client default-deny, SUSPENDED and ARCHIVED, invite re-issue escalation fix | 55 API e2e + 9 API unit, 7 web unit, 17 Playwright |
 | 3 Nov 2026 | **Super Admin Phase 2c, MFA, re-auth and devices:** TOTP with recovery codes, half-signed-in sessions, `@RequireRecentAuth`, device list and sign-out (self and admin), socket disconnect on revoke, dormant Super Admin authority without MFA, Settings → Security and the sign-in code step | 65 API e2e + 17 API unit, 7 web unit, 18 Playwright |
 | 4 Nov 2026 | **Admin-managed access and QA hardening:** no invitations, admin-only passwords (switchable), employee page with full data, admin email change, Phase 2d bootstrap and recovery commands, richer seed, a QA pass by area with about 75 fixes | 189 API, 10 web unit, 54 Playwright |
+| 4 Nov 2026 | **Super Admin Phase 3, user management:** Super Admins page and acceptance, access and security overview, suspend/archive, per-person access with ceiling rules, add-employee wizard | 204 API, 15 web unit, 57 Playwright |
 
 ## Next
 1. Run `db:reset-org` on Neon before go-live (K-3). The script is ready.
-2. Super Admin Phase 3: a Super Admins page and the rest of user management (2d is done: `superadmin:bootstrap`, `superadmin:recover`)
+2. Super Admin Phase 4: roles editor and Permission Studio (Phase 3 is done)
 3. A shift model: night-shift people are flagged late, and corrections cannot describe a shift that ends the next morning
 4. Set `MFA_ENCRYPTION_KEY` on Render before anyone turns on two-step verification in production (see `DEPLOY_RENDER_NEON.md`)
 5. Decision D-7 (storage) is still open and blocks pictures, attachments and documents

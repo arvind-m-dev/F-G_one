@@ -11,6 +11,7 @@ import { personSelect, toPerson } from '../employees/employee.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 
 const INVITE_TTL_HOURS = 72;
+const INVALID_LINK = 'This nomination link is not valid. Ask a Super Admin for a new one.';
 type Tx = Prisma.TransactionClient;
 
 /**
@@ -55,23 +56,72 @@ export class SuperAdminsService {
   }
 
   async list(auth: AuthContext) {
-    const [limit, active, pending] = await Promise.all([
+    const [limit, rows, pending] = await Promise.all([
       this.limit(this.prisma, auth.organizationId),
-      this.prisma.user.findMany({ where: { organizationId: auth.organizationId, isSuperAdmin: true }, select: { ...personSelect, status: true, lastLoginAt: true }, orderBy: { firstName: 'asc' } }),
+      this.prisma.user.findMany({
+        where: { organizationId: auth.organizationId, isSuperAdmin: true },
+        select: { ...personSelect, email: true, status: true, accountType: true, lastLoginAt: true, mustChangePassword: true, mfaEnabledAt: true, mfaSecretEnc: true },
+        orderBy: { firstName: 'asc' },
+      }),
       this.prisma.superAdminInvitation.findMany({
         where: this.pendingWhere(auth.organizationId),
-        include: { user: { select: personSelect }, invitedBy: { select: personSelect } },
+        include: { user: { select: { ...personSelect, email: true, mfaEnabledAt: true, mfaSecretEnc: true } }, invitedBy: { select: personSelect } },
         orderBy: { createdAt: 'desc' },
       }),
     ]);
-    const activeCount = active.filter((a) => a.status === 'ACTIVE').length;
+    // Same count the limit check uses (activeWhere): active internal accounts holding the flag.
+    const activeCount = rows.filter((a) => a.status === 'ACTIVE' && a.accountType === 'INTERNAL').length;
     return {
       limit,
       hardLimit: SUPER_ADMIN_HARD_LIMIT,
       used: activeCount + pending.length,
-      superAdmins: active.map(({ status, lastLoginAt, ...p }) => ({ ...toPerson(p), status, lastLoginAt, isYou: p.id === auth.userId })),
-      pending: pending.map((i) => ({ id: i.id, person: toPerson(i.user), invitedBy: i.invitedBy ? toPerson(i.invitedBy) : null, createdAt: i.createdAt, expiresAt: i.expiresAt })),
+      activeCount,
+      pendingCount: pending.length,
+      superAdmins: rows.map(({ status, accountType, lastLoginAt, mustChangePassword, mfaEnabledAt, mfaSecretEnc, email, ...p }) => {
+        const mfaEnabled = !!(mfaEnabledAt && mfaSecretEnc);
+        return {
+          ...toPerson(p),
+          email,
+          status,
+          lastLoginAt,
+          mfaEnabled,
+          // Same rule as the session: the authority only works with two-step verification and a password they chose.
+          authorityActive: status === 'ACTIVE' && accountType === 'INTERNAL' && mfaEnabled && !mustChangePassword,
+          isYou: p.id === auth.userId,
+        };
+      }),
+      pending: pending.map((i) => {
+        const { email, mfaEnabledAt, mfaSecretEnc, ...u } = i.user;
+        return {
+          id: i.id,
+          person: { ...toPerson(u), email, mfaEnabled: !!(mfaEnabledAt && mfaSecretEnc) },
+          invitedBy: i.invitedBy ? toPerson(i.invitedBy) : null,
+          createdAt: i.createdAt,
+          expiresAt: i.expiresAt,
+        };
+      }),
     };
+  }
+
+  /**
+   * The nominee looks at their own nomination before accepting. Reveals nothing about other links:
+   * unknown, someone else's, used, withdrawn and expired links all get the same 404.
+   */
+  async check(auth: AuthContext, token: string) {
+    const inv = await this.prisma.superAdminInvitation.findUnique({ where: { tokenHash: sha256(token) }, include: { invitedBy: { select: personSelect } } });
+    if (!inv || !this.usableBy(inv, auth)) throw new NotFoundException(INVALID_LINK);
+    const [limit, active] = await Promise.all([this.limit(this.prisma, auth.organizationId), this.prisma.user.count({ where: this.activeWhere(auth.organizationId) })]);
+    return {
+      invitedBy: inv.invitedBy ? toPerson(inv.invitedBy) : null,
+      createdAt: inv.createdAt,
+      expiresAt: inv.expiresAt,
+      mfaEnabled: auth.mfaEnabled,
+      limitReached: active >= limit,
+    };
+  }
+
+  private usableBy(inv: { userId: string; organizationId: string; acceptedAt: Date | null; revokedAt: Date | null; expiresAt: Date }, auth: AuthContext) {
+    return inv.userId === auth.userId && inv.organizationId === auth.organizationId && !inv.acceptedAt && !inv.revokedAt && inv.expiresAt > new Date() && auth.accountType === 'INTERNAL';
   }
 
   async invite(auth: AuthContext, userId: string, password: string) {
@@ -119,10 +169,7 @@ export class SuperAdminsService {
     const inv = await this.serializable(async (tx) => {
       const inv = await tx.superAdminInvitation.findUnique({ where: { tokenHash: sha256(token) } });
       // Same answer for unknown, someone else's, used, revoked or expired links.
-      if (!inv || inv.userId !== auth.userId || inv.organizationId !== auth.organizationId || inv.acceptedAt || inv.revokedAt || inv.expiresAt <= new Date()) {
-        throw new NotFoundException('This nomination link is not valid. Ask a Super Admin for a new one.');
-      }
-      if (auth.accountType !== 'INTERNAL') throw new NotFoundException('This nomination link is not valid. Ask a Super Admin for a new one.');
+      if (!inv || !this.usableBy(inv, auth)) throw new NotFoundException(INVALID_LINK);
       if (!auth.mfaEnabled) {
         throw new ForbiddenException({ statusCode: 403, code: 'MFA_SETUP_REQUIRED', message: 'Turn on two-step verification before accepting. Super Admins must use it.' });
       }
@@ -143,8 +190,11 @@ export class SuperAdminsService {
     await this.serializable(async (tx) => {
       const target = await tx.user.findFirst({ where: { id: userId, organizationId: auth.organizationId, isSuperAdmin: true } });
       if (!target) throw new NotFoundException('Super Admin not found');
-      const remaining = await tx.user.count({ where: { ...this.activeWhere(auth.organizationId), id: { not: userId } } });
-      if (remaining < 1) throw new ConflictException('You cannot remove the last active Super Admin.');
+      // Only working Super Admins count here: a paused one (no two-step verification, or a temporary password) cannot act.
+      const remaining = await tx.user.count({
+        where: { ...this.activeWhere(auth.organizationId), id: { not: userId }, mfaEnabledAt: { not: null }, mfaSecretEnc: { not: null }, mustChangePassword: false },
+      });
+      if (remaining < 1) throw new ConflictException('You cannot remove the last working Super Admin. Another Super Admin must have two-step verification on first.');
       await tx.user.update({ where: { id: userId }, data: { isSuperAdmin: false } });
     });
     await this.audit.log(auth, 'superadmin.removed', 'user', userId);

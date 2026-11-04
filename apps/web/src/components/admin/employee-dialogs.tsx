@@ -1,13 +1,12 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AtSign, KeyRound, UserPlus } from 'lucide-react';
+import { Archive, ArchiveRestore, AtSign, KeyRound, PauseCircle, PlayCircle, UserCheck, UserX, type LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm, type UseFormRegister } from 'react-hook-form';
 import { toast } from 'sonner';
 import {
   changeEmployeeEmailSchema,
-  createEmployeeSchema,
   setEmployeePasswordSchema,
   updateEmployeeSchema,
   type ChangeEmployeeEmailInput,
@@ -17,8 +16,8 @@ import {
 import { HandoverMessage, PasswordInput } from '@/components/admin/password-handover';
 import { isCancelled, useReauth } from '@/components/security/reauth';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
-import { Field, Input, Select } from '@/components/ui/input';
+import { Dialog } from '@/components/ui/dialog';
+import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
 import { useDepartments, useEmployeeList, useRoles } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
@@ -41,7 +40,7 @@ function useSelfServicePassword() {
 
 type PeopleFields = Pick<CreateEmployeeInput, 'roleId' | 'departmentId' | 'managerId'>;
 
-function PeopleSelects({ register, excludeId }: { register: UseFormRegister<PeopleFields>; excludeId?: string }) {
+function PeopleSelects({ register, excludeId, currentManager }: { register: UseFormRegister<PeopleFields>; excludeId?: string; currentManager?: Employee['manager'] }) {
   const depts = useDepartments();
   const roles = useRoles();
   const managers = useEmployeeList({ pageSize: 100 });
@@ -70,6 +69,12 @@ function PeopleSelects({ register, excludeId }: { register: UseFormRegister<Peop
       <Field label="Reports to" htmlFor="managerId">
         <Select id="managerId" {...register('managerId', { setValueAs: (v) => v || null })}>
           <option value="">No manager</option>
+          {/* Keep a current manager who is no longer pickable (for example suspended), so saving doesn't drop them. */}
+          {currentManager && managers.data && !managers.data.items.some((m) => m.id === currentManager.id) && (
+            <option value={currentManager.id}>
+              {currentManager.firstName} {currentManager.lastName} (not active)
+            </option>
+          )}
           {managers.data?.items
             .filter((m) => m.id !== excludeId)
             .map((m) => (
@@ -80,127 +85,6 @@ function PeopleSelects({ register, excludeId }: { register: UseFormRegister<Peop
         </Select>
       </Field>
     </>
-  );
-}
-
-/** Creates an account with a password the admin hands over. */
-export function AddEmployeeDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated?: (e: Employee) => void }) {
-  const me = useSession();
-  const refresh = useRefreshEmployees();
-  const roles = useRoles();
-  const selfService = useSelfServicePassword();
-  const [result, setResult] = useState<{ employee: Employee; password: string } | null>(null);
-  const defaultRole = roles.data?.roles.find((r) => r.key === 'employee')?.id ?? '';
-  const form = useForm<CreateEmployeeInput>({
-    resolver: zodResolver(createEmployeeSchema),
-    defaultValues: { email: '', firstName: '', lastName: '', roleId: defaultRole, departmentId: null, managerId: null, designation: '', employeeCode: '', joinedAt: null, password: '' },
-  });
-  useEffect(() => {
-    if (defaultRole && !form.getValues('roleId')) form.setValue('roleId', defaultRole);
-  }, [defaultRole, form]);
-  const err = form.formState.errors;
-  const domains = me.organization.settings.auth.allowedEmailDomains;
-  const reset = () => form.reset({ ...form.formState.defaultValues, roleId: defaultRole });
-
-  const close = (o: boolean) => {
-    onOpenChange(o);
-    if (!o) {
-      setResult(null);
-      reset();
-    }
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={close}
-      title="Add an employee"
-      description={`${selfService ? 'Set a temporary password to hand over; they choose their own at first sign-in.' : 'Set their password and hand it over. Only administrators can change it later.'} Allowed email domains: ${domains.join(', ')}`}
-      className="max-w-2xl"
-    >
-      {result ? (
-        <div className="space-y-4">
-          <p className="text-sm">
-            <b>{result.employee.firstName}</b>&apos;s account is ready.
-          </p>
-          <HandoverMessage firstName={result.employee.firstName} email={result.employee.email} password={result.password} organization={me.organization.name} selfService={selfService} />
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setResult(null);
-                reset();
-              }}
-            >
-              <UserPlus /> Add another
-            </Button>
-            {onCreated && (
-              <Button variant="outline" onClick={() => { const e = result.employee; close(false); onCreated(e); }}>
-                Open their page
-              </Button>
-            )}
-            <Button onClick={() => close(false)}>Done</Button>
-          </div>
-        </div>
-      ) : (
-        <form
-          noValidate
-          className="space-y-4"
-          onSubmit={form.handleSubmit(async (v) => {
-            try {
-              const res = await api<{ employee: Employee }>('/employees', {
-                body: { ...v, designation: v.designation || null, employeeCode: v.employeeCode || null, joinedAt: v.joinedAt || null },
-              });
-              refresh();
-              setResult({ employee: res.employee, password: v.password });
-              toast.success(`Account created for ${res.employee.email}`);
-            } catch (e) {
-              toast.error(errorMessage(e));
-            }
-          })}
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="First name" htmlFor="firstName" error={err.firstName?.message}>
-              <Input id="firstName" autoFocus {...form.register('firstName')} />
-            </Field>
-            <Field label="Last name" htmlFor="lastName" error={err.lastName?.message}>
-              <Input id="lastName" {...form.register('lastName')} />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="Work email" htmlFor="email" error={err.email?.message}>
-                <Input id="email" type="email" placeholder={`name@${domains[0]}`} {...form.register('email')} />
-              </Field>
-            </div>
-            <Field label="Designation" htmlFor="designation">
-              <Input id="designation" placeholder="e.g. Software Engineer" {...form.register('designation')} />
-            </Field>
-            <Field label="Employee code" htmlFor="employeeCode">
-              <Input id="employeeCode" placeholder="e.g. FG1042" {...form.register('employeeCode')} />
-            </Field>
-            <PeopleSelects register={form.register as unknown as UseFormRegister<PeopleFields>} />
-            <Field label="Date of joining" htmlFor="joinedAt" error={err.joinedAt?.message}>
-              <Input id="joinedAt" type="date" {...form.register('joinedAt', { setValueAs: (v) => v || null })} />
-            </Field>
-          </div>
-          <Field
-            label={selfService ? 'Temporary password' : 'Password'}
-            htmlFor="password"
-            error={err.password?.message}
-            hint="10+ characters with upper, lower case and a number. You'll get a message to send them."
-          >
-            <PasswordInput id="password" {...form.register('password')} onGenerate={(pw) => form.setValue('password', pw, { shouldValidate: true })} />
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => close(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={form.formState.isSubmitting}>
-              <UserPlus /> Create account
-            </Button>
-          </div>
-        </form>
-      )}
-    </Dialog>
   );
 }
 
@@ -257,7 +141,7 @@ export function EditEmployeeDialog({ employee, onOpenChange }: { employee: Emplo
             <Field label="Employee code" htmlFor="e-code">
               <Input id="e-code" {...form.register('employeeCode')} />
             </Field>
-            <PeopleSelects register={form.register as unknown as UseFormRegister<PeopleFields>} excludeId={employee.id} />
+            <PeopleSelects register={form.register as unknown as UseFormRegister<PeopleFields>} excludeId={employee.id} currentManager={employee.manager} />
             <Field label="Work phone" htmlFor="e-phone">
               <Input id="e-phone" {...form.register('phone')} />
             </Field>
@@ -403,14 +287,85 @@ export function ChangeEmailDialog({ employee, onOpenChange }: { employee: Employ
   );
 }
 
-/** Confirms deactivating (signs out everywhere, blocks sign-in) or reactivating an account. */
-export function AccountStatusDialog({ target, onOpenChange }: { target: { employee: Employee; action: 'deactivate' | 'activate' } | null; onOpenChange: (o: boolean) => void }) {
+export type StatusAction = 'suspend' | 'unsuspend' | 'deactivate' | 'activate' | 'archive' | 'restore';
+
+/** Account status changes an admin can make from each status (shared by the list and the employee page). */
+export function statusActions(status: Employee['status']): StatusAction[] {
+  switch (status) {
+    case 'ACTIVE':
+    case 'INVITED':
+      return ['suspend', 'deactivate'];
+    case 'SUSPENDED':
+      return ['unsuspend', 'deactivate'];
+    case 'DEACTIVATED':
+      return ['activate', 'archive'];
+    case 'ARCHIVED':
+      return ['restore'];
+  }
+}
+
+/** Menu label, icon and whether it is destructive, for each status change. */
+export const STATUS_ACTION_META: Record<StatusAction, { label: string; icon: LucideIcon; danger?: boolean }> = {
+  suspend: { label: 'Suspend', icon: PauseCircle, danger: true },
+  unsuspend: { label: 'Lift suspension', icon: PlayCircle },
+  deactivate: { label: 'Deactivate', icon: UserX, danger: true },
+  activate: { label: 'Reactivate', icon: UserCheck },
+  archive: { label: 'Archive', icon: Archive, danger: true },
+  restore: { label: 'Restore', icon: ArchiveRestore },
+};
+
+const STATUS_COPY: Record<StatusAction, { title: (n: string) => string; body: string; confirm: string; done: string }> = {
+  suspend: {
+    title: (n) => `Suspend ${n}?`,
+    body: "They are signed out on every device right away and can't sign in until you lift the suspension. Nothing is deleted, and you can undo this at any time.",
+    confirm: 'Suspend',
+    done: 'Account suspended and signed out everywhere',
+  },
+  unsuspend: {
+    title: (n) => `Lift the suspension for ${n}?`,
+    body: 'They can sign in again with their current password. Accounts that never had a password stay waiting until you set one.',
+    confirm: 'Lift suspension',
+    done: 'Suspension lifted',
+  },
+  deactivate: {
+    title: (n) => `Deactivate ${n}?`,
+    body: 'They will be signed out on every device immediately and will not be able to sign in. Their messages and records are kept.',
+    confirm: 'Deactivate',
+    done: 'Account deactivated and signed out everywhere',
+  },
+  activate: {
+    title: (n) => `Reactivate ${n}?`,
+    body: 'They will be able to sign in again. Accounts that never had a password stay waiting until you set one.',
+    confirm: 'Reactivate',
+    done: 'Account reactivated',
+  },
+  archive: {
+    title: (n) => `Archive ${n}?`,
+    body: 'They disappear from the employee list, people pickers and everyday views. Their messages, attendance, leave and activity are kept, and you can restore them later.',
+    confirm: 'Archive',
+    done: 'Account archived',
+  },
+  restore: {
+    title: (n) => `Restore ${n}?`,
+    body: 'They come back as a deactivated account and show in the employee list again. Reactivate them when they should sign in.',
+    confirm: 'Restore',
+    done: 'Account restored as deactivated',
+  },
+};
+
+/** Confirms a status change in plain language. Suspending can carry a short reason only admins see. */
+export function AccountStatusDialog({ target, onOpenChange }: { target: { employee: Employee; action: StatusAction } | null; onOpenChange: (o: boolean) => void }) {
   const refresh = useRefreshEmployees();
   const reauth = useReauth();
-  const toggle = useMutation({
-    mutationFn: (v: { id: string; action: 'deactivate' | 'activate' }) => reauth.run(() => api(`/employees/${v.id}/${v.action}`, { method: 'POST' })),
+  const [reason, setReason] = useState('');
+  useEffect(() => {
+    if (target) setReason('');
+  }, [target]);
+  const m = useMutation({
+    mutationFn: (v: { id: string; action: StatusAction; reason: string }) =>
+      reauth.run(() => api(`/employees/${v.id}/${v.action}`, { method: 'POST', body: v.action === 'suspend' ? { reason: v.reason.trim() || null } : undefined })),
     onSuccess: (_d, v) => {
-      toast.success(v.action === 'deactivate' ? 'Account deactivated and signed out everywhere' : 'Account reactivated');
+      toast.success(STATUS_COPY[v.action].done);
       onOpenChange(false);
       refresh();
     },
@@ -418,23 +373,38 @@ export function AccountStatusDialog({ target, onOpenChange }: { target: { employ
       if (!isCancelled(e)) toast.error(errorMessage(e));
     },
   });
-  const deactivating = target?.action === 'deactivate';
+  const copy = target ? STATUS_COPY[target.action] : null;
+  const danger = target ? STATUS_ACTION_META[target.action].danger : false;
   return (
     <>
-      <ConfirmDialog
-        open={!!target}
-        onOpenChange={onOpenChange}
-        title={target ? `${deactivating ? 'Deactivate' : 'Reactivate'} ${target.employee.name}?` : ''}
-        description={
-          deactivating
-            ? 'They will be signed out on every device immediately and will not be able to sign in. Their messages and records are kept.'
-            : 'They will be able to sign in again. Accounts that never had a password stay waiting until you set one.'
-        }
-        confirmLabel={deactivating ? 'Deactivate' : 'Reactivate'}
-        danger={deactivating}
-        loading={toggle.isPending}
-        onConfirm={() => target && toggle.mutate({ id: target.employee.id, action: target.action })}
-      />
+      <Dialog open={!!target} onOpenChange={onOpenChange} title={target && copy ? copy.title(target.employee.name) : ''} className="max-w-md">
+        {target && copy && (
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              m.mutate({ id: target.employee.id, action: target.action, reason });
+            }}
+          >
+            <p className="text-sm text-muted">{copy.body}</p>
+            {target.action === 'suspend' && (
+              <div className="mt-4">
+                <Field label="Reason (optional)" htmlFor="suspend-reason" hint="Only administrators see this, on their page and in the activity log.">
+                  <Textarea id="suspend-reason" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Laptop reported lost" />
+                </Field>
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant={danger ? 'danger' : 'primary'} loading={m.isPending}>
+                {copy.confirm}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
       {reauth.dialog}
     </>
   );
