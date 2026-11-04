@@ -1,5 +1,14 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { changeEmployeeEmailSchema, createEmployeeSchema, listEmployeesQuerySchema, PERMISSIONS, setEmployeePasswordSchema, updateEmployeeSchema } from '@fg/shared';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  changeEmployeeEmailSchema,
+  createAccountSchema,
+  listEmployeesQuerySchema,
+  PERMISSIONS,
+  setEmployeePasswordSchema,
+  suspendEmployeeSchema,
+  updateEmployeeAccessSchema,
+  updateEmployeeSchema,
+} from '@fg/shared';
 import { z } from 'zod';
 import { Auth, AuthContext, RequirePermissions, RequireRecentAuth } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
@@ -30,7 +39,7 @@ export class EmployeesController {
 
   @Post()
   @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
-  create(@Auth() auth: AuthContext, @Body(new ZodPipe(createEmployeeSchema)) body: z.infer<typeof createEmployeeSchema>) {
+  create(@Auth() auth: AuthContext, @Body(new ZodPipe(createAccountSchema)) body: z.infer<typeof createAccountSchema>) {
     return this.employees.create(auth, body);
   }
 
@@ -52,6 +61,54 @@ export class EmployeesController {
   @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
   activate(@Auth() auth: AuthContext, @Param('id') id: string) {
     return this.employees.setActive(auth, id, true);
+  }
+
+  /** Temporarily blocks an account: signs them out everywhere and closes their live connections. */
+  @Post(':id/suspend')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  @RequireRecentAuth()
+  suspend(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(suspendEmployeeSchema)) body: z.infer<typeof suspendEmployeeSchema>) {
+    return this.employees.suspend(auth, id, body);
+  }
+
+  @Post(':id/unsuspend')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  unsuspend(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.employees.unsuspend(auth, id);
+  }
+
+  /** Hides a deactivated account from lists and pickers; history is kept. */
+  @Post(':id/archive')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  @RequireRecentAuth()
+  archive(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.employees.archive(auth, id);
+  }
+
+  /** Brings an archived account back as deactivated. */
+  @Post(':id/restore')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  restore(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.employees.restore(auth, id);
+  }
+
+  /** Main role, extra roles and exceptions for one person, and whether the caller may change them. */
+  @Get(':id/access')
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  access(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.employees.getAccess(auth, id);
+  }
+
+  /** Replaces one person's access. Escalation rules in packages/shared/src/access.ts. */
+  @Put(':id/access')
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  @RequireRecentAuth()
+  updateAccess(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(updateEmployeeAccessSchema)) body: z.infer<typeof updateEmployeeAccessSchema>) {
+    return this.employees.updateAccess(auth, id, body);
   }
 
   /** Changes the work email (sign-in name) and signs the person out everywhere. */
