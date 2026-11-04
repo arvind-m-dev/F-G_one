@@ -1,10 +1,11 @@
 'use client';
-import { AlertTriangle, AtSign, ChevronRight, KeyRound, MoreHorizontal, Pencil, RotateCw, Search, ShieldCheck, UserCheck, UserPlus, UserRound, UserX, Users } from 'lucide-react';
+import { AlertTriangle, AtSign, ChevronRight, KeyRound, MoreHorizontal, Pencil, RotateCw, Search, ShieldCheck, UserPlus, UserRound, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { PERMISSIONS } from '@fg/shared';
-import { AccountStatusDialog, AddEmployeeDialog, ChangeEmailDialog, EditEmployeeDialog, SetPasswordDialog } from '@/components/admin/employee-dialogs';
+import { AccountWizard } from '@/components/admin/account-wizard';
+import { AccountStatusDialog, ChangeEmailDialog, EditEmployeeDialog, SetPasswordDialog, STATUS_ACTION_META, statusActions, type StatusAction } from '@/components/admin/employee-dialogs';
 import { STATUS_LABEL, STATUS_TONE } from '@/components/admin/employee-status';
 import { Forbidden, PageHeader } from '@/components/admin/page-header';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,7 @@ function EmployeesAdmin() {
   const addOpen = get('add') === '1' || get('invite') === '1';
   const setAddOpen = (o: boolean) => set({ add: o ? '1' : null, invite: null });
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [confirm, setConfirm] = useState<{ employee: Employee; action: 'deactivate' | 'activate' } | null>(null);
+  const [confirm, setConfirm] = useState<{ employee: Employee; action: StatusAction } | null>(null);
   const [settingPassword, setSettingPassword] = useState<Employee | null>(null);
   const [changingEmail, setChangingEmail] = useState<Employee | null>(null);
   useEffect(() => {
@@ -77,7 +78,7 @@ function EmployeesAdmin() {
             ))}
           </Select>
           <div className="scrollbar-thin flex overflow-x-auto rounded-lg bg-surface-2 p-0.5 text-sm">
-            {(['ALL', 'ACTIVE', 'INVITED', 'DEACTIVATED'] as const).map((s) => (
+            {(['ALL', 'ACTIVE', 'INVITED', 'SUSPENDED', 'DEACTIVATED', 'ARCHIVED'] as const).map((s) => (
               <button key={s} onClick={() => setStatus(s)} aria-pressed={status === s} className={cn('shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition', status === s ? 'bg-surface shadow-sm' : 'text-muted hover:text-foreground')}>
                 {s === 'ALL' ? 'All' : STATUS_LABEL[s]}
               </button>
@@ -207,15 +208,14 @@ function EmployeesAdmin() {
                         {e.id !== me.user.id && (
                           <>
                             <DropdownSeparator />
-                            {e.status === 'DEACTIVATED' ? (
-                              <DropdownItem onSelect={() => setConfirm({ employee: e, action: 'activate' })}>
-                                <UserCheck /> Reactivate
-                              </DropdownItem>
-                            ) : (
-                              <DropdownItem danger onSelect={() => setConfirm({ employee: e, action: 'deactivate' })}>
-                                <UserX /> Deactivate
-                              </DropdownItem>
-                            )}
+                            {statusActions(e.status).map((a) => {
+                              const meta = STATUS_ACTION_META[a];
+                              return (
+                                <DropdownItem key={a} danger={meta.danger} onSelect={() => setConfirm({ employee: e, action: a })}>
+                                  <meta.icon /> {meta.label}
+                                </DropdownItem>
+                              );
+                            })}
                           </>
                         )}
                       </DropdownContent>
@@ -226,7 +226,13 @@ function EmployeesAdmin() {
             </tbody>
           </table>
         </div>
-        {list.data?.items.length === 0 && <EmptyState icon={<Users />} title="No employees match" description="Adjust the filters or add someone new." />}
+        {list.data?.items.length === 0 && (
+          <EmptyState
+            icon={<Users />}
+            title={status === 'ARCHIVED' ? 'No archived accounts' : status === 'SUSPENDED' ? 'Nobody is suspended' : 'No employees match'}
+            description={status === 'ARCHIVED' ? 'Archive a deactivated account to hide it from everyday lists. It shows up here.' : 'Adjust the filters or add someone new.'}
+          />
+        )}
         <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted">
           <span>{list.data ? `${list.data.total} total` : ''}</span>
           <div className="flex items-center gap-2">
@@ -243,7 +249,7 @@ function EmployeesAdmin() {
         </div>
       </Card>
 
-      <AddEmployeeDialog open={addOpen} onOpenChange={setAddOpen} onCreated={(e) => router.push(`/admin/employees/${e.id}`)} />
+      <AccountWizard open={addOpen} onOpenChange={setAddOpen} onCreated={(e) => router.push(`/admin/employees/${e.id}`)} />
       <EditEmployeeDialog employee={editing} onOpenChange={(o) => !o && setEditing(null)} />
       <AccountStatusDialog target={confirm} onOpenChange={(o) => !o && setConfirm(null)} />
       <SetPasswordDialog employee={settingPassword} onOpenChange={(o) => !o && setSettingPassword(null)} />

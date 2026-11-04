@@ -118,7 +118,10 @@ test('admin portal: add an employee with a password they can sign in with straig
   await page.getByLabel('First name').fill('Eetoo');
   await page.getByLabel('Last name').fill('Tester');
   await page.getByLabel('Work email').fill(email);
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: 'Next' }).click();
   await page.getByLabel('Password', { exact: true }).fill(temp);
+  await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByLabel('Sign-in message')).toContainText(`Password: ${temp}`);
 

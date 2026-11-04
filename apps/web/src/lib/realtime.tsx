@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { RT, type PresenceEvent } from '@fg/shared';
 import { toast } from 'sonner';
+import { api } from './api';
 import { presenceStore } from './presence-store';
 import type { ChatMessage, Me } from './types';
 
@@ -23,7 +24,16 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
     const s = io({ path: '/socket.io', withCredentials: true, transports: ['websocket', 'polling'] });
     setSocket(s);
     s.on('connect', () => setConnected(true));
-    s.on('disconnect', () => setConnected(false));
+    s.on('disconnect', (reason) => {
+      setConnected(false);
+      // The server closes the connection when the session ends (signed out everywhere, suspended,
+      // deactivated). Check the session: a 401 sends this tab to sign-in; otherwise reconnect.
+      if (reason === 'io server disconnect') {
+        void api('/auth/me')
+          .then(() => s.connect())
+          .catch(() => undefined);
+      }
+    });
     s.on(RT.ONLINE_SNAPSHOT, (p: { userIds: string[] }) => presenceStore.setOnline(p.userIds));
     s.on(RT.PRESENCE_UPDATED, (evt: PresenceEvent) => {
       presenceStore.apply(evt);
