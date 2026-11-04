@@ -10,3 +10,6 @@ test-results
 storage/
 *.tsbuildinfo
 .neon
+
+# Temporary agent worktrees
+.claude/worktrees/
