@@ -110,7 +110,7 @@ function QuickActionsWidget({ actions }: WidgetProps) {
         <Users /> Find people
       </Button>
       {can(PERMISSIONS.EMPLOYEES_MANAGE) && (
-        <Button variant="outline" onClick={() => router.push('/admin/employees?invite=1')}>
+        <Button variant="outline" onClick={() => router.push('/admin/employees?add=1')}>
           <UserPlus /> Add employee
         </Button>
       )}

@@ -29,8 +29,8 @@
 ## Admin portal (`/admin`)
 | Module | Status |
 |---|---|
-| Overview | ✅ Team composition, invitations waiting (re-issue link), admin activity, conversation activity, roles, holidays, announcements |
-| Employees | ✅ Add with a temporary password (domain-restricted) and a copyable sign-in message, set a new password (shown once), edit, role and manager, deactivate/reactivate. Employees choose their own password at first sign-in. |
+| Overview | ✅ Team composition, accounts waiting for a password, admin activity, conversation activity, roles, holidays, announcements |
+| Employees | ✅ Add with a work email and a password (domain-restricted) and a copyable sign-in message; employee page with overview, employment and access, attendance, leave, devices and activity; change email, set a new password (shown once), sign out everywhere, deactivate/reactivate. Passwords are never viewable. |
 | Departments | ✅ CRUD, head, colour |
 | Roles & permissions | 🟡 Read-only matrix. Editing is planned. |
 | System settings | ✅ Branding, modules, home defaults, navigation, attendance and leave policy values, allowed domains, session length |
@@ -49,7 +49,7 @@
 | Organization isolation | ✅ tested |
 | Permission engine (scoped grants, extra roles, ALLOW/DENY overrides, resolved per request) | ✅ backend only; the role editor UI arrives in Phase 4 |
 | Super Admin authority (flag, limit 1–4, nominate/accept/remove, last-admin protection) | ✅ API and tests; the Super Admins page arrives in Phase 3. Employees list shows a Super Admin badge. |
-| Admin device controls (list an employee's devices, sign them out everywhere) | ✅ API and tests; the buttons arrive with the Phase 3 user management screens. |
+| Admin device controls (list an employee's devices, sign them out everywhere) | ✅ Devices tab on the employee page. |
 | Super Admin requires two-step verification | ✅ Authority is paused until it is on; Settings → Security explains this to the Super Admin. |
 | Client accounts default-denied; suspended and archived statuses | ✅ enforced; client portal (5b) and suspend actions (3) not built |
 | Realtime with reconnection | ✅ Socket.IO with automatic reconnect and an indicator in the rail |

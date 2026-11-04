@@ -105,6 +105,6 @@ docker compose -f docker-compose.yml --profile app up -d --build
 - [ ] `COOKIE_SECURE=true`, HTTPS only, HSTS at the proxy
 - [ ] `SMTP_URL` set. Invite links in admin UI responses remain the authorized fallback.
 - [ ] Rotate the Postgres password. The DB isn't publicly reachable.
-- [ ] Remove demo data and run no seed in prod. Create the first Super Admin with `pnpm --filter @fg/api db:bootstrap` (see `apps/api/prisma/bootstrap.ts`).
+- [ ] Remove demo data and run no seed in prod. Create the first Super Admin with `CONFIRM_BOOTSTRAP=yes ADMIN_EMAIL=… pnpm --filter @fg/api superadmin:bootstrap` (see `ACCOUNT_PROVISIONING.md`).
 - [ ] Back up and test a restore
 - [ ] Rate limits verified at the proxy as well as in the app

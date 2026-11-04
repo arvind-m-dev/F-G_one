@@ -112,15 +112,15 @@ test('admin portal: add an employee with a password they can sign in with straig
   await signIn(page, 'admin@futuristglobal.com');
   await page.getByRole('banner').getByRole('link', { name: 'Admin portal' }).click();
   await expect(page.getByRole('heading', { name: /at a glance/ })).toBeVisible();
-  await page.goto('/admin/employees?invite=1');
+  await page.goto('/admin/employees?add=1');
   const email = `e2e.${Date.now()}@futuristglobal.com`;
   const temp = 'Temp-Pass-2026';
   await page.getByLabel('First name').fill('Eetoo');
   await page.getByLabel('Last name').fill('Tester');
   await page.getByLabel('Work email').fill(email);
-  await page.getByLabel('Temporary password').fill(temp);
+  await page.getByLabel('Password', { exact: true }).fill(temp);
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByLabel('Sign-in message')).toContainText(`Temporary password: ${temp}`);
+  await expect(page.getByLabel('Sign-in message')).toContainText(`Password: ${temp}`);
 
   const fresh = await (await page.context().browser()!.newContext()).newPage();
   // By default passwords are admin-managed (settings.auth.selfServicePassword off): the given one works as is.

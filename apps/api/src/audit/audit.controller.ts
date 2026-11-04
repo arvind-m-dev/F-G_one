@@ -1,3 +1,4 @@
+import { likeContains } from '../common/like';
 import { Controller, Get, Query } from '@nestjs/common';
 import { PERMISSIONS } from '@fg/shared';
 import { z } from 'zod';
@@ -22,7 +23,7 @@ export class AuditController {
     const where = {
       organizationId: auth.organizationId,
       ...(q.entityType ? { entityType: q.entityType } : {}),
-      ...(q.q ? { action: { contains: q.q, mode: 'insensitive' as const } } : {}),
+      ...(q.q ? { action: likeContains(q.q) } : {}),
     };
     const [items, total] = await Promise.all([
       this.prisma.auditLog.findMany({

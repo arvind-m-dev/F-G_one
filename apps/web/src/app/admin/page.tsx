@@ -96,7 +96,7 @@ export default function AdminOverview() {
               </Link>
             )}
             {can(PERMISSIONS.EMPLOYEES_MANAGE) && (
-              <Link href="/admin/employees?invite=1">
+              <Link href="/admin/employees?add=1">
                 <Button>
                   <UserPlus /> Add employee
                 </Button>
@@ -128,7 +128,7 @@ export default function AdminOverview() {
               <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
                 {[
                   ['Online now', d.employees.onlineNow, 'bg-emerald-500'],
-                  ['Invited', d.employees.invited, 'bg-amber-400'],
+                  ['Waiting for password', d.employees.invited, 'bg-amber-400'],
                   ['Deactivated', d.employees.deactivated, 'bg-slate-400'],
                   ['Channels', d.channelCount, 'bg-sky-500'],
                 ].map(([k, v, c]) => (

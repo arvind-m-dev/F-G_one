@@ -92,7 +92,7 @@ export class DashboardController {
       this.prisma.message.count({ where: { authorId: auth.userId, deletedAt: null } }),
       this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: { bio: true, phone: true, avatarUrl: true, statusText: true, presence: true } }),
     ]);
-    const onlineIds = new Set(this.realtime.onlineIds());
+    const onlineIds = new Set(this.realtime.onlineIds(auth.organizationId));
     return {
       workday: { start: settings.attendance.workdayStart, end: settings.attendance.workdayEnd, workingDays: settings.attendance.workingDays, timezone: settings.attendance.timezone },
       team: team.map((t) => toPerson(t, onlineIds.has(t.id))),
@@ -141,7 +141,7 @@ export class DashboardController {
         FROM "User" WHERE "organizationId" = ${org} AND "joinedAt" >= (date_trunc('month', now()) - interval '5 months')
         GROUP BY 1 ORDER BY 1`,
       // Online tracking is process-wide; count only this organization's people.
-      this.prisma.user.count({ where: { organizationId: org, status: 'ACTIVE', id: { in: this.realtime.onlineIds() } } }),
+      this.prisma.user.count({ where: { organizationId: org, status: 'ACTIVE', id: { in: this.realtime.onlineIds(org) } } }),
     ]);
 
     const status = Object.fromEntries(statusCounts.map((s) => [s.status, s._count])) as Record<string, number>;

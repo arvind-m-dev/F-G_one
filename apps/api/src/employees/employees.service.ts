@@ -9,6 +9,7 @@ import {
   UpdateEmployeeInput,
 } from '@fg/shared';
 import { AttendanceService } from '../attendance/attendance.service';
+import { likeContains } from '../common/like';
 import { AuditService } from '../audit/audit.service';
 import { hashPassword } from '../auth/password';
 import type { AuthContext } from '../common/auth-context';
@@ -49,11 +50,11 @@ export class EmployeesService {
       ...(q.q
         ? {
             OR: [
-              { firstName: { contains: q.q, mode: 'insensitive' } },
-              { lastName: { contains: q.q, mode: 'insensitive' } },
-              { displayName: { contains: q.q, mode: 'insensitive' } },
-              { email: { contains: q.q, mode: 'insensitive' } },
-              { designation: { contains: q.q, mode: 'insensitive' } },
+              { firstName: likeContains(q.q) },
+              { lastName: likeContains(q.q) },
+              { displayName: likeContains(q.q) },
+              { email: likeContains(q.q) },
+              { designation: likeContains(q.q) },
             ],
           }
         : {}),

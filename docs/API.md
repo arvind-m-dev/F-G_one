@@ -16,7 +16,7 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 | GET | `/auth/me` | `{ user, permissions, grants, role, preferences, organization{branding, settings} }`. `grants` maps permission → widest scope (e.g. `{"attendance.view":"TEAM"}`). `permissions` are the legacy flat keys derived from it. Also `isSuperAdmin`, `accountType` (`INTERNAL` or `CLIENT`), `mfaEnabled` and `superAdminNeedsMfa` (holds the flag, but the authority is off until two-step verification is on). |
 | 🌐 POST | `/auth/forgot-password` | `{ email }`. Always returns 200 (no enumeration). Limit 5 per 15 min. Not linked from the web app: passwords are reset by an admin. |
 | 🌐 POST | `/auth/reset-password` | `{ token, password }`. Single use, 30-min expiry. Signs out all sessions. |
-| POST | `/auth/change-password` | `{ currentPassword, newPassword }`. Signs out other sessions and closes their live connections. |
+| POST | `/auth/change-password` | `{ currentPassword, newPassword }`. 403 unless self-service passwords are on or the account has a temporary password. Signs out other sessions and closes their live connections. |
 | POST | `/auth/reauth` | `{ password, code? }`. `code` is required when two-step verification is on. Marks the session as recently authenticated. Limit 10 per 15 min. Failures are audited as `auth.reauth_failed`. |
 | GET | `/auth/mfa` | `{ enabled, enabledAt, recoveryCodesLeft, required }`. `required` is true for Super Admins. |
 | POST | `/auth/mfa/setup` | 🔒 recent auth. Starts enrolment: `{ secret, otpauthUrl, qrSvg }`. Nothing changes until a code is confirmed. 409 if already on. |
@@ -43,12 +43,13 @@ Base URL: `/api` (same origin via the Next.js proxy, or `http://localhost:4000/a
 |---|---|---|---|
 | GET | `/employees?q&departmentId&status&page&pageSize` | `employees.read` | Non-admins only see ACTIVE users and no private fields |
 | GET | `/employees/:id` | `employees.read` | Includes manager and direct reports |
-| POST | `/employees` | `employees.manage` | `createEmployeeSchema` (includes a temporary `password`). Enforces the domain allow-list and role rank. Creates an ACTIVE account that must change its password at first sign-in. Returns `{ employee }`. |
+| POST | `/employees` | `employees.manage` | `createEmployeeSchema` (includes a temporary `password`). Enforces the domain allow-list and role rank. Creates an ACTIVE account. It must change the password at first sign-in only when `settings.auth.selfServicePassword` is on. Returns `{ employee }`. |
 | PATCH | `/employees/:id` | `employees.manage` | Rank rules. You can't change your own role. |
 | POST | `/employees/:id/deactivate` | `employees.manage` | Revokes sessions and invitations and disconnects sockets |
 | POST | `/employees/:id/activate` | `employees.manage` | |
-| POST | `/employees/:id/invite` | `employees.manage` | Re-issues the invite and revokes earlier links (legacy; the admin UI now sets passwords instead) |
-| POST | `/employees/:id/password` | `employees.manage` + recent sign-in | `{ password }`. Sets a temporary password, signs the employee out everywhere, activates an invited account and requires them to choose their own at next sign-in. Rank and Super Admin checks as editing. Not for your own account. Audited `employee.password_set`. |
+| GET | `/employees/:id/overview` | `employees.manage` | Everything about one person: `employee`, `access` (roles, overrides, grants), `account` (status, MFA, last sign-in), `attendance` (30 days, null without `attendance.view`), `leave`, `sessions`, `activity` (50 audit entries, null without `audit.read`). Super Admins can open anyone, others only lower rank; other tenants 404. Never includes password hashes or MFA secrets. |
+| POST | `/employees/:id/email` | `employees.manage` + recent sign-in | `{ email }`. Company domain, globally unique (409). Same rank rules; not your own. Signs them out everywhere. Audited `employee.email_changed` with from/to. |
+| POST | `/employees/:id/password` | `employees.manage` + recent sign-in | `{ password }`. Sets a new password (shown once to hand over), signs the employee out everywhere and activates an account still waiting for a password. With `selfServicePassword` on it is temporary and must be changed at next sign-in. Rank and Super Admin checks as editing. Not for your own account. Audited `employee.password_set`. |
 
 Admin device controls (Phase 2c), with the same rank and Super Admin authority checks as editing:
 

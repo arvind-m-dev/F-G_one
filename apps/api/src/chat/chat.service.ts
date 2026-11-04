@@ -191,6 +191,8 @@ export class ChatService {
     const { channel, membership } = await this.access(auth, channelId);
     if (channel.type === 'DIRECT') throw new BadRequestException('Direct messages cannot be renamed');
     if (!this.canAdminChannel(auth, membership)) throw new ForbiddenException('Only channel admins can edit this channel');
+    // Default channels (e.g. #general) keep their name; the UI locks the field too.
+    if (channel.isDefault && input.name && input.name !== channel.name) throw new BadRequestException('Default channels cannot be renamed');
     if (input.name && input.name !== channel.name && (await this.prisma.channel.count({ where: { organizationId: auth.organizationId, name: input.name } }))) {
       throw new ConflictException('A channel with that name already exists');
     }

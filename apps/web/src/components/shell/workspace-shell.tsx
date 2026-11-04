@@ -467,11 +467,13 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
         </div>
         {portal === 'app' && <AttendanceAssist />}
         <main id="main" className={cn('relative min-h-0 flex-1 bg-canvas md:rounded-xl md:shadow-canvas', fullBleed ? 'overflow-hidden' : 'scrollbar-thin overflow-y-auto pb-16 md:pb-0')}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={fullBleed ? '/app/chat' : pathname} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16, ease: 'easeOut' }} className="h-full">
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          {/*
+            Enter animation only. An exit animation (AnimatePresence mode="wait") rendered the new route inside the
+            outgoing wrapper first and then mounted it again, so clicks in the first moments were lost.
+          */}
+          <motion.div key={fullBleed ? '/app/chat' : pathname} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.16, ease: 'easeOut' }} className="h-full">
+            {children}
+          </motion.div>
         </main>
       </div>
       {!/^\/app\/chat\/.+/.test(pathname) && <MobileTabs portal={portal} />}

@@ -13,9 +13,11 @@
 | 3 Nov 2026 | **Super Admin Phase 2a, permission engine:** scoped grants, extra roles, ALLOW/DENY overrides, per-request resolution, legacy compatibility, migration with backfill | 45 API e2e + 7 API unit, 7 web unit, 17 Playwright. Backfill verified (8 of 8 roles identical). |
 | 3 Nov 2026 | **Super Admin Phase 2b, authority:** `isSuperAdmin` flag, limit, nominate/accept/revoke/remove, last-admin protection, Administrator role, client default-deny, SUSPENDED and ARCHIVED, invite re-issue escalation fix | 55 API e2e + 9 API unit, 7 web unit, 17 Playwright |
 | 3 Nov 2026 | **Super Admin Phase 2c, MFA, re-auth and devices:** TOTP with recovery codes, half-signed-in sessions, `@RequireRecentAuth`, device list and sign-out (self and admin), socket disconnect on revoke, dormant Super Admin authority without MFA, Settings → Security and the sign-in code step | 65 API e2e + 17 API unit, 7 web unit, 18 Playwright |
+| 4 Nov 2026 | **Admin-managed access and QA hardening:** no invitations, admin-only passwords (switchable), employee page with full data, admin email change, Phase 2d bootstrap and recovery commands, richer seed, a QA pass by area with about 75 fixes | 189 API, 10 web unit, 54 Playwright |
 
 ## Next
 1. Run `db:reset-org` on Neon before go-live (K-3). The script is ready.
-2. Super Admin Phase 2d: bootstrap and recovery CLIs (`SUPER_ADMIN_IMPLEMENTATION_PLAN.md`)
-3. Set `MFA_ENCRYPTION_KEY` on Render before anyone turns on two-step verification in production (see `DEPLOY_RENDER_NEON.md`)
-4. Decision D-7 (storage) is still open and blocks pictures, attachments and documents
+2. Super Admin Phase 3: a Super Admins page and the rest of user management (2d is done: `superadmin:bootstrap`, `superadmin:recover`)
+3. A shift model: night-shift people are flagged late, and corrections cannot describe a shift that ends the next morning
+4. Set `MFA_ENCRYPTION_KEY` on Render before anyone turns on two-step verification in production (see `DEPLOY_RENDER_NEON.md`)
+5. Decision D-7 (storage) is still open and blocks pictures, attachments and documents
