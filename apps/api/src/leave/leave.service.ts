@@ -263,6 +263,29 @@ export class LeaveService {
     return rows.map((r) => this.serialize(r, true));
   }
 
+  /** Counts for the HR leave page: requests by status, plus who is out today and soon (organization time zone). */
+  async summary(auth: AuthContext) {
+    if (!hasPermission(auth.permissions, PERMISSIONS.EMPLOYEES_MANAGE)) throw new ForbiddenException('HR only');
+    const organizationId = auth.organizationId;
+    const today = localDate((await this.settings(organizationId)).attendance.timezone);
+    const weekEnd = addDays(today, 7);
+    const [byStatus, outToday, startingSoon] = await Promise.all([
+      this.prisma.leaveRequest.groupBy({ by: ['status'], where: { organizationId }, _count: { _all: true } }),
+      this.prisma.leaveRequest.count({ where: { organizationId, status: 'APPROVED', startDate: { lte: toDbDate(today) }, endDate: { gte: toDbDate(today) } } }),
+      this.prisma.leaveRequest.count({ where: { organizationId, status: 'APPROVED', startDate: { gt: toDbDate(today), lte: toDbDate(weekEnd) } } }),
+    ]);
+    const n = (s: string) => byStatus.find((x) => x.status === s)?._count._all ?? 0;
+    return {
+      date: today,
+      pending: n('PENDING'),
+      approved: n('APPROVED'),
+      declined: n('REJECTED'),
+      cancelled: n('CANCELLED'),
+      outToday,
+      startingSoon,
+    };
+  }
+
   async decide(auth: AuthContext, id: string, decision: 'APPROVED' | 'REJECTED', note?: string | null) {
     const r = await this.prisma.leaveRequest.findFirst({ where: { id, organizationId: auth.organizationId }, include: requestInclude });
     if (!r) throw new NotFoundException('Request not found');

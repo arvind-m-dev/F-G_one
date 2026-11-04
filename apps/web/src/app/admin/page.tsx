@@ -8,6 +8,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { toast } from 'sonner';
 import { PERMISSIONS } from '@fg/shared';
 import { AuditList, type AuditEntry } from '@/components/admin/audit-list';
+import { TodayAttendance } from '@/components/admin/today-attendance';
 import { Forbidden, LoadError } from '@/components/admin/page-header';
 import { PageHeader } from '@/components/shell/page';
 import { Button } from '@/components/ui/button';
@@ -62,11 +63,13 @@ function PendingInvites() {
         <ul className="divide-y rounded-xl border">
           {items.map((e) => (
             <li key={e.id} className="flex items-center gap-3 px-3 py-2.5">
-              <UserAvatar person={e} size="sm" showPresence={false} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium">{e.name}</span>
-                <span className="block truncate text-xs text-muted">{e.email} · added {timeAgo(e.createdAt)}</span>
-              </span>
+              <Link href={`/admin/employees/${e.id}`} className="group flex min-w-0 flex-1 items-center gap-3">
+                <UserAvatar person={e} size="sm" showPresence={false} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium group-hover:underline">{e.name}</span>
+                  <span className="block truncate text-xs text-muted">{e.email} · added {timeAgo(e.createdAt)}</span>
+                </span>
+              </Link>
               <Link href="/admin/employees?status=INVITED" className="text-xs font-medium text-primary hover:underline">
                 Set password
               </Link>
@@ -285,6 +288,7 @@ export default function AdminOverview() {
 
           <div className="mt-10 grid gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0 space-y-10">
+              {can(PERMISSIONS.ATTENDANCE_VIEW_ALL) && <TodayAttendance />}
               {d.access && <AccessAndSecurity a={d.access} />}
               {can(PERMISSIONS.EMPLOYEES_MANAGE) && <PendingInvites />}
               {can(PERMISSIONS.AUDIT_READ) && (

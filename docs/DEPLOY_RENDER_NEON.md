@@ -180,4 +180,5 @@ Check it with the `clientIp` step in the smoke test:
 1. Move both services to **Starter** so they never sleep.
 2. Add a custom domain (e.g. `one.futuristglobal.com`) to `fg-one-web`, then set `WEB_ORIGIN` to it and redeploy the API.
 3. With paid services, the web service can reach the API over Render's private network. Set `API_URL=http://fg-one-api:4000` and redeploy the web service. The API then no longer needs to be reached publicly.
-4. Work through the go-live checklist in [DEPLOYMENT.md](DEPLOYMENT.md#security-checklist-for-go-live).
+4. **Remove `DEMO_MFA_CODE` and `DEMO_MFA_EMAILS`** from the API service. While they are set, the listed demo accounts accept that fixed two-step code and the sign-in screen shows it.
+5. Work through the go-live checklist in [DEPLOYMENT.md](DEPLOYMENT.md#security-checklist-for-go-live).

@@ -232,3 +232,42 @@ describe('leave day breakdown', () => {
     await setSandwich(false);
   });
 });
+
+describe('leave summary', () => {
+  const shift = (ymd: string, n: number) => {
+    const d = new Date(`${ymd}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d;
+  };
+
+  it('counts requests by status and who is out, for HR only and within the tenant', async () => {
+    const hr = await login(app, 'hr_admin@futuristglobal.com');
+    const before = (await hr.get('/api/leave/requests/summary').expect(200)).body;
+    const today = before.date as string;
+    const base = { organizationId: fg.org.id, userId: fg.users.manager.id, typeId: casual.id, days: 1 };
+    await prisma.leaveRequest.createMany({
+      data: [
+        { ...base, startDate: shift(today, 0), endDate: shift(today, 0), status: 'APPROVED' },
+        { ...base, startDate: shift(today, 3), endDate: shift(today, 3), status: 'APPROVED' },
+        { ...base, startDate: shift(today, 30), endDate: shift(today, 30), status: 'PENDING' },
+        { ...base, startDate: shift(today, 40), endDate: shift(today, 40), status: 'REJECTED' },
+      ],
+    });
+    // Another company's leave must not show up.
+    const otherType = await prisma.leaveType.create({ data: { organizationId: other.org.id, code: 'CL', name: 'Casual', annualAllowance: 4 } });
+    await prisma.leaveRequest.create({
+      data: { organizationId: other.org.id, userId: other.users.employee.id, typeId: otherType.id, days: 1, startDate: shift(today, 0), endDate: shift(today, 0), status: 'APPROVED' },
+    });
+
+    const after = (await hr.get('/api/leave/requests/summary').expect(200)).body;
+    expect(after.pending - before.pending).toBe(1);
+    expect(after.approved - before.approved).toBe(2);
+    expect(after.declined - before.declined).toBe(1);
+    expect(after.cancelled - before.cancelled).toBe(0);
+    expect(after.outToday - before.outToday).toBe(1);
+    expect(after.startingSoon - before.startingSoon).toBe(1);
+
+    const emp = await login(app, 'employee@futuristglobal.com');
+    await emp.get('/api/leave/requests/summary').expect(403);
+  });
+});

@@ -1,5 +1,5 @@
 'use client';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarPlus, Check, Pencil, Plus, TreePalm, X } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -18,6 +18,35 @@ import { useCan, useSession } from '@/lib/session';
 import type { LeaveType } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
+
+interface LeaveSummary { date: string; pending: number; approved: number; declined: number; cancelled: number; outToday: number; startingSoon: number }
+
+/** Headline counts above the request list. Status tiles switch the list; "out" tiles open the calendar. */
+function SummaryTiles({ onStatus, onCalendar }: { onStatus: (s: string) => void; onCalendar: () => void }) {
+  const q = useQuery({ queryKey: ['leave-summary'], queryFn: () => api<LeaveSummary>('/leave/requests/summary'), refetchInterval: 60_000 });
+  if (q.isPending) return <Skeleton className="mb-5 h-[72px]" />;
+  if (q.isError) return <p className="mb-5 text-xs text-muted">Counts couldn't be loaded. {errorMessage(q.error)}</p>;
+  const d = q.data;
+  const tiles: { label: string; value: number; hint: string; onClick: () => void; accent?: boolean }[] = [
+    { label: 'Waiting for approval', value: d.pending, hint: 'Show pending', onClick: () => onStatus('PENDING'), accent: d.pending > 0 },
+    { label: 'Out today', value: d.outToday, hint: 'Open calendar', onClick: onCalendar },
+    { label: 'Starting in 7 days', value: d.startingSoon, hint: 'Open calendar', onClick: onCalendar },
+    { label: 'Approved', value: d.approved, hint: 'Show approved', onClick: () => onStatus('APPROVED') },
+    { label: 'Declined', value: d.declined, hint: 'Show declined', onClick: () => onStatus('REJECTED') },
+  ];
+  return (
+    <ul className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      {tiles.map((t) => (
+        <li key={t.label}>
+          <button type="button" onClick={t.onClick} title={t.hint} className="block w-full rounded-lg border px-3 py-2 text-left transition hover:bg-surface-2">
+            <span className="block text-xs text-muted">{t.label}</span>
+            <span className={cn('mt-0.5 block text-lg font-semibold tabular-nums', t.accent && 'text-warning')}>{t.value}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const COLORS = ['#0ea5e9', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6', '#6366f1', '#94a3b8'];
 
@@ -96,12 +125,12 @@ const STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ALL'] as cons
 function Requests() {
   const qc = useQueryClient();
   const me = useSession();
-  const [get, set] = useUrlState({ status: 'PENDING' });
+  const [get, set] = useUrlState({ status: 'PENDING', tab: 'requests' });
   // An unknown status in the URL shows the pending list instead of an error.
   const status = (STATUSES as readonly string[]).includes(get('status')) ? get('status') : 'PENDING';
   const list = useLeaveRequests('all', status);
   const refresh = () => {
-    for (const k of ['leave-requests', 'approvals-count', 'leave-calendar', 'leave-balances']) void qc.invalidateQueries({ queryKey: [k] });
+    for (const k of ['leave-requests', 'leave-summary', 'approvals-count', 'leave-calendar', 'leave-balances']) void qc.invalidateQueries({ queryKey: [k] });
   };
   const decide = useMutation({
     mutationFn: (v: { id: string; decision: 'APPROVED' | 'REJECTED' }) => api(`/leave/requests/${v.id}/decision`, { body: { decision: v.decision } }),
@@ -117,6 +146,7 @@ function Requests() {
   });
   return (
     <>
+      <SummaryTiles onStatus={(s) => set({ status: s })} onCalendar={() => set({ tab: 'calendar', status: null }, { push: true })} />
       <div className="scrollbar-thin mb-4 flex gap-1.5 overflow-x-auto" role="radiogroup" aria-label="Status">
         {STATUSES.map((s) => (
           <button key={s} role="radio" aria-checked={status === s} onClick={() => set({ status: s })} className={cn('shrink-0 rounded-full border px-3 py-1 text-[13px] capitalize transition', status === s ? 'border-foreground/20 bg-foreground text-canvas' : 'text-muted hover:text-foreground')}>
