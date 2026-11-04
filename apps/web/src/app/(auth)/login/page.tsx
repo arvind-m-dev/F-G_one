@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
 import { forgetAccount, readRecentAccounts, rememberAccount, type RecentAccount } from '@/lib/recent-accounts';
+import { safeNext } from '@/lib/safe-next';
 import type { Me } from '@/lib/types';
 import { cn, initials } from '@/lib/utils';
 
@@ -95,8 +96,7 @@ function LoginFlow() {
       } catch {
         rememberAccount({ email });
       }
-      const next = params.get('next');
-      router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/app/home');
+      router.replace(safeNext(params.get('next')));
   };
   const current = recent.find((r) => r.email === email);
 
@@ -260,7 +260,7 @@ export default function LoginPage() {
   return (
     <Suspense>
       <LoginFlow />
-      <p className={cn('mt-8 border-t pt-5 text-center text-xs text-subtle')}>No account yet? Your administrator sends an invitation.</p>
+      <p className={cn('mt-8 border-t pt-5 text-center text-xs text-subtle')}>No account yet? Your administrator creates one for you.</p>
     </Suspense>
   );
 }

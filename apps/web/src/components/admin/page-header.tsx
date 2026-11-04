@@ -1,4 +1,6 @@
-import { ShieldAlert } from 'lucide-react';
+import { CircleAlert, ShieldAlert } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { errorMessage } from '@/lib/api';
 import { PageHeader as CanvasHeader, type Crumb } from '@/components/shell/page';
 
 /**
@@ -43,6 +45,23 @@ export function Forbidden({ title = "You don't have access to this page", descri
         <p className="text-base font-semibold">{title}</p>
         <p className="mt-1 text-sm text-muted">{description}</p>
       </div>
+    </div>
+  );
+}
+
+/** Error state for admin pages: what failed, why, and a way to try again. */
+export function LoadError({ what, error, onRetry }: { what: string; error: unknown; onRetry?: () => void }) {
+  return (
+    <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 p-5 text-sm sm:flex-row sm:items-center">
+      <CircleAlert className="size-5 shrink-0 text-danger" />
+      <p className="flex-1">
+        <span className="font-medium">We couldn&apos;t load {what}.</span> <span className="text-muted">{errorMessage(error)}</span>
+      </p>
+      {onRetry && (
+        <Button size="sm" variant="outline" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
     </div>
   );
 }

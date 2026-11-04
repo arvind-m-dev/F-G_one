@@ -108,6 +108,7 @@ describe('authentication', () => {
     await login(app, 'manager@futuristglobal.com', 'Brand-New-Pass-42');
     // restore
     await prisma.user.update({ where: { id: fg.users.manager.id }, data: { passwordHash: (await prisma.user.findUniqueOrThrow({ where: { id: fg.users.employee.id } })).passwordHash } });
+    await selfService(false);
   });
 
   it('expired reset tokens are rejected', async () => {

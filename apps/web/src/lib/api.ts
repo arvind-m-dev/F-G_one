@@ -37,7 +37,7 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
       } catch {
         /* ignore */
       }
-      window.location.href = `/login?next=${encodeURIComponent(here)}`;
+      window.location.href = `/login?next=${encodeURIComponent(here + window.location.search)}`;
     }
   }
   const text = await res.text();

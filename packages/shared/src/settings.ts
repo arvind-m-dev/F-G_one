@@ -77,6 +77,9 @@ export function isTimeZone(tz: string) {
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
 
+/** Same check as `isTimeZone` (kept for callers that use this name). */
+export const isValidTimeZone = isTimeZone;
+
 export const organizationSettingsSchema = z.object({
   branding: z
     .object({
@@ -107,7 +110,7 @@ export const organizationSettingsSchema = z.object({
       allowedLocations: z.array(z.enum(['WFO', 'WFH', 'ON_DUTY'])).min(1).default(['WFO', 'WFH', 'ON_DUTY']),
       workingDays: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5]),
       /** IANA time zone that defines the attendance day and "late" */
-      timezone: z.string().min(1).max(60).refine(isTimeZone, 'Choose a valid time zone').default('Asia/Kolkata'),
+      timezone: z.string().min(1).max(60).refine(isTimeZone, 'Choose a valid time zone, such as Asia/Kolkata').default('Asia/Kolkata'),
       breaksEnabled: z.boolean().default(true),
       /** Allow checking in again after checking out on the same day (split shifts). */
       multipleSessions: z.boolean().default(false),
@@ -166,8 +169,9 @@ export function parseOrganizationSettings(raw: unknown): OrganizationSettings {
 }
 
 export const updateOrganizationSchema = z.object({
-  name: z.string().min(2).max(80).optional(),
-  logoUrl: z.string().url().max(500).nullable().optional(),
+  name: z.string().trim().min(2, 'Enter a company name of at least 2 characters').max(80).optional(),
+  /** Only web addresses: the logo is shown on the public sign-in page. */
+  logoUrl: z.string().trim().url('Enter a full web address starting with https://').max(500).refine((u) => /^https?:\/\//i.test(u), 'Enter a full web address starting with https://').nullable().optional(),
   primaryColor: HEX_COLOR.optional(),
   secondaryColor: HEX_COLOR.optional(),
   settings: organizationSettingsSchema.deepPartial().optional(),

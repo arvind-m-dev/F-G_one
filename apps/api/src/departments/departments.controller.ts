@@ -19,10 +19,10 @@ export class DepartmentsController {
       orderBy: { name: 'asc' },
       include: {
         head: { select: { id: true, firstName: true, lastName: true, avatarColor: true, avatarUrl: true } },
-        _count: { select: { members: { where: { status: 'ACTIVE' } } } },
+        _count: { select: { members: { where: { status: 'ACTIVE' } }, announcements: true } },
       },
     });
-    return rows.map(({ _count, ...d }) => ({ ...d, memberCount: _count.members }));
+    return rows.map(({ _count, ...d }) => ({ ...d, memberCount: _count.members, announcementCount: _count.announcements }));
   }
 
   private async checkHead(auth: AuthContext, headId?: string | null) {
@@ -63,6 +63,11 @@ export class DepartmentsController {
   async remove(@Auth() auth: AuthContext, @Param('id') id: string) {
     const existing = await this.prisma.department.findFirst({ where: { id, organizationId: auth.organizationId } });
     if (!existing) throw new NotFoundException('Department not found');
+    // Deleting would silently delete announcements aimed at this department (cascade). Ask first.
+    const announcements = await this.prisma.announcement.count({ where: { organizationId: auth.organizationId, departmentId: id } });
+    if (announcements) {
+      throw new ConflictException(`${announcements} announcement${announcements === 1 ? ' is' : 's are'} addressed to this department. Delete them or send them to everyone first.`);
+    }
     await this.prisma.department.delete({ where: { id } }); // members' departmentId is set to null
     await this.audit.log(auth, 'department.deleted', 'department', id, { name: existing.name });
     return { ok: true };

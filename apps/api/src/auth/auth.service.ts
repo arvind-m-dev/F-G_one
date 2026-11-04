@@ -47,7 +47,7 @@ export class AuthService {
       throw invalid;
     }
     if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new ForbiddenException('Too many failed attempts. Try again in a few minutes or reset your password.');
+      throw new ForbiddenException('Too many failed attempts. Try again in 15 minutes or ask your administrator for help.');
     }
     const ok = await verifyPassword(user.passwordHash, password);
     if (!ok) {
@@ -199,7 +199,8 @@ export class AuthService {
     }
     const passwordHash = await hashPassword(password);
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash, failedLogins: 0, lockedUntil: null } }),
+      // They chose this password themselves, so any temporary-password flag is cleared.
+      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash, failedLogins: 0, lockedUntil: null, mustChangePassword: false } }),
       this.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
       this.prisma.session.deleteMany({ where: { userId: record.userId } }), // sign out everywhere
     ]);

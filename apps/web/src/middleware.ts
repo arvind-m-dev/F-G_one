@@ -13,7 +13,8 @@ export function middleware(req: NextRequest) {
   if (!isPublic && !hasSession) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
-    url.search = pathname !== '/' ? `?next=${encodeURIComponent(pathname)}` : '';
+    // Keep the query too, so filters and tabs in a shared link survive signing in.
+    url.search = pathname !== '/' ? `?next=${encodeURIComponent(pathname + req.nextUrl.search)}` : '';
     return NextResponse.redirect(url);
   }
   if (pathname === '/login' && hasSession) {

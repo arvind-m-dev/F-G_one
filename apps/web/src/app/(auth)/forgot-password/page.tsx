@@ -14,7 +14,7 @@ export default function ForgotPasswordPage() {
         </div>
         <h2 className="text-xl font-semibold tracking-tight">Forgot your password?</h2>
         <p className="mt-2 text-sm text-muted">
-          Ask your HR team or administrator to set a new one for you. They&apos;ll send you a temporary password, and you&apos;ll choose your own the next time you sign in.
+          Ask your HR team or administrator to set a new one for you. For your security, passwords can&apos;t be looked up or sent by email.
         </p>
       </div>
     </>

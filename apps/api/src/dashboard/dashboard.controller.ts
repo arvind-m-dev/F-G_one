@@ -116,7 +116,7 @@ export class DashboardController {
   async overview(@Auth() auth: AuthContext) {
     const org = auth.organizationId;
     const since14 = new Date(startOfUtcDay().getTime() - 13 * DAY);
-    const [statusCounts, byDept, byRole, pendingInvites, recentAudit, messagesPerDay, channelCount, joiners] = await Promise.all([
+    const [statusCounts, byDept, byRole, pendingInvites, recentAudit, messagesPerDay, channelCount, joiners, onlineNow] = await Promise.all([
       this.prisma.user.groupBy({ by: ['status'], where: { organizationId: org }, _count: true }),
       this.prisma.department.findMany({
         where: { organizationId: org },
@@ -140,6 +140,8 @@ export class DashboardController {
         SELECT date_trunc('month', "joinedAt") AS month, COUNT(*)::int AS count
         FROM "User" WHERE "organizationId" = ${org} AND "joinedAt" >= (date_trunc('month', now()) - interval '5 months')
         GROUP BY 1 ORDER BY 1`,
+      // Online tracking is process-wide; count only this organization's people.
+      this.prisma.user.count({ where: { organizationId: org, status: 'ACTIVE', id: { in: this.realtime.onlineIds() } } }),
     ]);
 
     const status = Object.fromEntries(statusCounts.map((s) => [s.status, s._count])) as Record<string, number>;
@@ -157,7 +159,7 @@ export class DashboardController {
     });
 
     return {
-      employees: { active: status.ACTIVE ?? 0, invited: status.INVITED ?? 0, deactivated: status.DEACTIVATED ?? 0, onlineNow: this.realtime.onlineIds().length },
+      employees: { active: status.ACTIVE ?? 0, invited: status.INVITED ?? 0, deactivated: status.DEACTIVATED ?? 0, onlineNow },
       pendingInvites,
       channelCount,
       departments: byDept.map((d) => ({ id: d.id, name: d.name, color: d.color, members: d._count.members })),
