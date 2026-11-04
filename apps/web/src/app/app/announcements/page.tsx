@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { ANNOUNCEMENT_CATEGORIES } from '@fg/shared';
 import { AnnouncementReader, categoryLabel, priorityLabel, priorityTone } from '@/components/announcements/announcement-reader';
 import { PageHeader } from '@/components/shell/page';
+import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
 import { useAnnouncements } from '@/lib/hooks';
 import type { Announcement } from '@/lib/types';
@@ -59,7 +60,9 @@ function Feed() {
         ))}
       </div>
 
-      {list.isPending ? (
+      {list.isError ? (
+        <EmptyState icon={<CircleAlert />} title="Announcements could not be loaded" description="Check your connection and try again." action={<Button variant="outline" onClick={() => void list.refetch()}>Try again</Button>} />
+      ) : list.isPending ? (
         <div className="space-y-4">
           <Skeleton className="h-48" />
           <Skeleton className="h-24" />
@@ -82,8 +85,8 @@ function Feed() {
                 {lead.priority !== 'NORMAL' && <Badge tone={priorityTone[lead.priority]}>{priorityLabel[lead.priority]}</Badge>}
                 <NeedsAck a={lead} />
               </div>
-              <h2 className="mt-3 text-2xl leading-tight font-semibold tracking-tight group-hover:text-primary-ink sm:text-[1.75rem]">{lead.title}</h2>
-              <p className="mt-3 line-clamp-3 max-w-2xl text-[15px] leading-relaxed text-muted">{lead.body}</p>
+              <h2 className="mt-3 text-2xl leading-tight font-semibold tracking-tight break-words group-hover:text-primary-ink sm:text-[1.75rem]">{lead.title}</h2>
+              <p className="mt-3 line-clamp-3 max-w-2xl text-[15px] leading-relaxed break-words text-muted">{lead.body}</p>
               <p className="mt-5 text-xs text-subtle">
                 {lead.author ? `${lead.author.firstName} ${lead.author.lastName}` : 'Company'} · {lead.department?.name ?? 'Everyone'} · {timeAgo(lead.publishedAt)}
               </p>
@@ -99,11 +102,11 @@ function Feed() {
                   </span>
                   <span className="min-w-0">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="text-[15px] font-semibold group-hover:text-primary-ink">{a.title}</span>
+                      <span className="min-w-0 text-[15px] font-semibold break-words group-hover:text-primary-ink">{a.title}</span>
                       {a.priority !== 'NORMAL' && <Badge tone={priorityTone[a.priority]}>{priorityLabel[a.priority]}</Badge>}
                       <NeedsAck a={a} />
                     </span>
-                    <span className="mt-1 line-clamp-2 block text-sm text-muted">{a.body}</span>
+                    <span className="mt-1 line-clamp-2 block text-sm break-words text-muted">{a.body}</span>
                     <span className="mt-1.5 block text-xs text-subtle">
                       {a.author ? `${a.author.firstName} ${a.author.lastName}` : 'Company'} · {a.department?.name ?? 'Everyone'}
                     </span>

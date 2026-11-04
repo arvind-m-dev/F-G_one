@@ -55,7 +55,12 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
       void qc.invalidateQueries({ queryKey: ['channels'] });
       void qc.invalidateQueries({ queryKey: ['channel', p.channelId] });
     });
-    s.on(RT.CHANNEL_REMOVED, () => void qc.invalidateQueries({ queryKey: ['channels'] }));
+    s.on(RT.CHANNEL_REMOVED, (p: { channelId: string }) => {
+      // Removed from a conversation: drop what was cached so an open view stops showing it.
+      void qc.invalidateQueries({ queryKey: ['channels'] });
+      qc.removeQueries({ queryKey: ['messages', p.channelId] });
+      void qc.invalidateQueries({ queryKey: ['channel', p.channelId] });
+    });
     s.on(RT.NOTIFICATION_NEW, (n: { title: string; body: string | null; link: string | null; type: string }) => {
       void qc.invalidateQueries({ queryKey: ['notifications'] });
       if (n.type === 'leave' || n.type === 'correction') {

@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { announcementSchema, hasPermission, PERMISSIONS, RT, type AnnouncementInput } from '@fg/shared';
+import { ANNOUNCEMENT_CATEGORIES, announcementSchema, hasPermission, PERMISSIONS, RT, type AnnouncementCategoryKey, type AnnouncementInput } from '@fg/shared';
+import { likeContains } from '../common/like';
 import { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import { Auth, AuthContext, RequirePermissions } from '../common/auth-context';
@@ -10,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const listQuery = z.object({
-  category: z.string().max(40).optional(),
+  category: z.enum(ANNOUNCEMENT_CATEGORIES.map((c) => c.key) as [AnnouncementCategoryKey, ...AnnouncementCategoryKey[]]).optional(),
   q: z.string().trim().max(100).optional(),
   include: z.enum(['active', 'all']).default('active'),
 });
@@ -48,10 +49,14 @@ export class AnnouncementsController {
 
   @Get()
   async list(@Auth() auth: AuthContext, @Query(new ZodPipe(listQuery)) q: z.infer<typeof listQuery>) {
+    // Combine with AND: the visibility rule has its own OR (company-wide or my department), and the
+    // search OR must never replace it, or a search would reveal other departments' announcements.
     const where: Prisma.AnnouncementWhereInput = {
-      ...(await this.visibility(auth, q.include === 'all')),
-      ...(q.category ? { category: q.category as Prisma.EnumAnnouncementCategoryFilter['equals'] } : {}),
-      ...(q.q ? { OR: [{ title: { contains: q.q, mode: 'insensitive' } }, { body: { contains: q.q, mode: 'insensitive' } }] } : {}),
+      AND: [
+        await this.visibility(auth, q.include === 'all'),
+        ...(q.category ? [{ category: q.category }] : []),
+        ...(q.q ? [{ OR: [{ title: likeContains(q.q) }, { body: likeContains(q.q) }] }] : []),
+      ],
     };
     const rows = await this.prisma.announcement.findMany({
       where,
