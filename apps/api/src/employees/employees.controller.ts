@@ -47,12 +47,6 @@ export class EmployeesController {
     return this.employees.setActive(auth, id, true);
   }
 
-  @Post(':id/invite')
-  @HttpCode(200)
-  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
-  invite(@Auth() auth: AuthContext, @Param('id') id: string) {
-    return this.employees.issueInvitation(auth, id, true);
-  }
 
   /** Sets a temporary password the admin hands over; the employee must change it at next sign-in. */
   @Post(':id/password')

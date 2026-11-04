@@ -117,6 +117,7 @@ export class EmployeesService {
   async create(auth: AuthContext, input: CreateEmployeeInput) {
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: auth.organizationId } });
     const domains = parseOrganizationSettings(org.settings).auth.allowedEmailDomains.map((d) => d.toLowerCase());
+    const selfService = parseOrganizationSettings(org.settings).auth.selfServicePassword;
     const domain = input.email.split('@')[1];
     if (!domains.includes(domain)) throw new BadRequestException(`Email must use a company domain (${domains.join(', ')})`);
     await this.assertRoleAuthority(auth, { roleId: input.roleId });
@@ -143,7 +144,7 @@ export class EmployeesService {
         // The admin hands over a temporary password; the employee chooses their own at first sign-in.
         status: 'ACTIVE',
         passwordHash: await hashPassword(input.password),
-        mustChangePassword: true,
+        mustChangePassword: selfService,
       },
       select: employeeSelect,
     });
@@ -170,7 +171,7 @@ export class EmployeesService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
-        data: { passwordHash: await hashPassword(password), mustChangePassword: true, failedLogins: 0, lockedUntil: null, ...(activating ? { status: 'ACTIVE' } : {}) },
+        data: { passwordHash: await hashPassword(password), mustChangePassword: await this.selfServicePassword(auth.organizationId), failedLogins: 0, lockedUntil: null, ...(activating ? { status: 'ACTIVE' } : {}) },
       }),
       this.prisma.session.deleteMany({ where: { userId: id } }),
       this.prisma.passwordResetToken.updateMany({ where: { userId: id, usedAt: null }, data: { usedAt: new Date() } }),
@@ -182,29 +183,10 @@ export class EmployeesService {
     return this.get(auth, id);
   }
 
-  /** Creates a single-use invitation. The link is returned to the (authorized) admin so it can be shared even without SMTP. */
-  async issueInvitation(auth: AuthContext, userId: string, sendEmail = true) {
-    const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId: auth.organizationId }, include: { organization: true, role: true } });
-    if (!user) throw new NotFoundException('Employee not found');
-    // The invite link activates the account, so only someone allowed to manage the account may see it.
-    await this.assertRoleAuthority(auth, { targetRank: user.role.rank, targetIsSuperAdmin: user.isSuperAdmin });
-    if (user.status !== 'INVITED') throw new BadRequestException('This employee has already activated their account');
-    await this.prisma.invitation.updateMany({ where: { userId, acceptedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
-    const token = newToken();
-    const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86400_000);
-    await this.prisma.invitation.create({
-      data: { organizationId: auth.organizationId, userId, invitedById: auth.userId, tokenHash: sha256(token), expiresAt },
-    });
-    const url = `${env().WEB_ORIGIN}/invite/${token}`;
-    if (sendEmail) {
-      await this.mail.send({
-        to: user.email,
-        subject: `You're invited to ${user.organization.name} on FG One`,
-        text: `Hi ${user.firstName},\n\nYou've been invited to join ${user.organization.name}'s FG One workspace.\nSet your password here (valid for ${INVITE_TTL_DAYS} days):\n\n${url}\n`,
-      });
-    }
-    await this.audit.log(auth, 'employee.invited', 'user', userId, { emailed: sendEmail });
-    return { url, expiresAt };
+  /** Whether people choose their own passwords (otherwise only admins set them). */
+  private async selfServicePassword(organizationId: string) {
+    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { settings: true } });
+    return parseOrganizationSettings(org.settings).auth.selfServicePassword;
   }
 
   private async loadTarget(auth: AuthContext, id: string) {

@@ -132,6 +132,11 @@ export const organizationSettingsSchema = z.object({
       allowedEmailDomains: z.array(z.string().min(3)).min(1).default(['futuristglobal.com']),
       selfRegistration: z.boolean().default(false),
       sessionTtlHours: z.number().int().min(1).max(720).default(168),
+      /**
+       * false (default): only admins set and change passwords; people sign in with what the admin gave them.
+       * true: admin-set passwords are temporary and people choose their own at first sign-in and in their profile.
+       */
+      selfServicePassword: z.boolean().default(false),
     })
     .default({}),
   security: z

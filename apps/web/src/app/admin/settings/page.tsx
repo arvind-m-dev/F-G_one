@@ -321,7 +321,7 @@ export default function SettingsPage() {
           <Tabs.Content value="auth" className="space-y-5 outline-none">
             <div>
               <p className="text-sm font-medium">Allowed email domains</p>
-              <p className="mb-2 text-xs text-muted">Only these domains can be invited.</p>
+              <p className="mb-2 text-xs text-muted">New accounts must use one of these domains.</p>
               <div className="flex flex-wrap gap-2">
                 {s.auth.allowedEmailDomains.map((d) => (
                   <span key={d} className="inline-flex items-center gap-1 rounded-full bg-primary-soft py-1 pr-1.5 pl-3 text-sm text-primary">
@@ -357,9 +357,12 @@ export default function SettingsPage() {
                   ))}
                 </Select>
               </Row>
-              <Row title="Public self-registration" description="Kept off: employees join by admin invitation only.">
+              <Row title="People choose their own passwords" description="Off: only admins set and change passwords, and people sign in with the one they were given. On: admin-set passwords are temporary, people choose their own at first sign-in and can change it in their profile.">
+                <Switch checked={s.auth.selfServicePassword} onCheckedChange={(v) => patch('auth', { selfServicePassword: v })} aria-label="People choose their own passwords" />
+              </Row>
+              <Row title="Public self-registration" description="Kept off: only admins create accounts.">
                 <div className="flex items-center gap-2">
-                  <Badge tone="muted">invite-only</Badge>
+                  <Badge tone="muted">admins only</Badge>
                   <Switch checked={false} disabled aria-label="Self-registration (disabled)" />
                 </div>
               </Row>

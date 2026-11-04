@@ -140,7 +140,8 @@ export class AuthService {
     const roles = [u.role, ...u.extraRoles.map((x) => x.role).filter((r) => r.organizationId === u.organizationId)];
     const mfaEnabled = !!(u.mfaEnabledAt && u.mfaSecretEnc);
     // Super Admin authority is dormant until two-step verification is on.
-    const isSuperAdmin = u.accountType === 'INTERNAL' && u.isSuperAdmin && mfaEnabled;
+    // Dormant until two-step verification is on and any admin-set temporary password has been replaced.
+    const isSuperAdmin = u.accountType === 'INTERNAL' && u.isSuperAdmin && mfaEnabled && !u.mustChangePassword;
     const grants = session.mfaPending || u.mustChangePassword ? {} : resolveGrants(roles, u.permissionOverrides, { isSuperAdmin, accountType: u.accountType });
     return {
       sessionId: session.id,
@@ -204,7 +205,11 @@ export class AuthService {
   }
 
   async changePassword(auth: AuthContext, current: string, next: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, include: { organization: { select: { settings: true } } } });
+    // With admin-managed passwords, people only replace a temporary one an admin marked for change.
+    if (!user.mustChangePassword && !parseOrganizationSettings(user.organization.settings).auth.selfServicePassword) {
+      throw new ForbiddenException('Passwords are managed by your administrator. Ask them to set a new one.');
+    }
     if (!user.passwordHash || !(await verifyPassword(user.passwordHash, current))) {
       throw new BadRequestException('Current password is incorrect');
     }
