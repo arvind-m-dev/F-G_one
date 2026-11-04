@@ -1,7 +1,8 @@
 /**
  * Go-live reset: permanently deletes one organization and ALL its data (users, chat,
  * attendance, leave, announcements…), then recreates it empty with a first Super Admin
- * invitation. Use it to remove seeded demo data from a production database.
+ * (superadmin:bootstrap: a temporary password printed once, no invitation link).
+ * Use it to remove seeded demo data from a production database.
  *
  * Dry run (default) — shows what would be deleted, changes nothing:
  *   ORG_SLUG=futurist-global pnpm --filter @fg/api db:reset-org
@@ -10,21 +11,22 @@
  *   ORG_SLUG=futurist-global CONFIRM_RESET=futurist-global \
  *   ORG_NAME="Futurist Global" ORG_DOMAIN=futuristglobal.com \
  *   ADMIN_EMAIL=it@futuristglobal.com ADMIN_FIRST=IT ADMIN_LAST=Admin \
- *   WEB_ORIGIN=https://fg-one-web.onrender.com pnpm --filter @fg/api db:reset-org
+ *   pnpm --filter @fg/api db:reset-org
  *
  * Take a backup first (docs/DEPLOYMENT.md#backups).
  */
 import { PrismaClient } from '@prisma/client';
-import { bootstrap } from './bootstrap';
+import { emailSchema, passwordSchema } from '@fg/shared';
+import { bootstrapSuperAdmin } from './bootstrap';
+import { dbHost, RefusedError } from './operator';
 
 const prisma = new PrismaClient();
 
 async function main() {
   const slug = process.env.ORG_SLUG;
-  if (!slug) throw new Error('Set ORG_SLUG');
+  if (!slug) throw new RefusedError('Set ORG_SLUG');
   const org = await prisma.organization.findUnique({ where: { slug } });
-  const host = (process.env.DATABASE_URL ?? '').replace(/^[^@]*@/, '').split('/')[0];
-  console.log(`Database host: ${host}`);
+  console.log(`Database host: ${dbHost(process.env.DATABASE_URL)}`);
   if (org) {
     const where = { organizationId: org.id };
     const counts = {
@@ -39,21 +41,33 @@ async function main() {
   } else {
     console.log(`No organization "${slug}" yet; it will be created.`);
   }
+  console.log('Afterwards a first Super Admin is created with a temporary password printed once (they change it at first sign-in).');
 
   if (process.env.CONFIRM_RESET !== slug) {
     console.log('\nDry run only. Set CONFIRM_RESET to the same value as ORG_SLUG to really reset.');
     return;
   }
+
+  // Check the bootstrap values before deleting anything, so a typo cannot leave the database without an organization.
+  const { ORG_NAME, ORG_DOMAIN, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+  if (!ORG_NAME || !ORG_DOMAIN) throw new RefusedError('Set ORG_NAME and ORG_DOMAIN. Nothing was deleted.');
+  const email = emailSchema.safeParse(ADMIN_EMAIL ?? '');
+  if (!email.success) throw new RefusedError('Set ADMIN_EMAIL to the first Super Admin’s work email. Nothing was deleted.');
+  if (email.data.split('@')[1] !== ORG_DOMAIN.trim().toLowerCase()) throw new RefusedError(`ADMIN_EMAIL must be on ${ORG_DOMAIN}. Nothing was deleted.`);
+  if (ADMIN_PASSWORD && !passwordSchema.safeParse(ADMIN_PASSWORD).success) throw new RefusedError('ADMIN_PASSWORD is too weak (10+ characters with upper, lower case and a number). Nothing was deleted.');
+  const elsewhere = await prisma.user.findUnique({ where: { email: email.data }, select: { organizationId: true } });
+  if (elsewhere && elsewhere.organizationId !== org?.id) throw new RefusedError(`${email.data} belongs to another organization. Nothing was deleted.`);
+
   if (org) {
     await prisma.organization.delete({ where: { id: org.id } }); // cascades to all org data
     console.log(`Deleted "${org.name}".`);
   }
-  await bootstrap(prisma);
+  await bootstrapSuperAdmin(prisma, { ...process.env, CONFIRM_BOOTSTRAP: 'yes' });
 }
 
 main()
-  .catch((e) => {
-    console.error(e.message);
-    process.exit(1);
+  .catch((e: Error) => {
+    console.error(e instanceof RefusedError ? e.message : e);
+    process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());
