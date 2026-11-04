@@ -30,8 +30,9 @@
 | Module | Status |
 |---|---|
 | Overview | ✅ Team composition, accounts waiting for a password, admin activity, conversation activity, roles, holidays, announcements |
-| Employees | ✅ Add with a work email and a password (domain-restricted) and a copyable sign-in message; employee page with overview, employment and access, attendance, leave, devices and activity; change email, set a new password (shown once), sign out everywhere, deactivate/reactivate. Passwords are never viewable. |
+| Employees | ✅ Add with a work email and a password (domain-restricted) and a copyable sign-in message; employee page with overview, employment and access, attendance, leave, devices and activity; change email, set a new password (shown once), sign out everywhere, suspend/lift, deactivate/reactivate, archive/restore, per-person Access (extra roles, allow/block exceptions, live preview). Four-step add-employee wizard. Passwords are never viewable. |
 | Departments | ✅ CRUD, head, colour |
+| Super Admins | ✅ List, limit, nominate (one-time link), withdraw, remove; nominee acceptance page with two-step verification check |
 | Roles & permissions | 🟡 Read-only matrix. Editing is planned. |
 | System settings | ✅ Branding, modules, home defaults, navigation, attendance and leave policy values, allowed domains, session length |
 | Audit logs | ✅ Search and filter |

@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased: Super Admin Phase 3, user management (branch `phase-3-user-management`)
+### Added
+- **Super Admins page** `/admin/super-admins`: limit and places used (change the limit), each Super Admin with two-step status and whether the authority works, pending nominations (withdraw), nominate with password and a one-time link, remove authority. Rules explained in plain language.
+- **Nominee acceptance page** `/super-admin/accept?token=`: guides to two-step verification, confirms with password, handles invalid, used and expired links.
+- **Overview "Access and security"**: accounts by status, admins without two-step verification, locked and suspended accounts, Super Admins vs limit.
+- **Suspend / lift suspension** (reversible, signs out at once, optional reason) and **archive / restore** (from deactivated; hidden from lists and pickers).
+- **Access section per person**: primary role, extra roles, allow/block exceptions with scope, live "what they can do" preview. Ceiling rules: nobody grants more than they hold, sensitive exceptions are Super Admin only, no self-changes, no changes to Super Admins.
+- **Add-employee wizard**: Person, Access, Password, Review; created atomically.
+- Seed creates an e2e Super Admin with two-step verification when `SEED_E2E_TOTP` is set (development only).
+### Changed
+- The last-admin rule counts only working Super Admins (with two-step verification and no temporary password).
+- Lowering the Super Admin limit below the current number returns 409 and is audited (`superadmin.limit_changed`).
+- The admin portal opens for anyone holding an admin page's permission (attendance, holidays, announcements too).
+- An open tab goes to sign-in as soon as its session is revoked or the account is suspended.
+### Tests
+- API 204, web unit 15, Playwright 57.
+
 ## Unreleased: admin-managed access and QA hardening (branch `qa-hardening`)
 ### Changed
 - **Admins give access.** Accounts are created only by admins, with a work email and a password to hand over. Invitations are gone (`POST /employees/:id/invite` removed).

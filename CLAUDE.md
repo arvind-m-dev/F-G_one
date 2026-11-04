@@ -33,6 +33,7 @@ End-to-end tests need the stack running, the API started with `LOGIN_RATE_LIMIT_
 ```bash
 E2E_PASSWORD=<SEED_PASSWORD> pnpm --filter @fg/web test:e2e
 ```
+For the Super Admin browser test, seed with `SEED_E2E_TOTP=<base32 secret>` and pass the same value as `E2E_TOTP_SECRET` (otherwise that test is skipped).
 API tests use the `fgone_test` database. Apply new migrations to it too:
 ```bash
 DATABASE_URL=postgresql://fgone:<pw>@localhost:5432/fgone_test pnpm --filter @fg/api prisma:deploy
@@ -54,7 +55,7 @@ DATABASE_URL=postgresql://fgone:<pw>@localhost:5432/fgone_test pnpm --filter @fg
 - **D-7 file storage** for attachments: Cloudflare R2, Backblaze B2, AWS S3 or Neon. Render's disk is wiped on every deploy.
 
 ## Not built yet (PRD)
-Chat attachments, rich composer, link previews (SSRF-safe) and @mention autocomplete (needs D-7). My Work (tasks, kanban). Calendar. Ideas & Suggestions. Knowledge Base. Email notifications (Resend). Employee profile attendance/leave tabs. Reports. A custom roles editor.
+Chat attachments, rich composer, link previews (SSRF-safe) and @mention autocomplete (needs D-7). My Work (tasks, kanban). Calendar. Ideas & Suggestions. Knowledge Base. Email notifications (Resend). Reports. A custom roles editor (Phase 4). A shift model (night shifts are flagged late).
 
 ## Before go-live
 Run `pnpm --filter @fg/api db:reset-org` against Neon to remove demo data. It's a dry run unless `CONFIRM_RESET` is set. See `docs/DEPLOY_RENDER_NEON.md` §4.

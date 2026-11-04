@@ -814,6 +814,8 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
       avatarColor: p.color,
       status: p.status ?? 'ACTIVE',
       deactivatedAt: p.status === 'DEACTIVATED' ? new Date(now - (p.statusDaysAgo ?? 0) * 86400_000) : null,
+      suspendedAt: p.status === 'SUSPENDED' ? new Date(now - (p.statusDaysAgo ?? 0) * 86400_000) : null,
+      suspensionReason: p.status === 'SUSPENDED' ? 'Pending a policy review' : null,
       passwordHash,
       presence: p.status ? 'offline' : (p.presence ?? 'available'),
       statusText: p.status ? null : (p.statusText ?? null),
