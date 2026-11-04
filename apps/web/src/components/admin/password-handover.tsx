@@ -57,12 +57,34 @@ export const PasswordInput = forwardRef<HTMLInputElement, React.InputHTMLAttribu
 );
 PasswordInput.displayName = 'PasswordInput';
 
-/** Ready-to-send message with the sign-in details. The password is only shown here, once. */
-export function HandoverMessage({ firstName, email, password, organization, reset }: { firstName: string; email: string; password: string; organization: string; reset?: boolean }) {
+/**
+ * Ready-to-send message with the sign-in details. The password is only shown here, once.
+ * `selfService` follows the company setting: when off (the default) the admin-set password is final.
+ */
+export function HandoverMessage({
+  firstName,
+  email,
+  password,
+  organization,
+  reset,
+  selfService = false,
+}: {
+  firstName: string;
+  email: string;
+  password: string;
+  organization: string;
+  reset?: boolean;
+  selfService?: boolean;
+}) {
   const signIn = `${window.location.origin}/login`;
-  const message = reset
-    ? `Hi ${firstName}, your ${organization} FG One password has been reset.\n\nSign in: ${signIn}\nEmail: ${email}\nTemporary password: ${password}\n\nYou'll be asked to choose a new password when you sign in.`
-    : `Hi ${firstName}, welcome to ${organization} on FG One!\n\nSign in: ${signIn}\nEmail: ${email}\nTemporary password: ${password}\n\nYou'll be asked to choose your own password when you first sign in.`;
+  const label = selfService ? 'Temporary password' : 'Password';
+  const after = selfService
+    ? reset
+      ? "You'll be asked to choose a new password when you sign in."
+      : "You'll be asked to choose your own password when you first sign in."
+    : 'Keep it private. If you need a new one, ask your administrator.';
+  const opening = reset ? `Hi ${firstName}, your ${organization} FG One password has been reset.` : `Hi ${firstName}, welcome to ${organization} on FG One!`;
+  const message = `${opening}\n\nSign in: ${signIn}\nEmail: ${email}\n${label}: ${password}\n\n${after}`;
   return (
     <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4">
       <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Send these sign-in details to {firstName}</p>

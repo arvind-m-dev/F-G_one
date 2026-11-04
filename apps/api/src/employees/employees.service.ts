@@ -5,14 +5,17 @@ import {
   hasPermission,
   parseOrganizationSettings,
   PERMISSIONS,
+  resolveGrants,
   UpdateEmployeeInput,
 } from '@fg/shared';
+import { AttendanceService } from '../attendance/attendance.service';
 import { AuditService } from '../audit/audit.service';
 import { hashPassword } from '../auth/password';
 import type { AuthContext } from '../common/auth-context';
 import { toDateOnly } from '../common/dates';
 import { env } from '../common/env';
 import { newToken, sha256 } from '../common/tokens';
+import { LeaveService } from '../leave/leave.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -28,6 +31,8 @@ export class EmployeesService {
     private readonly audit: AuditService,
     private readonly mail: MailService,
     private readonly realtime: RealtimeGateway,
+    private readonly attendance: AttendanceService,
+    private readonly leave: LeaveService,
   ) {}
 
   private privileged(auth: AuthContext) {
@@ -102,6 +107,13 @@ export class EmployeesService {
     return null;
   }
 
+  /** Work emails must use one of the organization's allowed domains. */
+  private assertCompanyDomain(settings: Prisma.JsonValue, email: string) {
+    const domains = parseOrganizationSettings(settings).auth.allowedEmailDomains.map((d) => d.toLowerCase());
+    const domain = email.split('@')[1]?.toLowerCase() ?? '';
+    if (!domains.includes(domain)) throw new BadRequestException(`Email must use a company domain (${domains.join(', ')})`);
+  }
+
   private async assertRefs(auth: AuthContext, input: { departmentId?: string | null; managerId?: string | null }, selfId?: string) {
     if (input.departmentId) {
       const ok = await this.prisma.department.count({ where: { id: input.departmentId, organizationId: auth.organizationId } });
@@ -116,10 +128,8 @@ export class EmployeesService {
 
   async create(auth: AuthContext, input: CreateEmployeeInput) {
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: auth.organizationId } });
-    const domains = parseOrganizationSettings(org.settings).auth.allowedEmailDomains.map((d) => d.toLowerCase());
     const selfService = parseOrganizationSettings(org.settings).auth.selfServicePassword;
-    const domain = input.email.split('@')[1];
-    if (!domains.includes(domain)) throw new BadRequestException(`Email must use a company domain (${domains.join(', ')})`);
+    this.assertCompanyDomain(org.settings, input.email);
     await this.assertRoleAuthority(auth, { roleId: input.roleId });
     await this.assertRefs(auth, input);
 
@@ -271,5 +281,133 @@ export class EmployeesService {
     this.realtime.disconnectUser(id);
     await this.audit.log(auth, 'employee.sessions_revoked', 'user', id, { count });
     return { count };
+  }
+
+  /**
+   * Changes someone's work email (their sign-in name). Company domain only, unique across FG One,
+   * same authority rules as other edits. They are signed out everywhere so every device signs in again.
+   */
+  async changeEmail(auth: AuthContext, id: string, email: string) {
+    if (id === auth.userId) throw new BadRequestException('Ask another administrator to change your own email');
+    const target = await this.loadTarget(auth, id);
+    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: auth.organizationId }, select: { settings: true } });
+    this.assertCompanyDomain(org.settings, email);
+    if (email === target.email) throw new BadRequestException('That is already their email');
+    if (await this.prisma.user.findUnique({ where: { email }, select: { id: true } })) throw new ConflictException('An account with this email already exists');
+    try {
+      await this.prisma.$transaction([
+        this.prisma.user.update({ where: { id }, data: { email } }),
+        this.prisma.session.deleteMany({ where: { userId: id } }),
+        this.prisma.passwordResetToken.updateMany({ where: { userId: id, usedAt: null }, data: { usedAt: new Date() } }),
+      ]);
+    } catch (e) {
+      // Two admins racing for the same address.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException('An account with this email already exists');
+      throw e;
+    }
+    this.realtime.disconnectUser(id);
+    await this.audit.log(auth, 'employee.email_changed', 'user', id, { from: target.email, to: email });
+    return this.get(auth, id);
+  }
+
+  /**
+   * Everything an administrator needs about one person: profile and employment, roles and effective access,
+   * account flags, attendance (last 30 days, org time zone), leave, signed-in devices and recent activity.
+   * Same authority rules as editing: Super Admins can open anyone, others only people ranked below them.
+   * Sections the caller has no permission for (attendance, audit) come back as null.
+   */
+  async overview(auth: AuthContext, id: string) {
+    const target = await this.prisma.user.findFirst({
+      where: { id, organizationId: auth.organizationId },
+      select: {
+        ...employeeSelect,
+        failedLogins: true,
+        lockedUntil: true,
+        deactivatedAt: true,
+        mustChangePassword: true,
+        mfaEnabledAt: true,
+        mfaSecretEnc: true,
+        passwordHash: true,
+        role: { select: { id: true, key: true, name: true, rank: true, archivedAt: true, grants: { select: { permission: true, scope: true } } } },
+        extraRoles: { select: { createdAt: true, role: { select: { id: true, key: true, name: true, rank: true, organizationId: true, archivedAt: true, grants: { select: { permission: true, scope: true } } } } } },
+        permissionOverrides: { select: { id: true, permission: true, effect: true, scope: true, reason: true, createdAt: true } },
+        reports: { where: { status: { not: 'DEACTIVATED' } }, orderBy: { firstName: 'asc' }, select: { id: true, firstName: true, lastName: true, avatarColor: true, avatarUrl: true, designation: true, status: true } },
+      },
+    });
+    if (!target) throw new NotFoundException('Employee not found');
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+
+    const {
+      failedLogins, lockedUntil, deactivatedAt, mustChangePassword, mfaEnabledAt, mfaSecretEnc, passwordHash,
+      extraRoles, permissionOverrides, reports, role, ...row
+    } = target;
+    const mfaEnabled = !!(mfaEnabledAt && mfaSecretEnc);
+    const extras = extraRoles.filter((x) => x.role.organizationId === auth.organizationId).map((x) => x.role);
+    const superAdminActive = row.accountType === 'INTERNAL' && row.isSuperAdmin && mfaEnabled && !mustChangePassword;
+    const grants = resolveGrants([role, ...extras], permissionOverrides, { isSuperAdmin: superAdminActive, accountType: row.accountType });
+    const publicRole = { id: role.id, key: role.key, name: role.name, rank: role.rank };
+
+    const canAudit = hasPermission(auth.permissions, PERMISSIONS.AUDIT_READ);
+    const [attendance, balances, leaveRequests, sessions, activity] = await Promise.all([
+      this.attendance.history(auth, id).catch((e) => {
+        if (e instanceof ForbiddenException) return null; // no attendance.view for this person
+        throw e;
+      }),
+      this.leave.balances(auth, id),
+      this.prisma.leaveRequest.findMany({
+        where: { userId: id, organizationId: auth.organizationId },
+        orderBy: { startDate: 'desc' },
+        take: 20,
+        select: {
+          id: true, startDate: true, endDate: true, halfDay: true, days: true, reason: true, status: true, decisionNote: true, decidedAt: true, createdAt: true,
+          type: { select: { id: true, name: true, code: true, color: true, paid: true } },
+          approver: { select: { id: true, firstName: true, lastName: true } },
+        },
+      }),
+      this.listSessions(auth, id),
+      canAudit
+        ? this.prisma.auditLog.findMany({
+            where: { organizationId: auth.organizationId, OR: [{ actorId: id }, { entityType: 'user', entityId: id }] },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+            include: { actor: { select: { id: true, firstName: true, lastName: true, avatarColor: true, avatarUrl: true } } },
+          })
+        : Promise.resolve(null),
+    ]);
+    const ymd = (d: Date) => d.toISOString().slice(0, 10);
+
+    return {
+      employee: { ...toEmployee({ ...row, role: publicRole }, { privileged: true, online: this.realtime.isOnline(id) }), reports },
+      access: {
+        role: publicRole,
+        extraRoles: extras.map((r) => ({ id: r.id, key: r.key, name: r.name, rank: r.rank, archived: !!r.archivedAt })),
+        overrides: permissionOverrides,
+        grants,
+      },
+      account: {
+        status: row.status,
+        isSuperAdmin: row.isSuperAdmin,
+        superAdminActive,
+        mfaEnabled,
+        mfaEnabledAt: mfaEnabled ? mfaEnabledAt : null,
+        mustChangePassword,
+        hasPassword: !!passwordHash,
+        lastLoginAt: row.lastLoginAt,
+        lastSeenAt: row.lastSeenAt,
+        createdAt: row.createdAt,
+        deactivatedAt,
+        lockedUntil: lockedUntil && lockedUntil > new Date() ? lockedUntil : null,
+        failedLogins,
+      },
+      attendance,
+      leave: {
+        year: balances.year,
+        balances: balances.items,
+        requests: leaveRequests.map((r) => ({ ...r, startDate: ymd(r.startDate), endDate: ymd(r.endDate) })),
+      },
+      sessions,
+      activity,
+    };
   }
 }
