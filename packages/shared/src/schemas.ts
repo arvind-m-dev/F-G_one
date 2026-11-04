@@ -296,3 +296,8 @@ export type MfaCodeInput = z.infer<typeof mfaCodeSchema>;
 /** Prove identity again before a sensitive action. `code` is required when two-step verification is on. */
 export const reauthSchema = z.object({ password: z.string().min(1, 'Enter your password').max(200), code: z.string().trim().max(20).optional() });
 export type ReauthInput = z.infer<typeof reauthSchema>;
+
+// ───────── employee 360 (admin) ─────────
+/** An admin changes someone's work email. It must use a company domain; the person is signed out everywhere. */
+export const changeEmployeeEmailSchema = z.object({ email: emailSchema });
+export type ChangeEmployeeEmailInput = z.infer<typeof changeEmployeeEmailSchema>;
