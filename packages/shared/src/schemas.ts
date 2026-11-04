@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PRESENCE_KEYS, REACTION_KEYS } from './presence';
+import { isTimeZone } from './settings';
 
 /** Request contracts shared by the API (validation) and the web app (forms). */
 
@@ -37,15 +38,6 @@ export const changePasswordSchema = z.object({
 });
 
 const name = z.string().trim().min(1).max(60);
-/** True for an IANA time zone the runtime knows (e.g. "Asia/Kolkata"). */
-export function isTimeZone(tz: string) {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 const optionalId = z.string().min(1).max(40).nullable().optional();
 const optionalDate = z
