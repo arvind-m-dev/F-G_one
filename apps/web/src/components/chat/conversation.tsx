@@ -130,6 +130,21 @@ function MessageStream({ channel, onReply, parentId }: { channel: ChannelDetails
     prevHeight.current = el.scrollHeight;
   }, [messages.length]);
 
+  // A copied message link ends in #m-<id>: bring that message into view once and highlight it.
+  const jumped = useRef(false);
+  useEffect(() => {
+    if (jumped.current || !messages.length) return;
+    jumped.current = true;
+    const hash = window.location.hash;
+    if (!hash.startsWith('#m-')) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el || !scrollRef.current?.contains(el)) return;
+    atBottom.current = false;
+    el.scrollIntoView({ block: 'center' });
+    el.dataset.highlight = 'true';
+    setTimeout(() => delete el.dataset.highlight, 2500);
+  }, [messages.length]);
+
   // Mark as read when new messages arrive while viewing.
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
@@ -296,7 +311,7 @@ function MemberRow({ m, channel }: { m: ChannelDetails['members'][number]; chann
         <StatusLine person={live} />
       </span>
       {channel.canManage && channel.type !== 'DIRECT' && m.id !== me.user.id && (
-        <span className="flex opacity-0 transition group-hover:opacity-100">
+        <span className="flex transition [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
           <button onClick={() => role.mutate(m.role === 'ADMIN' ? 'MEMBER' : 'ADMIN')} className="rounded p-1.5 text-muted hover:bg-surface hover:text-primary" aria-label={m.role === 'ADMIN' ? 'Remove admin' : 'Make admin'} title={m.role === 'ADMIN' ? 'Remove admin' : 'Make admin'}>
             <Crown className="size-4" />
           </button>
@@ -353,7 +368,7 @@ function DetailsPanel({ channel, onClose }: { channel: ChannelDetails; onClose: 
   const canAdd = channel.isMember && channel.type !== 'DIRECT' && (channel.type === 'PUBLIC' || channel.canManage);
 
   return (
-    <motion.aside initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} className="hidden w-80 shrink-0 flex-col border-l bg-canvas xl:flex">
+    <motion.aside initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} className="absolute inset-0 z-10 flex flex-col border-l bg-canvas xl:static xl:w-80 xl:shrink-0" aria-label="Conversation details">
       <div className="flex h-14 items-center justify-between border-b px-4">
         <p className="text-sm font-semibold">Details</p>
         <button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Close details">

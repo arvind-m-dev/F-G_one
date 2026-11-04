@@ -29,8 +29,16 @@ export function AnnouncementReader({ id, onClose }: { id: string | null; onClose
   });
   const a = q.data;
   return (
-    <Dialog open={!!id} onOpenChange={(o) => !o && onClose()} title={a?.title ?? 'Announcement'} side="right" className="max-w-xl">
-      {!a ? (
+    <Dialog open={!!id} onOpenChange={(o) => !o && onClose()} title={q.isError ? 'Announcement' : (a?.title ?? 'Announcement')} side="right" className="max-w-xl">
+      {q.isError ? (
+        <div className="py-10 text-center" role="alert">
+          <p className="text-base font-semibold">This announcement isn&apos;t available</p>
+          <p className="mt-1 text-sm text-muted">It may have been removed, have expired, or be meant for another department.</p>
+          <Button variant="outline" className="mt-5" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      ) : !a ? (
         <Skeleton className="h-64" />
       ) : (
         <article>
@@ -55,7 +63,7 @@ export function AnnouncementReader({ id, onClose }: { id: string | null; onClose
               </div>
             </div>
           )}
-          <div className="mt-5 text-[15px] leading-[1.7] whitespace-pre-wrap text-foreground/90">{a.body}</div>
+          <div className="mt-5 text-[15px] leading-[1.7] break-words whitespace-pre-wrap text-foreground/90">{a.body}</div>
           {a.expiresAt && <p className="mt-6 text-xs text-subtle">Visible until {new Date(a.expiresAt).toLocaleDateString()}</p>}
           {a.requireAck && (
             <div className="mt-8 rounded-xl border bg-surface-2/60 p-4">

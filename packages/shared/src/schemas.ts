@@ -37,6 +37,15 @@ export const changePasswordSchema = z.object({
 });
 
 const name = z.string().trim().min(1).max(60);
+/** True for an IANA time zone the runtime knows (e.g. "Asia/Kolkata"). */
+export function isTimeZone(tz: string) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
 const optionalId = z.string().min(1).max(40).nullable().optional();
 const optionalDate = z
@@ -83,8 +92,8 @@ export const updateProfileSchema = z.object({
   phone: optionalText(30),
   bio: optionalText(280),
   pronouns: optionalText(30),
-  timezone: z.string().max(60).optional(),
-  avatarUrl: z.string().url().max(500).nullable().optional(),
+  timezone: z.string().max(60).refine(isTimeZone, 'Choose a time zone from the list').optional(),
+  avatarUrl: z.string().url().max(500).refine((u) => /^https?:\/\//i.test(u), 'Use a web address that starts with https://').nullable().optional(),
   avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   birthday: optionalDate,
   showBirthday: z.boolean().optional(),

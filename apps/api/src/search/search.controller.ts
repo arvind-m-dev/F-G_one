@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { Auth, AuthContext } from '../common/auth-context';
+import { likeContains } from '../common/like';
 import { ZodPipe } from '../common/zod.pipe';
 import { personSelect, toPerson } from '../employees/employee.mapper';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,7 +19,7 @@ export class SearchController {
 
   @Get()
   async search(@Auth() auth: AuthContext, @Query(new ZodPipe(q)) { q: term }: { q: string }) {
-    const contains = { contains: term, mode: 'insensitive' as const };
+    const contains = likeContains(term);
     const [people, channels, messages] = await Promise.all([
       this.prisma.user.findMany({
         where: {

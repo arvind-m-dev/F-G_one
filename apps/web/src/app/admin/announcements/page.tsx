@@ -21,6 +21,12 @@ import type { Announcement } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { timeAgo } from '@/lib/utils';
 
+/** The date part of an ISO timestamp in the viewer's own time zone (what the date picker shows). */
+const localYmd = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 type Person = { id: string; firstName: string; lastName: string; avatarColor: string; avatarUrl: string | null };
 
 function Composer({ editing, open, onOpenChange }: { editing: Announcement | null; open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -93,7 +99,7 @@ function Composer({ editing, open, onOpenChange }: { editing: Announcement | nul
             </Select>
           </Field>
           <Field label="Hide after (optional)" htmlFor="a-exp">
-            <Input id="a-exp" type="date" value={expires ? expires.slice(0, 10) : ''} onChange={(e) => form.setValue('expiresAt', e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null)} />
+            <Input id="a-exp" type="date" value={expires ? localYmd(expires) : ''} onChange={(e) => form.setValue('expiresAt', e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null)} />
           </Field>
         </div>
         <div className="divide-y rounded-xl border">
@@ -129,7 +135,11 @@ function Readers({ a, onClose }: { a: Announcement | null; onClose: () => void }
   const q = useQuery({ queryKey: ['announcements', 'acks', a?.id], queryFn: () => api<{ acknowledged: (Person & { at: string })[]; pending: Person[] }>(`/announcements/${a!.id}/acks`), enabled: !!a });
   return (
     <Dialog open={!!a} onOpenChange={(o) => !o && onClose()} title="Read confirmations" description={a?.title}>
-      {!q.data ? (
+      {q.isError ? (
+        <p className="py-6 text-center text-sm text-muted" role="alert">
+          {errorMessage(q.error)}
+        </p>
+      ) : !q.data ? (
         <Skeleton className="h-40" />
       ) : (
         <div className="grid gap-6 sm:grid-cols-2">
@@ -191,7 +201,9 @@ function AdminAnnouncements() {
           </Button>
         }
       />
-      {list.isPending ? (
+      {list.isError ? (
+        <EmptyState icon={<Megaphone />} title="Announcements could not be loaded" description={errorMessage(list.error)} action={<Button variant="outline" onClick={() => void list.refetch()}>Try again</Button>} />
+      ) : list.isPending ? (
         <Skeleton className="h-64" />
       ) : !list.data?.length ? (
         <EmptyState icon={<Megaphone />} title="No announcements yet" description="Your first announcement will appear on everyone's Home." action={<Button onClick={() => set({ compose: '1' })}>Write one</Button>} />
@@ -208,8 +220,8 @@ function AdminAnnouncements() {
                     {a.priority !== 'NORMAL' && <Badge tone={priorityTone[a.priority]}>{priorityLabel[a.priority]}</Badge>}
                     {expired && <Badge tone="muted">Hidden (expired)</Badge>}
                   </div>
-                  <p className="mt-1 text-[15px] font-semibold">{a.title}</p>
-                  <p className="line-clamp-1 text-sm text-muted">{a.body}</p>
+                  <p className="mt-1 text-[15px] font-semibold break-words">{a.title}</p>
+                  <p className="line-clamp-1 text-sm break-all text-muted">{a.body}</p>
                 </div>
                 <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
                   {a.requireAck ? (
