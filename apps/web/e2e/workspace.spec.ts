@@ -69,17 +69,15 @@ test('home layout can be customized and restored', async ({ page }) => {
 
 test('status change updates instantly', async ({ page }) => {
   await signIn(page, 'employee@futuristglobal.com');
-  const rail = page.getByRole('navigation', { name: 'Workspace' });
-  await rail.getByRole('button', { name: 'Set your status' }).click();
+  // The status picker lives on Home (and in the account menu) since the top bar moved out of the rail.
+  const status = page.getByRole('button', { name: /^Your status/ });
+  await status.click();
   await page.getByRole('option', { name: /In a meeting/ }).click();
-  await expect(rail.getByRole('button', { name: 'Set your status' })).toContainText('In a meeting');
-  await rail.getByRole('button', { name: 'Set your status' }).click();
-  await page.getByLabel('Status message').fill('Deep work until 3pm');
-  await page.getByRole('option', { name: /Focus time/ }).click();
-  await rail.getByRole('button', { name: 'Set your status' }).click();
+  await expect(status).toContainText('In a meeting');
+  await status.click();
   await page.getByLabel('Status message').fill('Deep work until 3pm');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(rail.getByRole('button', { name: 'Set your status' })).toContainText('Deep work until 3pm');
+  await expect(status).toContainText('Deep work until 3pm');
 });
 
 test('real-time direct messaging between two employees', async ({ browser }) => {
