@@ -163,14 +163,25 @@ function Security() {
   );
 }
 
+function PasswordByAdmin() {
+  return (
+    <Card>
+      <CardHeader title="Password" icon={<KeyRound />} subtitle="Managed by your administrator" />
+      <p className="px-5 pb-5 text-sm text-muted">Your administrator sets and changes passwords for everyone. If you need a new one, ask them.</p>
+    </Card>
+  );
+}
+
 export default function ProfilePage() {
+  const me = useSession();
+  const selfService = me.organization.settings.auth.selfServicePassword;
   return (
     <div className="mx-auto max-w-[1100px] px-6 pt-8 pb-14 sm:px-10">
       <PageHeader className="px-0 pt-0 sm:px-0" title="My profile" description="How colleagues see you across FG One. Theme and display options live in Settings." />
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <ProfileForm />
         <div className="space-y-4">
-          <Security />
+          {selfService ? <Security /> : <PasswordByAdmin />}
         </div>
       </div>
     </div>

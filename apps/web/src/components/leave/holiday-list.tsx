@@ -3,7 +3,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { HOLIDAY_TYPES } from '@fg/shared';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
+import { errorMessage } from '@/lib/api';
 import { useHolidays } from '@/lib/hooks';
+import { useOrgToday } from '@/lib/session';
 import type { Holiday } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn, parseDateOnly } from '@/lib/utils';
@@ -13,10 +15,11 @@ export const holidayTone = { MANDATORY: 'success', COMPANY: 'brand', OPTIONAL: '
 
 /** Year view of holidays grouped by month; `actions` renders per-row admin controls. */
 export function HolidayList({ actions }: { actions?: (h: Holiday) => React.ReactNode }) {
-  const [get, set] = useUrlState({ year: String(new Date().getFullYear()) });
-  const year = Number(get('year'));
+  const today = useOrgToday().today();
+  const [get, set] = useUrlState({ year: today.slice(0, 4) });
+  // A year that isn't a number (an edited link) falls back to this year.
+  const year = /^\d{4}$/.test(get('year')) ? Number(get('year')) : Number(today.slice(0, 4));
   const q = useHolidays(year);
-  const today = new Date().toLocaleDateString('en-CA');
   const byMonth = new Map<number, Holiday[]>();
   for (const h of q.data?.items ?? []) {
     const m = Number(h.date.slice(5, 7));
@@ -55,6 +58,8 @@ export function HolidayList({ actions }: { actions?: (h: Holiday) => React.React
       )}
       {q.isPending ? (
         <Skeleton className="h-64" />
+      ) : q.isError ? (
+        <EmptyState title="Holidays couldn't be loaded" description={errorMessage(q.error)} action={<Button variant="outline" onClick={() => void q.refetch()}>Try again</Button>} />
       ) : !q.data?.items.length ? (
         <EmptyState title={`No holidays added for ${year}`} description="HR adds the company holiday calendar here." />
       ) : (

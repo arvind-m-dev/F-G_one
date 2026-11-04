@@ -1,12 +1,30 @@
 'use client';
+import { CircleAlert } from 'lucide-react';
 import { ChoosePassword } from '@/components/security/choose-password';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/misc';
+import { errorMessage } from '@/lib/api';
 import { RealtimeProvider } from '@/lib/realtime';
 import { SessionProvider, useMeQuery } from '@/lib/session';
 
 /** Loads the signed-in user once and provides session + realtime to a portal. */
 export function PortalGate({ children }: { children: React.ReactNode }) {
   const me = useMeQuery();
+  // A 401 already sends the browser to sign in; anything else (server down, network) needs a way out.
+  if (!me.data && me.isError && (me.error as { status?: number }).status !== 401) {
+    return (
+      <div className="grid h-dvh place-items-center bg-chrome p-6">
+        <div role="alert" className="max-w-sm rounded-2xl bg-canvas p-8 text-center shadow-canvas">
+          <CircleAlert className="mx-auto mb-3 size-8 text-danger" />
+          <p className="font-semibold">FG One can&apos;t be reached right now</p>
+          <p className="mt-1 text-sm text-muted">{errorMessage(me.error)}. Check your connection and try again.</p>
+          <Button className="mt-5" loading={me.isFetching} onClick={() => me.refetch()}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  }
   if (!me.data) {
     return (
       <div className="flex h-dvh gap-2 p-2" aria-busy="true" aria-label="Loading workspace">

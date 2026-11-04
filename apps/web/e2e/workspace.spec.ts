@@ -41,7 +41,7 @@ test('employee home shows live data; admin portal is not available', async ({ pa
   await expect(page.getByRole('heading', { name: /Ananya/ })).toBeVisible();
   await expect(page.getByText('Upcoming holidays')).toBeVisible();
   await expect(page.getByText('Team pulse')).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Admin portal' })).toHaveCount(0);
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Admin portal' })).toHaveCount(0);
   await page.goto('/admin/employees');
   await expect(page.getByText("The admin portal isn't available to your role")).toBeVisible();
 });
@@ -69,17 +69,15 @@ test('home layout can be customized and restored', async ({ page }) => {
 
 test('status change updates instantly', async ({ page }) => {
   await signIn(page, 'employee@futuristglobal.com');
-  const rail = page.getByRole('navigation', { name: 'Workspace' });
-  await rail.getByRole('button', { name: 'Set your status' }).click();
+  // The status picker lives on Home (and in the account menu) since the top bar moved out of the rail.
+  const status = page.getByRole('button', { name: /^Your status/ });
+  await status.click();
   await page.getByRole('option', { name: /In a meeting/ }).click();
-  await expect(rail.getByRole('button', { name: 'Set your status' })).toContainText('In a meeting');
-  await rail.getByRole('button', { name: 'Set your status' }).click();
-  await page.getByLabel('Status message').fill('Deep work until 3pm');
-  await page.getByRole('option', { name: /Focus time/ }).click();
-  await rail.getByRole('button', { name: 'Set your status' }).click();
+  await expect(status).toContainText('In a meeting');
+  await status.click();
   await page.getByLabel('Status message').fill('Deep work until 3pm');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(rail.getByRole('button', { name: 'Set your status' })).toContainText('Deep work until 3pm');
+  await expect(status).toContainText('Deep work until 3pm');
 });
 
 test('real-time direct messaging between two employees', async ({ browser }) => {
@@ -110,27 +108,24 @@ test('real-time direct messaging between two employees', async ({ browser }) => 
   await expect(a.getByTestId('message').filter({ hasText: text }).getByRole('button', { name: 'Agree 1' })).toBeVisible();
 });
 
-test('admin portal: add an employee with a temporary password they change at first sign-in', async ({ page }) => {
+test('admin portal: add an employee with a password they can sign in with straight away', async ({ page }) => {
   await signIn(page, 'admin@futuristglobal.com');
-  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Admin portal' }).click();
+  await page.getByRole('banner').getByRole('link', { name: 'Admin portal' }).click();
   await expect(page.getByRole('heading', { name: /at a glance/ })).toBeVisible();
-  await page.goto('/admin/employees?invite=1');
+  await page.goto('/admin/employees?add=1');
   const email = `e2e.${Date.now()}@futuristglobal.com`;
   const temp = 'Temp-Pass-2026';
   await page.getByLabel('First name').fill('Eetoo');
   await page.getByLabel('Last name').fill('Tester');
   await page.getByLabel('Work email').fill(email);
-  await page.getByLabel('Temporary password').fill(temp);
+  await page.getByLabel('Password', { exact: true }).fill(temp);
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByLabel('Sign-in message')).toContainText(`Temporary password: ${temp}`);
+  await expect(page.getByLabel('Sign-in message')).toContainText(`Password: ${temp}`);
 
   const fresh = await (await page.context().browser()!.newContext()).newPage();
+  // By default passwords are admin-managed (settings.auth.selfServicePassword off): the given one works as is.
   await signIn(fresh, email, temp);
-  await expect(fresh.getByRole('heading', { name: 'Choose your own password' })).toBeVisible();
-  await fresh.getByLabel('Temporary password').fill(temp);
-  await fresh.getByLabel('New password', { exact: true }).fill('Welcome-Aboard-2026');
-  await fresh.getByLabel('Confirm new password').fill('Welcome-Aboard-2026');
-  await fresh.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(fresh.getByRole('heading', { name: 'Choose your own password' })).toHaveCount(0);
   await expect(fresh.getByRole('heading', { name: /Eetoo/ })).toBeVisible();
 });
 

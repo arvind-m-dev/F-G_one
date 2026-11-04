@@ -94,8 +94,10 @@ export function MessageItem({
       initial={m.pending ? { opacity: 0, y: 4 } : false}
       animate={{ opacity: m.pending ? 0.55 : 1, y: 0 }}
       id={`m-${m.id}`}
+      // Focusable so a tap on a touch screen (no hover) reveals the message actions.
+      tabIndex={-1}
       className={cn(
-        'group relative flex gap-3 px-5 transition-colors hover:bg-surface-2/50 [[data-density=compact]_&]:gap-2.5',
+        'group relative flex gap-3 px-5 outline-none transition-colors hover:bg-surface-2/50 focus-within:bg-surface-2/50 data-[highlight=true]:bg-primary-soft [[data-density=compact]_&]:gap-2.5',
         compact ? 'py-0.5' : 'mt-3 pt-1 pb-0.5 [[data-density=compact]_&]:mt-1.5',
         (pickerOpen || menuOpen) && 'bg-surface-2/50',
       )}
@@ -174,7 +176,7 @@ export function MessageItem({
       </div>
 
       {!m.deleted && !m.pending && !editing && (
-        <div className={cn('absolute -top-3.5 right-5 flex items-center gap-px rounded-lg border bg-elevated p-0.5 shadow-md transition-opacity', pickerOpen || menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100')}>
+        <div className={cn('absolute -top-3.5 right-5 flex items-center gap-px rounded-lg border bg-elevated p-0.5 shadow-md transition-opacity', pickerOpen || menuOpen ? 'opacity-100' : 'pointer-events-none opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100')}>
           {QUICK.map((r) => (
             <ActionButton key={r} label={reactionLabel(r)} onClick={() => react.mutate(r)}>
               <ReactionIcon reaction={r} className="size-4" />
@@ -218,7 +220,7 @@ export function MessageItem({
               <DropdownItem onSelect={() => copy(m.body, 'Text')}>
                 <Copy /> Copy text
               </DropdownItem>
-              <DropdownItem onSelect={() => copy(`${window.location.origin}/app/chat/${m.channelId}#m-${m.id}`, 'Link')}>
+              <DropdownItem onSelect={() => copy(`${window.location.origin}/app/chat/${m.channelId}${m.parentId ? `?thread=${m.parentId}` : ''}#m-${m.id}`, 'Link')}>
                 <Link2 /> Copy link
               </DropdownItem>
               {(mine || canModerate) && <DropdownSeparator />}

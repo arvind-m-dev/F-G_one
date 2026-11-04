@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased: admin-managed access and QA hardening (branch `qa-hardening`)
+### Changed
+- **Admins give access.** Accounts are created only by admins, with a work email and a password to hand over. Invitations are gone (`POST /employees/:id/invite` removed).
+- **Only admins set passwords by default** (`settings.auth.selfServicePassword`, off). People cannot change their own, forgot-password sends nothing and old reset links stop working. Turning the switch on (System settings → Auth) restores temporary passwords, the first-sign-in change and self-service reset.
+- A temporary-password session can only see `/auth/me`, sign out and change the password, and holds no Super Admin authority.
+### Added
+- **Employee page** `/admin/employees/[id]`: overview, employment and access, attendance (30 days), leave, devices (sign out everywhere) and activity; change email, set a new password (shown once), deactivate and reactivate. Super Admins can open anyone, others only people below their rank. `GET /employees/:id/overview`, `POST /employees/:id/email`.
+- **Phase 2d operator commands:** `superadmin:bootstrap` (first Super Admin with a one-time password; does nothing once one exists) and `superadmin:recover` (new temporary password, two-step verification cleared, sessions removed, audited, other Super Admins notified). See `ACCOUNT_PROVISIONING.md`.
+- **Much richer demo seed:** 48 people in 10 departments, 60 days of attendance, 321 leave requests, 41 holidays, 15 announcements, 37 conversations and 326 messages. Deterministic.
+### Fixed (QA pass across every area, about 75 issues)
+- **Security and privacy:** announcement search ignored department targeting; removed private-channel members still got reply notifications with message previews; the online list and online count crossed organizations; open redirect after sign-in (`?next=`); `javascript:` logo and photo links; email reset bypassed admin-managed passwords; % and _ in searches matched everything.
+- **Data integrity:** simultaneous leave requests, decisions and corrections could duplicate or overwrite each other (now one wins, others get 409); double taps opened two breaks; deleting a department silently deleted its announcements (now refused); turning one notification type off cleared the others; corrections could create never-ending shifts and left breaks outside corrected hours.
+- **Time zones:** attendance, leave, holidays and the home timeline used the browser's day instead of the company's; status "until end of today" used the server's midnight; invalid time zones broke attendance for everyone.
+- **Robustness:** impossible dates, unbounded ranges, unknown categories and non-member role changes returned 500; leave next year was checked against this year's balance; requests went to deactivated managers.
+- **UI:** clicks right after switching pages were lost (page transition mounted the page twice); chat details and message actions were unreachable on phones and tablets; error states instead of endless loading skeletons; filters and tabs kept in the URL; emojis replaced with icons; invitation wording removed.
+- Default channels can no longer be renamed through the API.
+### Tests
+- API 189 (was 98), web unit 10, Playwright 54 (was 18). New suites: `employee-360`, `superadmin-cli`, `qa-auth-admin`, `qa-attendance-leave`, `qa-chat-content`, `qa-followups`.
+
 ## Unreleased: Attendance modes, top bar (branch `top-bar`)
 ### Added
 - Desktop top bar with search, admin portal switch, notifications, theme and an account menu (name, email, role, status, profile, preferences, sign out). Sign out is no longer inside the logo menu; the phone header has the same account menu.

@@ -34,7 +34,7 @@ export function PeoplePicker({ selected, onChange, exclude = [], max }: { select
             <span key={p.id} className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft py-0.5 pr-1 pl-0.5 text-xs font-medium text-primary">
               <UserAvatar person={p} size="xs" showPresence={false} />
               {p.firstName}
-              <button onClick={() => toggle(p)} className="rounded-full p-0.5 hover:bg-primary/15" aria-label={`Remove ${p.name}`}>
+              <button type="button" onClick={() => toggle(p)} className="rounded-full p-0.5 hover:bg-primary/15" aria-label={`Remove ${p.name}`}>
                 <X className="size-3" />
               </button>
             </span>
@@ -50,7 +50,7 @@ export function PeoplePicker({ selected, onChange, exclude = [], max }: { select
           .filter((p) => !exclude.includes(p.id))
           .map((p) => (
             <li key={p.id}>
-              <button role="option" aria-selected={ids.has(p.id)} onClick={() => toggle(p)} className={cn('flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-2', ids.has(p.id) && 'bg-primary-soft/60')}>
+              <button type="button" role="option" aria-selected={ids.has(p.id)} onClick={() => toggle(p)} className={cn('flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-2', ids.has(p.id) && 'bg-primary-soft/60')}>
                 <UserAvatar person={p} size="sm" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{p.name}</span>

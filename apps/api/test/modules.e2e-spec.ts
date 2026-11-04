@@ -79,7 +79,8 @@ describe('attendance', () => {
     const acme = await login(app, 'super_admin@acme.test');
     const theirs = await acme.get('/api/attendance/board').expect(200);
     expect(theirs.body.rows.every((r: { person: { id: string } }) => !Object.values(fg.users).some((u) => u.id === r.person.id))).toBe(true);
-    await acme.get(`/api/attendance/users/${fg.users.employee.id}`).expect(403);
+    // Other tenants' people are not found.
+    await acme.get(`/api/attendance/users/${fg.users.employee.id}`).expect(404);
   });
 
   it('exports CSV with formula injection neutralised', async () => {

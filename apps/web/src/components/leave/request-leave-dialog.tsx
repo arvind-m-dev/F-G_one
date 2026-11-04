@@ -10,7 +10,7 @@ import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { Badge } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDays, useEmployeeList, useLeaveBalances } from '@/lib/hooks';
-import { useSession } from '@/lib/session';
+import { useOrgToday, useSession } from '@/lib/session';
 import type { LeaveRequest } from '@/lib/types';
 
 export const LEAVE_STATUS = {
@@ -24,19 +24,17 @@ export function LeaveStatusBadge({ status }: { status: LeaveRequest['status'] })
   return <Badge tone={LEAVE_STATUS[status].tone}>{LEAVE_STATUS[status].label}</Badge>;
 }
 
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 /** Request your own time off, or (`record`, HR only) record leave someone already took; that is approved straight away. */
 export function RequestLeaveDialog({ open, onOpenChange, record = false }: { open: boolean; onOpenChange: (o: boolean) => void; record?: boolean }) {
   const me = useSession();
+  const { today } = useOrgToday();
   const qc = useQueryClient();
   const [form, setForm] = useState({ userId: '', typeId: '', startDate: today(), endDate: today(), halfDay: 'NONE' as 'NONE' | 'FIRST_HALF' | 'SECOND_HALF', reason: '' });
   const employees = useEmployeeList({ status: 'ACTIVE', pageSize: 100 }, open && record);
   const people = (employees.data?.items ?? []).filter((e) => e.id !== me.user.id).sort((a, b) => a.name.localeCompare(b.name));
-  const balances = useLeaveBalances(record ? form.userId : undefined, open && (!record || !!form.userId));
+  // The balance of the leave year the leave starts in: next year's leave uses next year's allowance.
+  const balances = useLeaveBalances(record ? form.userId : undefined, open && (!record || !!form.userId), /^\d{4}-\d{2}-\d{2}$/.test(form.startDate) ? form.startDate : undefined);
   const schema = record ? recordLeaveSchema : leaveRequestSchema;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -144,7 +142,9 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
               ? record
                 ? 'Choose the employee and dates to see how many days this uses.'
                 : 'Pick your dates to see how many days this uses.'
-              : preview.isFetching && days === undefined
+              : preview.isError
+                ? errorMessage(preview.error)
+                : preview.isFetching && days === undefined
                 ? 'Counting working days…'
                 : days === 0
                   ? 'Those dates are weekends or holidays — you don’t need leave.'
@@ -176,7 +176,7 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button loading={saving} disabled={!valid.success || days === 0 || over} onClick={submit}>
+          <Button loading={saving} disabled={!valid.success || days === undefined || days === 0 || over} onClick={submit}>
             {record ? 'Record leave' : 'Send request'}
           </Button>
         </div>

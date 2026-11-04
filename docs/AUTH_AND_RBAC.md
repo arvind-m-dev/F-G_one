@@ -68,7 +68,7 @@ There are no update or delete endpoints. It is **not** append-only at the databa
 |---|---|
 | Super Admin as a separate authority (1–4 accounts, last one protected) | **Done (Phase 2b), backend.** The UI arrives in Phase 3. |
 | MFA, re-auth, session list and revoke, login history | **Done (Phase 2c)** except the login history view (Phase 7) |
-| Secure bootstrap that closes after first use | Partial. `db:bootstrap` creates a Super Admin invite but can be re-run and does not require MFA. |
+| Secure bootstrap that closes after first use | **Done (Phase 2d).** `superadmin:bootstrap` does nothing once a Super Admin exists; the authority stays dormant until two-step verification is on. `superadmin:recover` for lockouts. |
 | Dynamic roles (create, edit, duplicate, archive, templates) | Data model and enforcement done (Phase 2a). There is no UI or API to edit yet (Phase 4). |
 | Granular actions × modules × **data scopes**, explicit deny, user overrides | Engine done (Phase 2a). The catalogue covers today's modules with ORG and TEAM scopes; other scopes arrive with their modules. |
 | Additional roles per user | Done in the engine (`UserRole`); not yet assignable in the UI |

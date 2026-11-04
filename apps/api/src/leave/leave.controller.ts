@@ -1,12 +1,13 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { decisionSchema, leaveCalendarSchema, leaveListSchema, leaveRequestSchema, recordLeaveSchema, leaveTypeSchema, PERMISSIONS, type LeaveRequestInput, type RecordLeaveInput, type LeaveTypeInput } from '@fg/shared';
+import { decisionSchema, isCalendarDate, leaveCalendarSchema, leaveListSchema, leaveRequestSchema, recordLeaveSchema, leaveTypeSchema, PERMISSIONS, type LeaveRequestInput, type RecordLeaveInput, type LeaveTypeInput } from '@fg/shared';
 import { z } from 'zod';
 import { Auth, AuthContext, RequirePermissions } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
 import { LeaveService } from './leave.service';
 
 const typesQuery = z.object({ include: z.enum(['active', 'all']).default('active') });
-const balanceQuery = z.object({ userId: z.string().max(40).optional() });
+/** `at`: a date in the leave year to show (default: today in the organization's time zone). */
+const balanceQuery = z.object({ userId: z.string().max(40).optional(), at: z.string().refine(isCalendarDate, 'Use YYYY-MM-DD').optional() });
 
 @Controller('leave')
 export class LeaveController {
@@ -31,7 +32,7 @@ export class LeaveController {
 
   @Get('balances')
   balances(@Auth() auth: AuthContext, @Query(new ZodPipe(balanceQuery)) q: z.infer<typeof balanceQuery>) {
-    return this.leave.balances(auth, q.userId ?? auth.userId);
+    return this.leave.balances(auth, q.userId ?? auth.userId, q.at);
   }
 
   @Post('preview')

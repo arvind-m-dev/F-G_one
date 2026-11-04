@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Unauthor
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { hasPermission, type Permission } from '@fg/shared';
-import { CLIENT_ALLOWED, IS_PUBLIC, MFA_PENDING_OK, RECENT_AUTH, REQUIRED_PERMISSIONS, SUPER_ADMIN_ONLY } from '../common/auth-context';
+import { CLIENT_ALLOWED, IS_PUBLIC, MFA_PENDING_OK, PASSWORD_CHANGE_OK, RECENT_AUTH, REQUIRED_PERMISSIONS, SUPER_ADMIN_ONLY } from '../common/auth-context';
 import { env } from '../common/env';
 import { AuthService } from './auth.service';
 
@@ -30,6 +30,11 @@ export class SessionGuard implements CanActivate {
 
     if (auth.mfaPending && !this.reflector.getAllAndOverride<boolean>(MFA_PENDING_OK, targets)) {
       throw new UnauthorizedException({ statusCode: 401, code: 'MFA_REQUIRED', message: 'Enter the code from your authenticator app to finish signing in' });
+    }
+
+    // An admin-set temporary password unlocks nothing until the user replaces it.
+    if (auth.mustChangePassword && !this.reflector.getAllAndOverride<boolean>(PASSWORD_CHANGE_OK, targets)) {
+      throw new ForbiddenException({ statusCode: 403, code: 'PASSWORD_CHANGE_REQUIRED', message: 'Choose a new password to continue' });
     }
 
     // Client accounts are default-denied on every internal route.

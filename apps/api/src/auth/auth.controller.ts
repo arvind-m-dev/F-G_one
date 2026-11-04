@@ -12,7 +12,7 @@ import {
   resetPasswordSchema,
 } from '@fg/shared';
 import { z } from 'zod';
-import { Auth, AuthContext, ClientAllowed, MfaPendingAllowed, Public, RequireRecentAuth } from '../common/auth-context';
+import { Auth, AuthContext, ClientAllowed, MfaPendingAllowed, PasswordChangeAllowed, Public, RequireRecentAuth } from '../common/auth-context';
 import { env } from '../common/env';
 import { ZodPipe } from '../common/zod.pipe';
 import { PrismaService } from '../prisma/prisma.service';
@@ -74,6 +74,7 @@ export class AuthController {
     }
   }
 
+  @PasswordChangeAllowed()
   @ClientAllowed()
   @MfaPendingAllowed()
   @Post('logout')
@@ -86,6 +87,7 @@ export class AuthController {
   }
 
   /** The signed-in user, their permissions and their organization's branding/settings. */
+  @PasswordChangeAllowed()
   @ClientAllowed()
   @Get('me')
   async me(@Auth() auth: AuthContext) {
@@ -136,6 +138,7 @@ export class AuthController {
     return { ok: true };
   }
 
+  @PasswordChangeAllowed()
   @ClientAllowed()
   @Post('change-password')
   @HttpCode(200)

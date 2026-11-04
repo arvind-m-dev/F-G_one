@@ -38,6 +38,10 @@ export const RequireSuperAdmin = () => SetMetadata(SUPER_ADMIN_ONLY, true);
 export const CLIENT_ALLOWED = 'fg:clientAllowed';
 export const ClientAllowed = () => SetMetadata(CLIENT_ALLOWED, true);
 
+/** Route stays available while the user must replace an admin-set password (me, sign out, change password). */
+export const PASSWORD_CHANGE_OK = 'fg:passwordChangeOk';
+export const PasswordChangeAllowed = () => SetMetadata(PASSWORD_CHANGE_OK, true);
+
 /** Route may be used by a session that still owes its second sign-in step. */
 export const MFA_PENDING_OK = 'fg:mfaPendingOk';
 export const MfaPendingAllowed = () => SetMetadata(MFA_PENDING_OK, true);

@@ -14,7 +14,7 @@ import { Badge, EmptyState, Skeleton, Switch } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDays, fmtRange, useLeaveRequests, useLeaveTypes } from '@/lib/hooks';
-import { useCan } from '@/lib/session';
+import { useCan, useSession } from '@/lib/session';
 import type { LeaveType } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
@@ -91,29 +91,43 @@ function TypeDialog({ editing, open, onOpenChange }: { editing: LeaveType | null
   );
 }
 
+const STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ALL'] as const;
+
 function Requests() {
   const qc = useQueryClient();
+  const me = useSession();
   const [get, set] = useUrlState({ status: 'PENDING' });
-  const list = useLeaveRequests('all', get('status'));
+  // An unknown status in the URL shows the pending list instead of an error.
+  const status = (STATUSES as readonly string[]).includes(get('status')) ? get('status') : 'PENDING';
+  const list = useLeaveRequests('all', status);
+  const refresh = () => {
+    for (const k of ['leave-requests', 'approvals-count', 'leave-calendar', 'leave-balances']) void qc.invalidateQueries({ queryKey: [k] });
+  };
   const decide = useMutation({
     mutationFn: (v: { id: string; decision: 'APPROVED' | 'REJECTED' }) => api(`/leave/requests/${v.id}/decision`, { body: { decision: v.decision } }),
     onSuccess: (_d, v) => {
       toast.success(v.decision === 'APPROVED' ? 'Approved' : 'Declined');
-      for (const k of ['leave-requests', 'approvals-count', 'leave-calendar']) void qc.invalidateQueries({ queryKey: [k] });
+      refresh();
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    // Someone else may have decided first: show the current state.
+    onError: (e) => {
+      toast.error(errorMessage(e));
+      refresh();
+    },
   });
   return (
     <>
       <div className="scrollbar-thin mb-4 flex gap-1.5 overflow-x-auto" role="radiogroup" aria-label="Status">
-        {(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ALL'] as const).map((s) => (
-          <button key={s} role="radio" aria-checked={get('status') === s} onClick={() => set({ status: s })} className={cn('shrink-0 rounded-full border px-3 py-1 text-[13px] capitalize transition', get('status') === s ? 'border-foreground/20 bg-foreground text-canvas' : 'text-muted hover:text-foreground')}>
+        {STATUSES.map((s) => (
+          <button key={s} role="radio" aria-checked={status === s} onClick={() => set({ status: s })} className={cn('shrink-0 rounded-full border px-3 py-1 text-[13px] capitalize transition', status === s ? 'border-foreground/20 bg-foreground text-canvas' : 'text-muted hover:text-foreground')}>
             {s === 'ALL' ? 'All' : s === 'REJECTED' ? 'Declined' : s.toLowerCase()}
           </button>
         ))}
       </div>
       {list.isPending ? (
         <Skeleton className="h-48" />
+      ) : list.isError ? (
+        <EmptyState icon={<TreePalm />} title="Requests couldn't be loaded" description={errorMessage(list.error)} action={<Button variant="outline" onClick={() => void list.refetch()}>Try again</Button>} />
       ) : !list.data?.length ? (
         <EmptyState icon={<TreePalm />} title="No requests here" />
       ) : (
@@ -131,12 +145,13 @@ function Requests() {
                 </span>
               </span>
               <LeaveStatusBadge status={r.status} />
-              {r.status === 'PENDING' && (
+              {r.status === 'PENDING' && r.person.id === me.user.id && <span className="text-xs text-muted">Another admin or your manager decides this</span>}
+              {r.status === 'PENDING' && r.person.id !== me.user.id && (
                 <span className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={() => decide.mutate({ id: r.id, decision: 'REJECTED' })} aria-label={`Decline ${r.person.name}`}>
+                  <Button size="sm" variant="outline" disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, decision: 'REJECTED' })} aria-label={`Decline ${r.person.name}`}>
                     <X />
                   </Button>
-                  <Button size="sm" onClick={() => decide.mutate({ id: r.id, decision: 'APPROVED' })} aria-label={`Approve ${r.person.name}`}>
+                  <Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ id: r.id, decision: 'APPROVED' })} aria-label={`Approve ${r.person.name}`}>
                     <Check />
                   </Button>
                 </span>
@@ -160,8 +175,15 @@ function Types() {
           <Plus /> New leave type
         </Button>
       </div>
+      {types.isPending ? (
+        <Skeleton className="h-40" />
+      ) : types.isError ? (
+        <EmptyState icon={<TreePalm />} title="Leave types couldn't be loaded" description={errorMessage(types.error)} action={<Button variant="outline" onClick={() => void types.refetch()}>Try again</Button>} />
+      ) : !types.data?.length ? (
+        <EmptyState icon={<TreePalm />} title="No leave types yet" description="Add the kinds of leave people can take, such as casual or sick leave." />
+      ) : (
       <ul className="divide-y rounded-xl border">
-        {types.data?.map((t) => (
+        {types.data.map((t) => (
           <li key={t.id} className="flex items-center gap-4 px-4 py-3">
             <span className="size-2.5 rounded-full" style={{ background: t.color }} />
             <span className="min-w-0 flex-1">
@@ -177,6 +199,7 @@ function Types() {
           </li>
         ))}
       </ul>
+      )}
       <TypeDialog editing={editing} open={open} onOpenChange={setOpen} />
     </>
   );

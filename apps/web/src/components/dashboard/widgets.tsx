@@ -19,10 +19,10 @@ import { useLivePeople, useLivePerson } from '@/lib/presence-store';
 import { useCan, useClock, useModule, useSession, useUpdatePreferences } from '@/lib/session';
 import type { ChannelSummary, Person } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
-import { cn, greeting, parseDateOnly, timeAgo } from '@/lib/utils';
+import { cn, dateInZone, greeting, minutesInZone, parseDateOnly, timeAgo, weekdayInZone } from '@/lib/utils';
 
 export interface DashboardData {
-  workday: { start: string; end: string; workingDays: number[] };
+  workday: { start: string; end: string; workingDays: number[]; timezone?: string };
   team: Person[];
   announcements: {
     id: string;
@@ -110,7 +110,7 @@ function QuickActionsWidget({ actions }: WidgetProps) {
         <Users /> Find people
       </Button>
       {can(PERMISSIONS.EMPLOYEES_MANAGE) && (
-        <Button variant="outline" onClick={() => router.push('/admin/employees?invite=1')}>
+        <Button variant="outline" onClick={() => router.push('/admin/employees?add=1')}>
           <UserPlus /> Add employee
         </Button>
       )}
@@ -126,19 +126,29 @@ function minutesOf(hhmm: string) {
   const [h, m] = hhmm.split(':').map(Number);
   return h! * 60 + m!;
 }
-const minutesOfDate = (d: Date) => d.getHours() * 60 + d.getMinutes();
+/** A clock label for minutes since midnight (only the hour and minute matter). */
 const atMinutes = (m: number) => new Date(new Date().setHours(Math.floor(m / 60), m % 60, 0, 0));
 
 /** Workday as a progress bar: worked time, breaks and what is left, from today's attendance. */
 function ClockWidget({ data }: WidgetProps) {
-  const { time } = useClock();
+  const { time: clockTime } = useClock();
   const mod = useModule();
   const att = useAttendanceToday();
   const now = useNow();
+  // The workday is defined in the organization's time zone; place everything on that clock, not the browser's.
+  const tz = data.workday.timezone ?? att.data?.policy.timezone;
+  const today = dateInZone(tz, now ?? new Date());
+  const time = (t: string | Date) => clockTime(t, tz);
+  /** Minutes since the organization's midnight today; a night shift that started yesterday is negative, clamped to the start. */
+  const minutesOfDate = (d: Date) => {
+    const day = dateInZone(tz, d);
+    const shift = day === today ? 0 : Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400_000) * 1440;
+    return Math.max(0, minutesInZone(tz, d) + shift);
+  };
   const ws = minutesOf(data.workday.start);
   const we = minutesOf(data.workday.end);
   const cur = now ? minutesOfDate(now) : ws;
-  const workday = now ? data.workday.workingDays.includes(now.getDay()) : true;
+  const workday = now ? (att.data ? att.data.isWorkingDay : data.workday.workingDays.includes(weekdayInZone(tz, now))) : true;
   const rec = mod('attendance') ? (att.data?.record ?? null) : null;
 
   const inAt = rec ? minutesOfDate(new Date(rec.checkInAt)) : null;
@@ -188,9 +198,9 @@ function ClockWidget({ data }: WidgetProps) {
       </SectionTitle>
       <div className="rounded-xl border bg-surface px-4 pt-4 pb-3.5">
         <div className="mb-2 flex items-baseline justify-between text-[11px] text-subtle tabular-nums">
-          <span>{time(atMinutes(from))}</span>
-          <span>Working hours {time(atMinutes(ws))} – {time(atMinutes(we))}</span>
-          <span>{time(atMinutes(to))}</span>
+          <span>{clockTime(atMinutes(from))}</span>
+          <span>Working hours {clockTime(atMinutes(ws))} – {clockTime(atMinutes(we))}</span>
+          <span>{clockTime(atMinutes(to))}</span>
         </div>
 
         <div
@@ -209,7 +219,7 @@ function ClockWidget({ data }: WidgetProps) {
             <>
               {/* late start: the stretch before check-in */}
               {inAt > ws && (
-                <Tooltip side="top" content={`Not checked in · ${time(atMinutes(ws))} – ${time(rec.checkInAt)}`}>
+                <Tooltip side="top" content={`Not checked in · ${clockTime(atMinutes(ws))} – ${time(rec.checkInAt)}`}>
                   <span className="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,transparent_0_4px,var(--color-border)_4px_6px)]" style={{ left: `${pct(ws)}%`, width: `${pct(inAt) - pct(ws)}%` }} />
                 </Tooltip>
               )}

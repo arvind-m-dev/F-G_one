@@ -47,7 +47,7 @@ export class AuthService {
       throw invalid;
     }
     if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new ForbiddenException('Too many failed attempts. Try again in a few minutes or reset your password.');
+      throw new ForbiddenException('Too many failed attempts. Try again in 15 minutes or ask your administrator for help.');
     }
     const ok = await verifyPassword(user.passwordHash, password);
     if (!ok) {
@@ -140,7 +140,8 @@ export class AuthService {
     const roles = [u.role, ...u.extraRoles.map((x) => x.role).filter((r) => r.organizationId === u.organizationId)];
     const mfaEnabled = !!(u.mfaEnabledAt && u.mfaSecretEnc);
     // Super Admin authority is dormant until two-step verification is on.
-    const isSuperAdmin = u.accountType === 'INTERNAL' && u.isSuperAdmin && mfaEnabled;
+    // Dormant until two-step verification is on and any admin-set temporary password has been replaced.
+    const isSuperAdmin = u.accountType === 'INTERNAL' && u.isSuperAdmin && mfaEnabled && !u.mustChangePassword;
     const grants = session.mfaPending || u.mustChangePassword ? {} : resolveGrants(roles, u.permissionOverrides, { isSuperAdmin, accountType: u.accountType });
     return {
       sessionId: session.id,
@@ -171,8 +172,10 @@ export class AuthService {
 
   /** Always resolves the same way whether or not the email exists (no account enumeration). */
   async requestPasswordReset(email: string, meta: ClientMeta) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({ where: { email }, include: { organization: { select: { settings: true } } } });
     if (!user || user.status !== 'ACTIVE') return;
+    // With admin-managed passwords there is no self-service reset; the same reply is returned (no enumeration).
+    if (!parseOrganizationSettings(user.organization.settings).auth.selfServicePassword) return;
     // Invalidate older outstanding tokens.
     await this.prisma.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } });
     const token = newToken();
@@ -189,13 +192,15 @@ export class AuthService {
   }
 
   async resetPassword(token: string, password: string, meta: ClientMeta) {
-    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
-    if (!record || record.usedAt || record.expiresAt < new Date() || record.user.status !== 'ACTIVE') {
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: sha256(token) }, include: { user: { include: { organization: { select: { settings: true } } } } } });
+    // Links issued before the organization switched to admin-managed passwords stop working too.
+    if (!record || record.usedAt || record.expiresAt < new Date() || record.user.status !== 'ACTIVE' || !parseOrganizationSettings(record.user.organization.settings).auth.selfServicePassword) {
       throw new BadRequestException('This reset link is invalid or has expired.');
     }
     const passwordHash = await hashPassword(password);
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash, failedLogins: 0, lockedUntil: null } }),
+      // They chose this password themselves, so any temporary-password flag is cleared.
+      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash, failedLogins: 0, lockedUntil: null, mustChangePassword: false } }),
       this.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
       this.prisma.session.deleteMany({ where: { userId: record.userId } }), // sign out everywhere
     ]);
@@ -204,7 +209,11 @@ export class AuthService {
   }
 
   async changePassword(auth: AuthContext, current: string, next: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, include: { organization: { select: { settings: true } } } });
+    // With admin-managed passwords, people only replace a temporary one an admin marked for change.
+    if (!user.mustChangePassword && !parseOrganizationSettings(user.organization.settings).auth.selfServicePassword) {
+      throw new ForbiddenException('Passwords are managed by your administrator. Ask them to set a new one.');
+    }
     if (!user.passwordHash || !(await verifyPassword(user.passwordHash, current))) {
       throw new BadRequestException('Current password is incorrect');
     }

@@ -37,9 +37,10 @@ export class NotificationsService {
     private readonly realtime: RealtimeGateway,
   ) {}
 
-  async notify(input: NotifyInput) {
+  /** Returns the ids of the people who were actually notified (after preferences). */
+  async notify(input: NotifyInput): Promise<string[]> {
     const ids = [...new Set(input.userIds)].filter((id) => id && id !== input.actorId);
-    if (!ids.length) return;
+    if (!ids.length) return [];
     try {
       const users = await this.prisma.user.findMany({
         where: { id: { in: ids }, organizationId: input.organizationId, status: 'ACTIVE' },
@@ -55,7 +56,7 @@ export class NotificationsService {
         if (existing) {
           n = await this.prisma.notification.update({
             where: { id: existing.id },
-            data: { count: { increment: 1 }, body: input.body ?? null, title: input.title, actorId: input.actorId ?? null, createdAt: new Date() },
+            data: { count: { increment: 1 }, body: input.body?.slice(0, 280) ?? null, title: input.title, actorId: input.actorId ?? null, createdAt: new Date() },
           });
         } else {
           n = await this.prisma.notification.create({
@@ -73,9 +74,11 @@ export class NotificationsService {
         }
         this.realtime.toUser(u.id, RT.NOTIFICATION_NEW, { id: n.id, type: n.type, title: n.title, body: n.body, link: n.link });
       }
+      return recipients.map((u) => u.id);
     } catch (err) {
       // Notifications must never break the action that triggered them.
       this.logger.warn(`notify failed: ${(err as Error).message}`);
+      return [];
     }
   }
 }

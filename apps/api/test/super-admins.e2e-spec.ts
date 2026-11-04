@@ -54,12 +54,21 @@ describe('Super Admin authority', () => {
     await prisma.user.update({ where: { id: sa2.id }, data: { isSuperAdmin: false } });
   });
 
-  it('nobody can re-issue the activation link of an account above them (takeover guard)', async () => {
+  it('nobody can set the password of an account above them (takeover guard)', async () => {
     const pending = await prisma.user.create({ data: { organizationId: fg.org.id, email: 'pending.admin@futuristglobal.com', firstName: 'P', lastName: 'A', roleId: fg.roles.administrator.id, status: 'INVITED' } });
     const hr = await login(app, 'hr_admin@futuristglobal.com');
-    await hr.post(`/api/employees/${pending.id}/invite`).send({}).expect(403);
+    await hr.post(`/api/employees/${pending.id}/password`).send({ password: 'Takeover-Pass-2026' }).expect(403);
+    await hr.post(`/api/employees/${fg.users.super_admin.id}/password`).send({ password: 'Takeover-Pass-2026' }).expect(403);
     const sa = await login(app, 'super_admin@futuristglobal.com');
-    await sa.post(`/api/employees/${pending.id}/invite`).send({}).expect(200);
+    await sa.post(`/api/employees/${pending.id}/password`).send({ password: 'Activate-Pass-2026' }).expect(200);
+  });
+
+  it('a Super Admin signed in with a temporary admin-set password has no Super Admin authority', async () => {
+    await prisma.user.update({ where: { id: fg.users.super_admin.id }, data: { mustChangePassword: true } });
+    const sa = await login(app, 'super_admin@futuristglobal.com');
+    expect((await sa.get('/api/super-admins').expect(403)).body.code).toBe('PASSWORD_CHANGE_REQUIRED');
+    expect((await sa.get('/api/auth/me').expect(200)).body.isSuperAdmin).toBe(false);
+    await prisma.user.update({ where: { id: fg.users.super_admin.id }, data: { mustChangePassword: false } });
   });
 
   it('invite → accept flow with password confirmation, and the limit counts pending invitations', async () => {

@@ -26,6 +26,8 @@ test('attendance: check in from Home, take a break, check out; history and team 
   await mgr.goto('/app/attendance?tab=team');
   await mgr.getByRole('radio', { name: /Checked out/ }).click();
   await expect(mgr.getByText('Ananya Iyer')).toBeVisible();
+  // The filter is written to the URL in a transition; wait for it before reloading.
+  await expect(mgr).toHaveURL(/show=out/);
   await mgr.reload();
   await expect(mgr.getByRole('radio', { name: /Checked out/ })).toHaveAttribute('aria-checked', 'true');
 });

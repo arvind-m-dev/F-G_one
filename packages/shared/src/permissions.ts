@@ -30,7 +30,7 @@ export const ALL_PERMISSIONS: Permission[] = Object.values(PERMISSIONS);
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   'employees.read': 'View employee directory',
-  'employees.manage': 'Create, invite, edit and deactivate employees',
+  'employees.manage': 'Create, edit and deactivate employees and set their passwords',
   'departments.manage': 'Manage departments',
   'roles.manage': 'Manage roles and permissions',
   'settings.manage': 'Manage company settings and branding',

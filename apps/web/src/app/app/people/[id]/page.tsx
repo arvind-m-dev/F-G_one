@@ -50,7 +50,7 @@ export default function PersonPage() {
             <UserAvatar person={p} size="xl" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight">{p.name}</h1>
+            <h1 className="text-xl font-semibold tracking-tight break-words">{p.name}</h1>
             <p className="text-muted">{[p.designation, p.department?.name].filter(Boolean).join(' · ')}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusLine person={live} className="rounded-full border px-2.5 py-1" />
@@ -64,8 +64,10 @@ export default function PersonPage() {
               <Link href="/app/profile">
                 <Button variant="outline">Edit profile</Button>
               </Link>
-            ) : (
+            ) : p.status === 'ACTIVE' ? (
               <MessageButton userId={p.id} variant="gradient" />
+            ) : (
+              <Badge tone="muted">{p.status === 'DEACTIVATED' ? 'No longer active' : 'Not signed in yet'}</Badge>
             )}
           </div>
         </div>
@@ -75,7 +77,7 @@ export default function PersonPage() {
         <Card className="md:col-span-2">
           <CardHeader title="About" icon={<UserRound />} />
           <div className="px-5 pb-5">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">{p.bio || <span className="text-muted">No bio yet.</span>}</p>
+            <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{p.bio || <span className="text-muted">No bio yet.</span>}</p>
             <div className="mt-4 grid border-t sm:grid-cols-2">
               <Row icon={Mail} label="Email" value={<a href={`mailto:${p.email}`} className="text-primary hover:underline">{p.email}</a>} />
               <Row icon={Phone} label="Phone" value={p.phone} />

@@ -191,6 +191,8 @@ export class ChatService {
     const { channel, membership } = await this.access(auth, channelId);
     if (channel.type === 'DIRECT') throw new BadRequestException('Direct messages cannot be renamed');
     if (!this.canAdminChannel(auth, membership)) throw new ForbiddenException('Only channel admins can edit this channel');
+    // Default channels (e.g. #general) keep their name; the UI locks the field too.
+    if (channel.isDefault && input.name && input.name !== channel.name) throw new BadRequestException('Default channels cannot be renamed');
     if (input.name && input.name !== channel.name && (await this.prisma.channel.count({ where: { organizationId: auth.organizationId, name: input.name } }))) {
       throw new ConflictException('A channel with that name already exists');
     }
@@ -237,11 +239,18 @@ export class ChatService {
     if (userId !== auth.userId && !this.canAdminChannel(auth, membership)) throw new ForbiddenException('Only group admins can remove members');
     const target = await this.prisma.channelMember.findUnique({ where: { channelId_userId: { channelId, userId } } });
     if (!target) throw new NotFoundException('Not a member');
+    let archive = false;
     if (target.role === 'ADMIN') {
       const admins = await this.prisma.channelMember.count({ where: { channelId, role: 'ADMIN' } });
-      if (admins <= 1) throw new BadRequestException('Assign another admin before removing the last one');
+      if (admins <= 1) {
+        // The last person in a channel may leave it; the empty channel is archived.
+        const members = await this.prisma.channelMember.count({ where: { channelId } });
+        if (members > 1 || userId !== auth.userId) throw new BadRequestException('Assign another admin before removing the last one');
+        archive = true;
+      }
     }
     await this.prisma.channelMember.delete({ where: { channelId_userId: { channelId, userId } } });
+    if (archive) await this.prisma.channel.update({ where: { id: channelId }, data: { archivedAt: new Date() } });
     this.realtime.leaveChannel([userId], channelId);
     this.realtime.toUser(userId, RT.CHANNEL_REMOVED, { channelId });
     this.realtime.toChannel(channelId, RT.CHANNEL_UPDATED, { channelId });
@@ -253,6 +262,9 @@ export class ChatService {
     const { channel, membership } = await this.requireMember(auth, channelId);
     if (channel.type === 'DIRECT') throw new BadRequestException('Not applicable to direct messages');
     if (!this.canAdminChannel(auth, membership)) throw new ForbiddenException('Only group admins can change roles');
+    const target = await this.prisma.channelMember.findUnique({ where: { channelId_userId: { channelId, userId } } });
+    if (!target) throw new NotFoundException('Not a member');
+    if (target.role === role) return { ok: true };
     if (role === 'MEMBER') {
       const admins = await this.prisma.channelMember.count({ where: { channelId, role: 'ADMIN' } });
       if (admins <= 1) throw new BadRequestException('A group needs at least one admin');
@@ -293,11 +305,13 @@ export class ChatService {
 
     if (channel.type === 'DIRECT' && !msg.parentId) {
       const ids = members.map((m) => m.userId).filter((id) => !notified.has(id));
-      ids.forEach((id) => notified.add(id));
-      await this.notifications.notify({ organizationId: auth.organizationId, userIds: ids, actorId: auth.userId, type: 'dm', title: `${authorName} sent you a message`, body: preview, link, groupKey: `dm:${channel.id}` });
+      // Only people who actually received a notification are skipped below, so someone who
+      // turned one type off still hears about the same message through another (e.g. a thread reply).
+      const sent = await this.notifications.notify({ organizationId: auth.organizationId, userIds: ids, actorId: auth.userId, type: 'dm', title: `${authorName} sent you a message`, body: preview, link, groupKey: `dm:${channel.id}` });
+      sent.forEach((id) => notified.add(id));
     }
 
-    const tokens = new Set((msg.body.match(/@([A-Za-z][\w.-]*)/g) ?? []).map((t) => t.slice(1).toLowerCase()));
+    const tokens = new Set((msg.body.match(/@([A-Za-z][\w.-]*)/g) ?? []).map((t) => t.slice(1).toLowerCase().replace(/[.-]+$/, '')));
     if (tokens.size) {
       const mentioned = members
         .filter((m) => {
@@ -307,13 +321,14 @@ export class ChatService {
         })
         .map((m) => m.userId)
         .filter((id) => !notified.has(id));
-      mentioned.forEach((id) => notified.add(id));
-      await this.notifications.notify({ organizationId: auth.organizationId, userIds: mentioned, actorId: auth.userId, type: 'mention', title: `${authorName} mentioned you in ${where}`, body: preview, link });
+      const sent = await this.notifications.notify({ organizationId: auth.organizationId, userIds: mentioned, actorId: auth.userId, type: 'mention', title: `${authorName} mentioned you in ${where}`, body: preview, link });
+      sent.forEach((id) => notified.add(id));
     }
 
     if (msg.parentId) {
       const parent = await this.prisma.message.findUnique({ where: { id: msg.parentId }, select: { authorId: true } });
-      if (parent?.authorId && !notified.has(parent.authorId)) {
+      // Only people still in the conversation hear about replies (a removed member must not see private content).
+      if (parent?.authorId && !notified.has(parent.authorId) && members.some((m) => m.userId === parent.authorId)) {
         await this.notifications.notify({ organizationId: auth.organizationId, userIds: [parent.authorId], actorId: auth.userId, type: 'thread', title: `${authorName} replied to your message in ${where}`, body: preview, link, groupKey: `thread:${msg.parentId}` });
       }
     }
@@ -324,6 +339,8 @@ export class ChatService {
     if (input.parentId) {
       const parent = await this.prisma.message.findFirst({ where: { id: input.parentId, channelId } });
       if (!parent) throw new BadRequestException('Original message not found');
+      // Threads are one level deep: a reply to a reply would never be shown anywhere.
+      if (parent.parentId) throw new BadRequestException('Reply in the original thread instead');
     }
     const now = new Date();
     const [msg] = await this.prisma.$transaction([
@@ -336,7 +353,7 @@ export class ChatService {
     ]);
     const dto = { ...this.toMessage(msg), clientId: input.clientId };
     this.realtime.toChannel(channelId, RT.MESSAGE_NEW, dto);
-    void this.notifyForMessage(auth, channel, msg, dto.author?.name ?? 'Someone');
+    void this.notifyForMessage(auth, channel, msg, dto.author?.name ?? 'Someone').catch(() => undefined); // never fail the send
     if (input.parentId) {
       const parent = await this.prisma.message.findUniqueOrThrow({ where: { id: input.parentId }, include: messageInclude });
       this.realtime.toChannel(channelId, RT.MESSAGE_UPDATED, this.toMessage(parent));

@@ -54,6 +54,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   private readonly logger = new Logger('Realtime');
   /** userId -> open socket count (single-instance online tracking) */
   private readonly online = new Map<string, number>();
+  /** Organization of each online user, so presence never crosses tenants. */
+  private readonly orgOf = new Map<string, string>();
 
   constructor(
     private readonly auth: AuthService,
@@ -64,8 +66,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     return (this.online.get(userId) ?? 0) > 0;
   }
 
-  onlineIds() {
-    return [...this.online.keys()];
+  /** Online people of one organization (tracking is process-wide, so always filter by tenant). */
+  onlineIds(organizationId: string) {
+    return [...this.online.keys()].filter((id) => this.orgOf.get(id) === organizationId);
   }
 
   async handleConnection(socket: Socket) {
@@ -87,8 +90,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
       const count = (this.online.get(ctx.userId) ?? 0) + 1;
       this.online.set(ctx.userId, count);
+      this.orgOf.set(ctx.userId, ctx.organizationId);
       if (count === 1) this.emitPresence(ctx.organizationId, { userId: ctx.userId, online: true });
-      socket.emit(RT.ONLINE_SNAPSHOT, { userIds: this.onlineIds() });
+      socket.emit(RT.ONLINE_SNAPSHOT, { userIds: this.onlineIds(ctx.organizationId) });
     } catch (err) {
       this.logger.warn(`Socket auth failed: ${(err as Error).message}`);
       socket.disconnect(true);
@@ -101,6 +105,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const count = (this.online.get(data.userId) ?? 1) - 1;
     if (count <= 0) {
       this.online.delete(data.userId);
+      this.orgOf.delete(data.userId);
       this.emitPresence(data.organizationId, { userId: data.userId, online: false });
       await this.prisma.user.update({ where: { id: data.userId }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
     } else {

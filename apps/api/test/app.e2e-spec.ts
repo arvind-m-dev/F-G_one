@@ -78,7 +78,23 @@ describe('authentication', () => {
     await request(app.getHttpServer()).post('/api/auth/login').set('Origin', 'https://evil.example').send({ email: 'employee@futuristglobal.com', password: PASSWORD }).expect(403);
   });
 
-  it('password reset: single-use token, signs out other sessions, no enumeration', async () => {
+  const selfService = (on: boolean) =>
+    prisma.organization.update({ where: { id: fg.org.id }, data: { settings: { auth: { allowedEmailDomains: ['futuristglobal.com'], selfServicePassword: on } } } });
+
+  it('with admin-managed passwords (default) there is no self-service reset, and older links stop working', async () => {
+    await selfService(true);
+    mail.testOutbox.length = 0;
+    await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'employee@futuristglobal.com' }).expect(200);
+    const token = mail.testOutbox[0]!.text.match(/token=([\w-]+)/)![1];
+    await selfService(false);
+    mail.testOutbox.length = 0;
+    await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'employee@futuristglobal.com' }).expect(200);
+    expect(mail.testOutbox).toHaveLength(0);
+    await request(app.getHttpServer()).post('/api/auth/reset-password').send({ token, password: 'Brand-New-Pass-42' }).expect(400);
+  });
+
+  it('password reset (self-service on): single-use token, signs out other sessions, no enumeration', async () => {
+    await selfService(true);
     const existing = await login(app, 'manager@futuristglobal.com');
     mail.testOutbox.length = 0;
     await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'ghost@futuristglobal.com' }).expect(200);
@@ -92,14 +108,17 @@ describe('authentication', () => {
     await login(app, 'manager@futuristglobal.com', 'Brand-New-Pass-42');
     // restore
     await prisma.user.update({ where: { id: fg.users.manager.id }, data: { passwordHash: (await prisma.user.findUniqueOrThrow({ where: { id: fg.users.employee.id } })).passwordHash } });
+    await selfService(false);
   });
 
   it('expired reset tokens are rejected', async () => {
+    await selfService(true);
     mail.testOutbox.length = 0;
     await request(app.getHttpServer()).post('/api/auth/forgot-password').send({ email: 'employee@futuristglobal.com' }).expect(200);
     const token = mail.testOutbox[0]!.text.match(/token=([\w-]+)/)![1];
     await prisma.passwordResetToken.updateMany({ where: { userId: fg.users.employee.id, usedAt: null }, data: { expiresAt: new Date(Date.now() - 1000) } });
     await request(app.getHttpServer()).post('/api/auth/reset-password').send({ token, password: 'Brand-New-Pass-42' }).expect(400);
+    await selfService(false);
   });
 });
 
@@ -110,7 +129,29 @@ describe('employee onboarding & RBAC', () => {
     await agent.patch(`/api/employees/${fg.users.manager.id}`).send({ firstName: 'Hacked' }).expect(403);
   });
 
-  it('HR creates an employee with a temporary password they must change at first sign-in', async () => {
+  const passwordPolicy = (selfServicePassword: boolean) =>
+    prisma.organization.update({ where: { id: fg.org.id }, data: { settings: { auth: { allowedEmailDomains: ['futuristglobal.com'], selfServicePassword } } } });
+
+  it('by default only admins manage passwords: new accounts work at once and people cannot change their own', async () => {
+    const hr = await login(app, 'hr_admin@futuristglobal.com');
+    const res = await hr.post('/api/employees').send({ email: 'given.pass@futuristglobal.com', firstName: 'Given', lastName: 'Pass', roleId: fg.roles.employee.id, password: 'Given-Pass-2026' }).expect(201);
+    const agent = await login(app, 'given.pass@futuristglobal.com', 'Given-Pass-2026');
+    const me = (await agent.get('/api/auth/me').expect(200)).body;
+    expect(me.mustChangePassword).toBe(false);
+    expect(me.permissions.length).toBeGreaterThan(0);
+    await agent.get('/api/channels').expect(200);
+    const denied = await agent.post('/api/auth/change-password').send({ currentPassword: 'Given-Pass-2026', newPassword: 'Other-Pass-2026' }).expect(403);
+    expect(denied.body.message).toMatch(/administrator/);
+    // An admin-set replacement is not temporary either.
+    await hr.post(`/api/employees/${res.body.employee.id}/password`).send({ password: 'Second-Pass-2026' }).expect(200);
+    const again = await login(app, 'given.pass@futuristglobal.com', 'Second-Pass-2026');
+    expect((await again.get('/api/auth/me').expect(200)).body.mustChangePassword).toBe(false);
+    // The invitation flow is gone.
+    await hr.post(`/api/employees/${res.body.employee.id}/invite`).send({}).expect(404);
+  });
+
+  it('with self-service passwords, HR creates an employee with a temporary password they must change at first sign-in', async () => {
+    await passwordPolicy(true);
     const hr = await login(app, 'hr_admin@futuristglobal.com');
     const temp = 'Temp-Pass-2026';
     await hr.post('/api/employees').send({ email: 'new@gmail.com', firstName: 'N', lastName: 'J', roleId: fg.roles.employee.id, password: temp }).expect(400); // domain policy
@@ -125,6 +166,8 @@ describe('employee onboarding & RBAC', () => {
     const me = await agent.get('/api/auth/me').expect(200);
     expect(me.body.mustChangePassword).toBe(true);
     expect(me.body.permissions).toEqual([]); // nothing works until they choose their own password
+    expect((await agent.get('/api/channels').expect(403)).body.code).toBe('PASSWORD_CHANGE_REQUIRED');
+    await agent.get('/api/auth/sessions').expect(403);
     await agent.post('/api/auth/change-password').send({ currentPassword: temp, newPassword: temp }).expect(400); // must differ
     await agent.post('/api/auth/change-password').send({ currentPassword: temp, newPassword: 'Joiner-Pass-2026' }).expect(200);
     const after = await agent.get('/api/auth/me').expect(200);
@@ -133,9 +176,11 @@ describe('employee onboarding & RBAC', () => {
     // auto-joined default channels
     const channels = await agent.get('/api/channels').expect(200);
     expect(channels.body.map((c: { name: string }) => c.name)).toContain('general');
+    await passwordPolicy(false);
   });
 
   it('admins set a password for an employee: signs them out, forces a change, audited, guarded by rank', async () => {
+    await passwordPolicy(true);
     const victim = await login(app, 'employee@futuristglobal.com');
     const hr = await login(app, 'hr_admin@futuristglobal.com');
     await hr.post(`/api/employees/${fg.users.super_admin.id}/password`).send({ password: 'Reset-Pass-2026' }).expect(403); // above them
@@ -152,6 +197,7 @@ describe('employee onboarding & RBAC', () => {
 
     const audit = await prisma.auditLog.count({ where: { organizationId: fg.org.id, action: 'employee.password_set', entityId: fg.users.employee.id } });
     expect(audit).toBe(1);
+    await passwordPolicy(false);
   });
 
   it('deactivation revokes sessions immediately; HR cannot deactivate a super admin', async () => {

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { createEmployeeSchema, listEmployeesQuerySchema, PERMISSIONS, setEmployeePasswordSchema, updateEmployeeSchema } from '@fg/shared';
+import { changeEmployeeEmailSchema, createEmployeeSchema, listEmployeesQuerySchema, PERMISSIONS, setEmployeePasswordSchema, updateEmployeeSchema } from '@fg/shared';
 import { z } from 'zod';
 import { Auth, AuthContext, RequirePermissions, RequireRecentAuth } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
@@ -13,6 +13,13 @@ export class EmployeesController {
   @RequirePermissions(PERMISSIONS.EMPLOYEES_READ)
   list(@Auth() auth: AuthContext, @Query(new ZodPipe(listEmployeesQuerySchema)) q: z.infer<typeof listEmployeesQuerySchema>) {
     return this.employees.list(auth, q);
+  }
+
+  /** Everything about one person for the admin employee page. */
+  @Get(':id/overview')
+  @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
+  overview(@Auth() auth: AuthContext, @Param('id') id: string) {
+    return this.employees.overview(auth, id);
   }
 
   @Get(':id')
@@ -47,11 +54,13 @@ export class EmployeesController {
     return this.employees.setActive(auth, id, true);
   }
 
-  @Post(':id/invite')
+  /** Changes the work email (sign-in name) and signs the person out everywhere. */
+  @Post(':id/email')
   @HttpCode(200)
   @RequirePermissions(PERMISSIONS.EMPLOYEES_MANAGE)
-  invite(@Auth() auth: AuthContext, @Param('id') id: string) {
-    return this.employees.issueInvitation(auth, id, true);
+  @RequireRecentAuth()
+  changeEmail(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(changeEmployeeEmailSchema)) body: z.infer<typeof changeEmployeeEmailSchema>) {
+    return this.employees.changeEmail(auth, id, body.email);
   }
 
   /** Sets a temporary password the admin hands over; the employee must change it at next sign-in. */

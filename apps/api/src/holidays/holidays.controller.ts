@@ -1,10 +1,10 @@
 import { Body, ConflictException, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { holidaySchema, PERMISSIONS, type HolidayInput } from '@fg/shared';
+import { holidaySchema, parseOrganizationSettings, PERMISSIONS, type HolidayInput } from '@fg/shared';
 import { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import { Auth, AuthContext, RequirePermissions } from '../common/auth-context';
-import { toDbDate } from '../common/tz';
+import { localDate, toDbDate } from '../common/tz';
 import { ZodPipe } from '../common/zod.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -20,7 +20,9 @@ export class HolidaysController {
 
   @Get()
   async list(@Auth() auth: AuthContext, @Query(new ZodPipe(yearQ)) q: z.infer<typeof yearQ>) {
-    const year = q.year ?? new Date().getUTCFullYear();
+    // The current year in the organization's time zone (not the server's), so New Year's Eve shows the right year.
+    const org = q.year ? null : await this.prisma.organization.findUniqueOrThrow({ where: { id: auth.organizationId }, select: { settings: true } });
+    const year = q.year ?? Number(localDate(parseOrganizationSettings(org!.settings).attendance.timezone).slice(0, 4));
     const rows = await this.prisma.holiday.findMany({
       where: { organizationId: auth.organizationId, date: { gte: toDbDate(`${year}-01-01`), lte: toDbDate(`${year}-12-31`) } },
       orderBy: { date: 'asc' },
@@ -46,7 +48,13 @@ export class HolidaysController {
   async update(@Auth() auth: AuthContext, @Param('id') id: string, @Body(new ZodPipe(holidaySchema.partial())) body: Partial<HolidayInput>) {
     const h = await this.prisma.holiday.findFirst({ where: { id, organizationId: auth.organizationId } });
     if (!h) throw new NotFoundException('Holiday not found');
-    const u = await this.prisma.holiday.update({ where: { id }, data: { ...body, date: body.date ? toDbDate(body.date) : undefined } });
+    let u;
+    try {
+      u = await this.prisma.holiday.update({ where: { id }, data: { ...body, date: body.date ? toDbDate(body.date) : undefined } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException('That holiday already exists on this date');
+      throw e;
+    }
     await this.audit.log(auth, 'holiday.updated', 'holiday', id, { fields: Object.keys(body) });
     return out(u);
   }

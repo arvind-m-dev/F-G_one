@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PRESENCE_KEYS, REACTION_KEYS } from './presence';
+import { isTimeZone } from './settings';
 
 /** Request contracts shared by the API (validation) and the web app (forms). */
 
@@ -83,8 +84,8 @@ export const updateProfileSchema = z.object({
   phone: optionalText(30),
   bio: optionalText(280),
   pronouns: optionalText(30),
-  timezone: z.string().max(60).optional(),
-  avatarUrl: z.string().url().max(500).nullable().optional(),
+  timezone: z.string().max(60).refine(isTimeZone, 'Choose a time zone from the list').optional(),
+  avatarUrl: z.string().url().max(500).refine((u) => /^https?:\/\//i.test(u), 'Use a web address that starts with https://').nullable().optional(),
   avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   birthday: optionalDate,
   showBirthday: z.boolean().optional(),
@@ -172,8 +173,21 @@ export type CheckInInput = z.infer<typeof checkInSchema>;
 
 export const checkOutSchema = z.object({ remarks: z.string().trim().max(200).nullable().optional() });
 
-const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
-export const attendanceRangeSchema = z.object({ from: ymd.optional(), to: ymd.optional() });
+/** True for a real calendar date in YYYY-MM-DD form (rejects 2026-02-30, 2026-13-01). */
+export function isCalendarDate(s: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').refine(isCalendarDate, 'Enter a real date');
+/** Days between two YYYY-MM-DD dates (b - a). */
+export const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400_000);
+/** Longest range a history, export or leave request may cover. */
+export const MAX_RANGE_DAYS = 366;
+export const attendanceRangeSchema = z
+  .object({ from: ymd.optional(), to: ymd.optional() })
+  .refine((v) => !v.from || !v.to || v.from <= v.to, { path: ['from'], message: '"from" must be on or before "to"' })
+  .refine((v) => !v.from || !v.to || daysBetween(v.from, v.to) < MAX_RANGE_DAYS, { path: ['from'], message: `Choose at most ${MAX_RANGE_DAYS} days` });
 export const attendanceBoardSchema = z.object({ date: ymd.optional() });
 
 /* ---------------- announcements ---------------- */
@@ -245,12 +259,14 @@ const leaveRequestBase = z.object({
 });
 export const leaveRequestSchema = leaveRequestBase
   .refine((v) => v.startDate <= v.endDate, { path: ['endDate'], message: 'End date must be on or after the start date' })
+  .refine((v) => v.endDate < v.startDate || daysBetween(v.startDate, v.endDate) < MAX_RANGE_DAYS, { path: ['endDate'], message: `Leave can cover at most ${MAX_RANGE_DAYS} days in one request` })
   .refine((v) => v.halfDay === 'NONE' || v.startDate === v.endDate, { path: ['halfDay'], message: 'Half days are for a single date' });
 export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>;
 /** HR records leave for someone; it is approved straight away. */
 export const recordLeaveSchema = leaveRequestBase
   .extend({ userId: z.string().min(1, 'Choose an employee') })
   .refine((v) => v.startDate <= v.endDate, { path: ['endDate'], message: 'End date must be on or after the start date' })
+  .refine((v) => v.endDate < v.startDate || daysBetween(v.startDate, v.endDate) < MAX_RANGE_DAYS, { path: ['endDate'], message: `Leave can cover at most ${MAX_RANGE_DAYS} days in one request` })
   .refine((v) => v.halfDay === 'NONE' || v.startDate === v.endDate, { path: ['halfDay'], message: 'Half days are for a single date' });
 export type RecordLeaveInput = z.infer<typeof recordLeaveSchema>;
 
@@ -263,7 +279,7 @@ export const leaveListSchema = z.object({
   status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ALL']).default('ALL'),
   scope: z.enum(['mine', 'approvals', 'all']).default('mine'),
 });
-export const leaveCalendarSchema = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM').optional() });
+export const leaveCalendarSchema = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use YYYY-MM').optional() });
 
 /* ---------------- attendance corrections ---------------- */
 const hm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM');
@@ -296,3 +312,8 @@ export type MfaCodeInput = z.infer<typeof mfaCodeSchema>;
 /** Prove identity again before a sensitive action. `code` is required when two-step verification is on. */
 export const reauthSchema = z.object({ password: z.string().min(1, 'Enter your password').max(200), code: z.string().trim().max(20).optional() });
 export type ReauthInput = z.infer<typeof reauthSchema>;
+
+// ───────── employee 360 (admin) ─────────
+/** An admin changes someone's work email. It must use a company domain; the person is signed out everywhere. */
+export const changeEmployeeEmailSchema = z.object({ email: emailSchema });
+export type ChangeEmployeeEmailInput = z.infer<typeof changeEmployeeEmailSchema>;

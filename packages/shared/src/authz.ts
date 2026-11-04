@@ -64,7 +64,7 @@ export const PERMISSION_MODULES: Record<string, string> = {
 export const PERMISSION_CATALOG: CatalogEntry[] = [
   { key: 'dashboard.view_org', module: 'dashboard', action: 'view', scopes: ['ORG'], label: 'See company analytics', help: 'Headcount, attendance and activity charts for the whole company.' },
   { key: 'employees.view', module: 'employees', action: 'view', scopes: ['ORG'], label: 'View the employee directory', help: 'Names, titles, departments and work contact details. Not private HR records.' },
-  { key: 'employees.create', module: 'employees', action: 'create', scopes: ['ORG'], label: 'Add and invite employees', help: 'Create accounts and send invitations.' },
+  { key: 'employees.create', module: 'employees', action: 'create', scopes: ['ORG'], label: 'Add employees', help: 'Create accounts with a work email and a password to hand over.' },
   { key: 'employees.edit', module: 'employees', action: 'edit', scopes: ['ORG'], label: 'Edit employee details', help: 'Change job details, department, manager and role (only roles below their own).' },
   { key: 'employees.deactivate', module: 'employees', action: 'archive', scopes: ['ORG'], label: 'Deactivate and reactivate accounts', help: 'Deactivated people cannot sign in. Their history is kept.' },
   { key: 'departments.manage', module: 'departments', action: 'manage', scopes: ['ORG'], label: 'Manage departments', help: 'Create, rename and remove departments and set their heads.' },

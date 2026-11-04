@@ -8,7 +8,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { toast } from 'sonner';
 import { PERMISSIONS } from '@fg/shared';
 import { AuditList, type AuditEntry } from '@/components/admin/audit-list';
-import { Forbidden } from '@/components/admin/page-header';
+import { Forbidden, LoadError } from '@/components/admin/page-header';
 import { PageHeader } from '@/components/shell/page';
 import { Button } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
@@ -36,24 +36,18 @@ interface Dash {
   announcements: { id: string; title: string; priority: string; publishedAt: string }[];
 }
 
+/** Accounts that exist but cannot sign in yet because no password was set (older invitations). */
 function PendingInvites() {
   const list = useEmployeeList({ status: 'INVITED', pageSize: 6 });
-  const [link, setLink] = useState<string | null>(null);
-  const resend = useMutation({
-    mutationFn: (id: string) => api<{ url: string }>(`/employees/${id}/invite`, { method: 'POST' }),
-    onSuccess: (r) => setLink(r.url),
-    onError: (e) => toast.error(errorMessage(e)),
-  });
   const items = list.data?.items ?? [];
+  if (!list.isPending && items.length === 0) return null;
   return (
     <section>
-      <SectionTitle icon={<MailPlus />} action={<Link href="/admin/employees" className="text-xs text-muted hover:text-foreground">All employees</Link>}>
-        Waiting to join
+      <SectionTitle icon={<MailPlus />} action={<Link href="/admin/employees?status=INVITED" className="text-xs text-muted hover:text-foreground">Open list</Link>}>
+        Waiting for a password
       </SectionTitle>
       {list.isPending ? (
         <Skeleton className="h-24" />
-      ) : items.length === 0 ? (
-        <p className="text-sm text-muted">Everyone you invited has joined.</p>
       ) : (
         <ul className="divide-y rounded-xl border">
           {items.map((e) => (
@@ -61,31 +55,15 @@ function PendingInvites() {
               <UserAvatar person={e} size="sm" showPresence={false} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium">{e.name}</span>
-                <span className="block truncate text-xs text-muted">
-                  {e.email} · invited {timeAgo(e.createdAt)}
-                </span>
+                <span className="block truncate text-xs text-muted">{e.email} · added {timeAgo(e.createdAt)}</span>
               </span>
-              <Button size="sm" variant="outline" loading={resend.isPending && resend.variables === e.id} onClick={() => resend.mutate(e.id)}>
-                New link
-              </Button>
+              <Link href="/admin/employees?status=INVITED" className="text-xs font-medium text-primary hover:underline">
+                Set password
+              </Link>
             </li>
           ))}
         </ul>
       )}
-      <Dialog open={!!link} onOpenChange={(o) => !o && setLink(null)} title="New invitation link" description="Earlier links no longer work. Share this one directly or rely on the email.">
-        <div className="flex gap-2">
-          <Input readOnly value={link ?? ''} className="font-mono text-xs" aria-label="Invitation link" onFocus={(e) => e.target.select()} />
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await navigator.clipboard.writeText(link ?? '');
-              toast.success('Copied');
-            }}
-          >
-            <Copy /> Copy
-          </Button>
-        </div>
-      </Dialog>
     </section>
   );
 }
@@ -118,7 +96,7 @@ export default function AdminOverview() {
               </Link>
             )}
             {can(PERMISSIONS.EMPLOYEES_MANAGE) && (
-              <Link href="/admin/employees?invite=1">
+              <Link href="/admin/employees?add=1">
                 <Button>
                   <UserPlus /> Add employee
                 </Button>
@@ -128,7 +106,9 @@ export default function AdminOverview() {
         }
       />
 
-      {!d ? (
+      {q.isError && !d ? (
+        <LoadError what="the overview" error={q.error} onRetry={() => q.refetch()} />
+      ) : !d ? (
         <div className="space-y-6">
           <Skeleton className="h-28" />
           <div className="grid gap-8 lg:grid-cols-2">
@@ -148,7 +128,7 @@ export default function AdminOverview() {
               <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
                 {[
                   ['Online now', d.employees.onlineNow, 'bg-emerald-500'],
-                  ['Invited', d.employees.invited, 'bg-amber-400'],
+                  ['Waiting for password', d.employees.invited, 'bg-amber-400'],
                   ['Deactivated', d.employees.deactivated, 'bg-slate-400'],
                   ['Channels', d.channelCount, 'bg-sky-500'],
                 ].map(([k, v, c]) => (
@@ -232,6 +212,7 @@ export default function AdminOverview() {
               </section>
               <section>
                 <SectionTitle icon={<CalendarDays />}>Upcoming holidays</SectionTitle>
+                {dash.data && !dash.data.holidays.length && <p className="text-[13px] text-muted">No holidays coming up.</p>}
                 <ul className="space-y-1.5 text-[13px]">
                   {(dash.data?.holidays ?? []).slice(0, 3).map((h) => (
                     <li key={h.id} className="flex justify-between gap-3">
@@ -243,6 +224,7 @@ export default function AdminOverview() {
               </section>
               <section>
                 <SectionTitle icon={<Megaphone />}>Live announcements</SectionTitle>
+                {dash.data && !dash.data.announcements.length && <p className="text-[13px] text-muted">No announcements right now.</p>}
                 <ul className="space-y-2 text-[13px]">
                   {(dash.data?.announcements ?? []).slice(0, 3).map((a) => (
                     <li key={a.id}>

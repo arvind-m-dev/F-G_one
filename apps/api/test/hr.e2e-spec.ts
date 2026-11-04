@@ -143,7 +143,7 @@ describe('attendance corrections', () => {
     await emp.post('/api/attendance/corrections').send({ date: '2099-01-01', checkIn: '09:00', location: 'WFO', reason: 'future day' }).expect(400);
     await emp.post('/api/attendance/corrections').send({ date: yesterday, checkIn: '10:00', checkOut: '09:00', location: 'WFO', reason: 'bad times' }).expect(400);
     const c = await emp.post('/api/attendance/corrections').send({ date: yesterday, checkIn: '09:15', checkOut: '18:30', location: 'WFH', reason: 'Forgot to check in' }).expect(201);
-    await emp.post('/api/attendance/corrections').send({ date: yesterday, checkIn: '09:15', location: 'WFH', reason: 'Again please' }).expect(409);
+    await emp.post('/api/attendance/corrections').send({ date: yesterday, checkIn: '09:15', checkOut: '18:00', location: 'WFH', reason: 'Again please' }).expect(409);
 
     const other = await login(app, 'super_admin@acme.test');
     await other.post(`/api/attendance/corrections/${c.body.id}/decision`).send({ decision: 'APPROVED' }).expect(404);

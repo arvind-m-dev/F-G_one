@@ -1,7 +1,7 @@
 'use client';
 import { Check, KeyRound, Minus } from 'lucide-react';
 import { ALL_PERMISSIONS, PERMISSIONS } from '@fg/shared';
-import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
 import { Card } from '@/components/ui/card';
 import { Badge, Skeleton } from '@/components/ui/misc';
 import { useRoles } from '@/lib/hooks';
@@ -14,7 +14,9 @@ export default function RolesPage() {
   return (
     <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
       <PageHeader title="Roles & access" description="What each role can do. Permissions are enforced by the API on every request." />
-      {!roles.data ? (
+      {roles.isError ? (
+        <LoadError what="roles" error={roles.error} onRetry={() => roles.refetch()} />
+      ) : !roles.data ? (
         <Skeleton className="h-96" />
       ) : (
         <>
