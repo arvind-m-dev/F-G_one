@@ -1,8 +1,8 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
-  superAdminAcceptSchema, superAdminConfirmSchema, superAdminInviteSchema,
-  type SuperAdminAcceptInput, type SuperAdminConfirmInput, type SuperAdminInviteInput,
+  superAdminAcceptSchema, superAdminConfirmSchema, superAdminInviteSchema, superAdminTokenSchema,
+  type SuperAdminAcceptInput, type SuperAdminConfirmInput, type SuperAdminInviteInput, type SuperAdminTokenInput,
 } from '@fg/shared';
 import { Auth, AuthContext, RequireRecentAuth, RequireSuperAdmin } from '../common/auth-context';
 import { ZodPipe } from '../common/zod.pipe';
@@ -32,6 +32,14 @@ export class SuperAdminsController {
   @HttpCode(200)
   revoke(@Auth() auth: AuthContext, @Param('id') id: string) {
     return this.svc.revokeInvite(auth, id);
+  }
+
+  /** Called by the nominee: shows their own nomination without accepting it (404 for any other link). */
+  @Post('invitations/check')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  check(@Auth() auth: AuthContext, @Body(new ZodPipe(superAdminTokenSchema)) body: SuperAdminTokenInput) {
+    return this.svc.check(auth, body.token);
   }
 
   /** Called by the nominee (not yet a Super Admin). */

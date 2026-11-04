@@ -7,6 +7,7 @@ import { localDate, toDbDate } from '../common/tz';
 import { personSelect, toPerson } from '../employees/employee.mapper';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { accessSummary } from './access-summary';
 
 const DAY = 86400_000;
 
@@ -143,6 +144,7 @@ export class DashboardController {
       // Online tracking is process-wide; count only this organization's people.
       this.prisma.user.count({ where: { organizationId: org, status: 'ACTIVE', id: { in: this.realtime.onlineIds(org) } } }),
     ]);
+    const access = await accessSummary(this.prisma, auth);
 
     const status = Object.fromEntries(statusCounts.map((s) => [s.status, s._count])) as Record<string, number>;
     const msgMap = new Map(messagesPerDay.map((m) => [fmtDateOnly(m.day), m.count]));
@@ -167,6 +169,7 @@ export class DashboardController {
       activity,
       hiring,
       recentAudit,
+      access,
     };
   }
 }

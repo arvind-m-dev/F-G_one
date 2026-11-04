@@ -58,6 +58,7 @@ const LABELS: Record<string, string> = {
   'message.deleted_by_moderator': 'removed a message as moderator',
   'superadmin.invite_revoked': 'withdrew a Super Admin nomination',
   'superadmin.reauth_failed': 'entered a wrong password for a Super Admin action',
+  'superadmin.limit_changed': 'changed how many Super Admins are allowed',
   'announcement.published': 'published an announcement',
   'announcement.updated': 'updated an announcement',
   'announcement.deleted': 'deleted an announcement',

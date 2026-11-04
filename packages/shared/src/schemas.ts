@@ -302,6 +302,9 @@ export const superAdminConfirmSchema = z.object({ password: z.string().min(1).ma
 export type SuperAdminConfirmInput = z.infer<typeof superAdminConfirmSchema>;
 export const superAdminAcceptSchema = z.object({ token: z.string().min(10).max(200), password: z.string().min(1).max(200) });
 export type SuperAdminAcceptInput = z.infer<typeof superAdminAcceptSchema>;
+/** The nominee looks up their own nomination before accepting. */
+export const superAdminTokenSchema = z.object({ token: z.string().min(10).max(200) });
+export type SuperAdminTokenInput = z.infer<typeof superAdminTokenSchema>;
 
 // ───────── two-step verification and re-authentication (Phase 2c) ─────────
 
