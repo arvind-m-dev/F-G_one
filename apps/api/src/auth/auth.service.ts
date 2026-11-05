@@ -233,6 +233,50 @@ export class AuthService {
     return !!e.DEMO_MFA_CODE && e.DEMO_MFA_EMAILS.includes(email.toLowerCase());
   }
 
+  // ───────── demo passwordless sign-in (remove before go-live) ─────────
+
+  /** Whether an account may be signed in without a password. Only the listed demo accounts, never in production. */
+  private isDemoPasswordlessAccount(email: string) {
+    const e = env();
+    return e.DEMO_PASSWORDLESS_LOGIN && e.DEMO_MFA_EMAILS.includes(email.toLowerCase());
+  }
+
+  /** The login screen asks this to decide whether to show the "Sign in without a password" link. */
+  async demoAccounts() {
+    if (!env().DEMO_PASSWORDLESS_LOGIN) return { enabled: false as const, accounts: [] };
+    const emails = env().DEMO_MFA_EMAILS;
+    if (!emails.length) return { enabled: true as const, accounts: [] };
+    const users = await this.prisma.user.findMany({
+      where: { email: { in: emails }, status: 'ACTIVE', accountType: 'INTERNAL' },
+      select: { email: true, firstName: true, lastName: true, avatarColor: true, role: { select: { name: true, rank: true } } },
+      orderBy: { role: { rank: 'desc' } },
+    });
+    return {
+      enabled: true as const,
+      accounts: users.map((u) => ({ email: u.email, name: `${u.firstName} ${u.lastName}`.trim(), role: u.role?.name ?? null, avatarColor: u.avatarColor })),
+    };
+  }
+
+  /**
+   * Signs a demo account in with no password and no two-step code. Guarded three ways: the feature
+   * flag, the production boot-check in env(), and an explicit allow-list of demo emails. A disabled
+   * feature or a non-listed email is reported as "not found" so the route is invisible when off.
+   */
+  async demoLogin(email: string, meta: ClientMeta) {
+    const notAvailable = new NotFoundException('Not found');
+    if (!env().DEMO_PASSWORDLESS_LOGIN) throw notAvailable;
+    const normalized = email.toLowerCase();
+    if (!this.isDemoPasswordlessAccount(normalized)) throw notAvailable;
+    const user = await this.prisma.user.findUnique({ where: { email: normalized }, include: { organization: true } });
+    if (!user || user.accountType !== 'INTERNAL') throw notAvailable;
+    if (user.status !== 'ACTIVE') throw new ForbiddenException('This account is not active. Contact your administrator.');
+    if (user.organization.status !== 'ACTIVE') throw new ForbiddenException('This workspace is suspended.');
+    await this.prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() } });
+    const token = await this.createSession(user.id, user.organizationId, parseOrganizationSettings(user.organization.settings).auth.sessionTtlHours, meta);
+    await this.audit.log({ organizationId: user.organizationId, userId: user.id, ip: meta.ip }, 'auth.demo_login', 'user', user.id);
+    return token;
+  }
+
   /** Checks an authenticator code (no replay) or consumes a recovery code. Returns how the user proved it, or null. */
   private async checkSecondFactor(userId: string, code: string): Promise<'totp' | 'recovery' | null> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, mfaSecretEnc: true, mfaLastStep: true, mfaEnabledAt: true } });

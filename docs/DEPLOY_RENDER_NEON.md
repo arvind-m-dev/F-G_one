@@ -181,4 +181,5 @@ Check it with the `clientIp` step in the smoke test:
 2. Add a custom domain (e.g. `one.futuristglobal.com`) to `fg-one-web`, then set `WEB_ORIGIN` to it and redeploy the API.
 3. With paid services, the web service can reach the API over Render's private network. Set `API_URL=http://fg-one-api:4000` and redeploy the web service. The API then no longer needs to be reached publicly.
 4. **Remove `DEMO_MFA_CODE` and `DEMO_MFA_EMAILS`** from the API service. While they are set, the listed demo accounts accept that fixed two-step code and the sign-in screen shows it.
-5. Work through the go-live checklist in [DEPLOYMENT.md](DEPLOYMENT.md#security-checklist-for-go-live).
+5. **Remove `DEMO_PASSWORDLESS_LOGIN`** (or set it to `false`) on the API service. While it is on, the login screen offers a one-click "Sign in without a password" into the `DEMO_MFA_EMAILS` accounts. The API refuses to start with it set once `NODE_ENV=production`, so a production deploy surfaces it immediately rather than shipping it silently.
+6. Work through the go-live checklist in [DEPLOYMENT.md](DEPLOYMENT.md#security-checklist-for-go-live).

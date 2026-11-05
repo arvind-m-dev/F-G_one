@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased: demo passwordless sign-in (branch `demo-passwordless-login`)
+### Added
+- **Demo "Sign in without a password"** (remove before go-live): with `DEMO_PASSWORDLESS_LOGIN=true` the login screen shows an underlined "Sign in without a password" link that signs in one of the `DEMO_MFA_EMAILS` accounts with no password and no two-step code. New `GET /auth/demo-accounts` (which accounts to offer) and `POST /auth/demo-login`.
+- Guarded three ways: the feature flag, an explicit allow-list (`DEMO_MFA_EMAILS`, internal accounts only), and a production boot-check — the API refuses to start if the flag is set while `NODE_ENV=production`, the same guard as `MFA_BYPASS_LOCAL`. When the flag is off, both endpoints behave as if they do not exist (`demo-accounts` returns `enabled: false`; `demo-login` returns 404).
+### Tests
+- API 6 e2e (listing is allow-listed and tenant-scoped; one-click sign-in gives a full session; non-listed, other-tenant and unknown emails all 404).
+
 ## Unreleased: admin overview and leave counts (branch `admin-counts-demo-mfa`)
 ### Added
 - **Overview "Attendance today"**: checked in of total, late count, split bar and tiles (working, on a break, checked out, on leave, not checked in) linking to the filtered attendance board, and who has not checked in yet.

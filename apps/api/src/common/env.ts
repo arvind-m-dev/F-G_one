@@ -46,6 +46,17 @@ const envSchema = z.object({
     .optional()
     .default('')
     .transform((v) => v.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)),
+  /**
+   * Demo only, remove before go-live: shows a "Sign in without a password" link on the login
+   * screen that signs in one of the DEMO_MFA_EMAILS accounts with no password and no two-step code.
+   * Only ever works outside production: the API refuses to start if this is set while
+   * NODE_ENV=production (same guard as MFA_BYPASS_LOCAL), so it cannot ship to a live deploy.
+   * It does nothing unless DEMO_MFA_EMAILS also lists the accounts it may sign in.
+   */
+  DEMO_PASSWORDLESS_LOGIN: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
   MAIL_FROM: z.string().default('FG One <no-reply@futuristglobal.com>'),
 });
 
@@ -61,6 +72,9 @@ export function env(): Env {
     }
     if (parsed.data.MFA_BYPASS_LOCAL && parsed.data.NODE_ENV === 'production') {
       throw new Error('MFA_BYPASS_LOCAL must not be set in production.');
+    }
+    if (parsed.data.DEMO_PASSWORDLESS_LOGIN && parsed.data.NODE_ENV === 'production') {
+      throw new Error('DEMO_PASSWORDLESS_LOGIN must not be set in production.');
     }
     cached = parsed.data;
   }
