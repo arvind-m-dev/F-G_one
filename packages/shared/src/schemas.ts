@@ -21,6 +21,14 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+/**
+ * Demo only (remove before go-live): one-click sign-in for a listed demo account, no password.
+ * The server honours it only when DEMO_PASSWORDLESS_LOGIN is on, outside production, for an
+ * allow-listed demo email. See the DEMO_PASSWORDLESS_LOGIN docs.
+ */
+export const demoLoginSchema = z.object({ email: emailSchema });
+export type DemoLoginInput = z.infer<typeof demoLoginSchema>;
+
 export const forgotPasswordSchema = z.object({ email: emailSchema });
 
 export const resetPasswordSchema = z.object({

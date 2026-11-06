@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import {
   acceptInvitationSchema,
   changePasswordSchema,
+  demoLoginSchema,
   forgotPasswordSchema,
   loginSchema,
   mfaCodeSchema,
@@ -53,6 +54,24 @@ export class AuthController {
     // With two-step verification on, this cookie only allows /auth/mfa/verify and sign out.
     // demoMfaCode is only set for listed demo accounts after a correct password (DEMO_MFA_CODE).
     return { ok: true, mfaRequired, ...(demoMfaCode ? { demoMfaCode } : {}) };
+  }
+
+  /** Demo only (remove before go-live): which accounts the login screen may offer a one-click, no-password sign-in for. */
+  @Public()
+  @Get('demo-accounts')
+  demoAccounts() {
+    return this.auth.demoAccounts();
+  }
+
+  /** Demo only (remove before go-live): sign in a listed demo account with no password. 404 when the feature is off. */
+  @Public()
+  @Post('demo-login')
+  @HttpCode(200)
+  @Throttle({ default: { limit: LOGIN_LIMIT, ttl: 60_000 } })
+  async demoLogin(@Body(new ZodPipe(demoLoginSchema)) body: z.infer<typeof demoLoginSchema>, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { token, expiresAt } = await this.auth.demoLogin(body.email, meta(req));
+    setSessionCookie(res, token, expiresAt);
+    return { ok: true };
   }
 
   /** Second sign-in step: an authenticator or recovery code. Issues a new session cookie. */

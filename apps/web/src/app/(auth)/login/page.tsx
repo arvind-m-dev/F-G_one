@@ -13,7 +13,8 @@ import { safeNext } from '@/lib/safe-next';
 import type { Me } from '@/lib/types';
 import { cn, initials } from '@/lib/utils';
 
-type Step = 'choose' | 'email' | 'password' | 'code';
+type Step = 'choose' | 'email' | 'password' | 'code' | 'demo';
+type DemoAccount = { email: string; name: string; role: string | null; avatarColor: string | null };
 
 function LoginFlow() {
   const router = useRouter();
@@ -28,12 +29,19 @@ function LoginFlow() {
   const [demoCode, setDemoCode] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
+  // Demo only (removed at go-live): populated when DEMO_PASSWORDLESS_LOGIN is on server-side.
+  const [demoAccounts, setDemoAccounts] = useState<DemoAccount[] | null>(null);
   const pwRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const list = readRecentAccounts();
     setRecent(list);
     if (list.length) setStep('choose');
+  }, []);
+  useEffect(() => {
+    void api<{ enabled: boolean; accounts: DemoAccount[] }>('/auth/demo-accounts')
+      .then((r) => setDemoAccounts(r.enabled ? r.accounts : null))
+      .catch(() => setDemoAccounts(null));
   }, []);
   useEffect(() => {
     if (step === 'password') setTimeout(() => pwRef.current?.focus(), 50);
@@ -100,9 +108,23 @@ function LoginFlow() {
       }
       router.replace(safeNext(params.get('next')));
   };
+  // Demo only (removed at go-live): sign in a listed demo account with no password or code.
+  const demoLogin = async (demoEmail: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api('/auth/demo-login', { body: { email: demoEmail } });
+      setEmail(demoEmail);
+      await finish();
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  };
   const current = recent.find((r) => r.email === email);
 
   return (
+    <>
     <AnimatePresence mode="wait" initial={false}>
       <motion.div key={step} initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.15 }}>
         {step === 'choose' && (
@@ -258,8 +280,54 @@ function LoginFlow() {
             </div>
           </form>
         )}
+
+        {step === 'demo' && (
+          <>
+            <button type="button" onClick={() => { setError(null); setStep(recent.length ? 'choose' : 'email'); }} className="mb-5 inline-flex items-center gap-1.5 rounded-full border bg-surface py-1 pr-3 pl-1 text-[13px] transition hover:border-border-strong">
+              <span className="grid size-6 place-items-center rounded-full bg-surface-2">
+                <ArrowLeft className="size-3.5" />
+              </span>
+              Back to sign in
+            </button>
+            <h1 className="text-xl font-semibold tracking-tight">Sign in without a password</h1>
+            <p className="mt-1 text-sm text-muted">Demo workspace. Pick an account to sign in straight away — no password or code.</p>
+            <ul className="mt-6 space-y-1.5" aria-label="Demo accounts">
+              {demoAccounts?.map((a) => (
+                <li key={a.email}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => demoLogin(a.email)}
+                    className="flex w-full items-center gap-3 rounded-xl border bg-surface px-3 py-2.5 text-left transition hover:border-border-strong hover:shadow-sm disabled:opacity-60"
+                  >
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold" style={{ background: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 16%, var(--surface))`, color: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 80%, var(--foreground))` }}>
+                      {initials(a.name || a.email)}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{a.name || a.email}</span>
+                      <span className="block truncate text-[13px] text-muted">{a.role ? `${a.role} · ${a.email}` : a.email}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {error && (
+              <p role="alert" className="mt-4 rounded-lg bg-rose-500/8 px-3 py-2 text-[13px] text-danger">
+                {error}
+              </p>
+            )}
+          </>
+        )}
       </motion.div>
     </AnimatePresence>
+    {demoAccounts && demoAccounts.length > 0 && (step === 'email' || step === 'choose' || step === 'password') && (
+      <div className="mt-6 border-t pt-4 text-center">
+        <button type="button" onClick={() => { setError(null); setStep('demo'); }} className="text-[13px] text-muted underline underline-offset-4 transition hover:text-foreground">
+          Sign in without a password
+        </button>
+      </div>
+    )}
+    </>
   );
 }
 
