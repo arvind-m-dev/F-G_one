@@ -254,7 +254,11 @@ describe('leave summary', () => {
       ],
     });
     // Another company's leave must not show up.
-    const otherType = await prisma.leaveType.create({ data: { organizationId: other.org.id, code: 'CL', name: 'Casual', annualAllowance: 4 } });
+    const otherType = await prisma.leaveType.upsert({
+      where: { organizationId_code: { organizationId: other.org.id, code: 'CL' } },
+      update: {},
+      create: { organizationId: other.org.id, code: 'CL', name: 'Casual', annualAllowance: 4 },
+    });
     await prisma.leaveRequest.create({
       data: { organizationId: other.org.id, userId: other.users.employee.id, typeId: otherType.id, days: 1, startDate: shift(today, 0), endDate: shift(today, 0), status: 'APPROVED' },
     });
