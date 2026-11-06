@@ -30,6 +30,9 @@ function useRefreshEmployees() {
     void qc.invalidateQueries({ queryKey: ['employees'] });
     void qc.invalidateQueries({ queryKey: ['employee-overview'] });
     void qc.invalidateQueries({ queryKey: ['admin-overview'] });
+    // Editing details can change the main role; the Access editor seeds its draft from this query,
+    // so without this it would save a stale roleId and silently restore the old role.
+    void qc.invalidateQueries({ queryKey: ['employee-access'] });
   };
 }
 

@@ -77,8 +77,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const token = cookies[env().SESSION_COOKIE_NAME];
       const ctx = token ? await this.auth.validateSession(token) : null;
       // Client accounts never join internal rooms (org-wide presence, channels, announcements).
-      // Sessions still owing the second sign-in step get no live connection either.
-      if (!ctx || ctx.accountType !== 'INTERNAL' || ctx.mfaPending) {
+      // Sessions still owing the second sign-in step, or a forced password change, get no live
+      // connection either — they must finish signing in before they can read any messages.
+      if (!ctx || ctx.accountType !== 'INTERNAL' || ctx.mfaPending || ctx.mustChangePassword) {
         socket.emit('error', 'unauthorized');
         socket.disconnect(true);
         return;

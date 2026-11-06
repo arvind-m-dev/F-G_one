@@ -259,8 +259,11 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
       }
     }
     if (idleMinutes && !r.breaks.some((b) => b.kind === 'BREAK' && !b.endAt)) {
-      // Closed at the last moment we saw activity, once the idle limit has passed.
-      const last = r.lastActiveAt && r.lastActiveAt > start ? r.lastActiveAt : start;
+      // Closed at the last moment we saw activity, once the idle limit has passed. Returning from a
+      // break is activity too, so count the latest break end; otherwise a break longer than the idle
+      // limit would auto-close the shift the instant the person comes back.
+      const breakEnds = r.breaks.map((b) => b.endAt).filter((d): d is Date => !!d);
+      const last = [start, ...(r.lastActiveAt ? [r.lastActiveAt] : []), ...breakEnds].reduce((a, b) => (b > a ? b : a));
       rules.push({ fireAt: new Date(last.getTime() + idleMinutes * 60_000), at: last, reason: 'idle' });
     }
     if (!rules.length) return null;
@@ -559,7 +562,9 @@ export class AttendanceService implements OnModuleInit, OnModuleDestroy {
         const remarks = `Corrected: ${c.reason}`.slice(0, 200);
         const rec = await tx.attendanceRecord.upsert({
           where: { userId_date: { userId: c.userId, date: c.date } },
-          update: { checkInAt, checkOutAt, location: c.location, late, remarks, autoCheckOutReason: null },
+          // A correction with no finish time fixes only the check-in; keep any existing check-out
+          // rather than erasing it with null.
+          update: { checkInAt, location: c.location, late, remarks, autoCheckOutReason: null, ...(c.checkOut ? { checkOutAt } : {}) },
           create: { organizationId: auth.organizationId, userId: c.userId, date: c.date, checkInAt, checkOutAt, location: c.location, late, remarks },
         });
         // Breaks recorded outside the corrected hours no longer apply; ones that overlap an edge are trimmed to it.

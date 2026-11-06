@@ -3,8 +3,10 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, Plus, ShieldCheck, X } from 'lucide
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { emailSchema } from '@fg/shared';
+import { clearPersistedCache } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
@@ -18,6 +20,7 @@ type DemoAccount = { email: string; name: string; role: string | null; avatarCol
 
 function LoginFlow() {
   const router = useRouter();
+  const qc = useQueryClient();
   const params = useSearchParams();
   const [recent, setRecent] = useState<RecentAccount[]>([]);
   const [step, setStep] = useState<Step>('email');
@@ -100,6 +103,10 @@ function LoginFlow() {
     }
   };
   const finish = async () => {
+    // A just-authenticated session must not inherit the previous person's cache on this tab
+    // (sign-in doesn't always go through logout or a 401 full reload), or their data flashes first.
+    qc.clear();
+    clearPersistedCache();
     try {
         const me = await api<Me>('/auth/me');
         rememberAccount({ email: me.user.email, name: me.user.name, avatarColor: me.user.avatarColor });

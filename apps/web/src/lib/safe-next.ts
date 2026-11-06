@@ -7,7 +7,12 @@ export function safeNext(next: string | null | undefined, origin = typeof window
   try {
     const url = new URL(next, origin);
     if (url.origin !== origin) return fallback;
-    return `${url.pathname}${url.search}${url.hash}`;
+    const resolved = `${url.pathname}${url.search}${url.hash}`;
+    // The origin check passes for same-origin inputs, but dot segments can resolve to a
+    // protocol-relative path (e.g. "/.//evil.example" -> "//evil.example"), which the browser
+    // then treats as another site. Only return a single-slash absolute path.
+    if (!resolved.startsWith('/') || resolved.startsWith('//') || resolved.startsWith('/\\')) return fallback;
+    return resolved;
   } catch {
     return fallback;
   }

@@ -904,6 +904,20 @@ async function main() {
   if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed demo data in production');
   const password = process.env.SEED_PASSWORD;
   if (!password || password.length < 10) throw new Error('Set SEED_PASSWORD (10+ chars) in apps/api/.env before seeding');
+  // NODE_ENV alone is not enough: a dev machine whose DATABASE_URL points at a hosted database
+  // (e.g. Neon) would delete and recreate the real org. Refuse a non-local host unless told plainly.
+  const dbHost = (() => {
+    try {
+      return new URL(process.env.DATABASE_URL ?? '').hostname;
+    } catch {
+      return '';
+    }
+  })();
+  console.log(`Seeding database at host: ${dbHost || '(unknown)'}`);
+  const isLocalHost = ['localhost', '127.0.0.1', '::1', ''].includes(dbHost);
+  if (!isLocalHost && process.env.SEED_ALLOW_REMOTE !== 'yes') {
+    throw new Error(`Refusing to seed a non-local database (${dbHost}); seeding DELETES and recreates the demo orgs. Set SEED_ALLOW_REMOTE=yes only if you are certain.`);
+  }
   const started = Date.now();
   const fg = await seedOrg({ name: 'Futurist Global', slug: process.env.DEFAULT_ORG_SLUG || 'futurist-global', domain: 'futuristglobal.com', password });
   await seedOrg({ name: 'Acme Test Co', slug: 'acme-test', domain: 'acme.test', password, minimal: true });
