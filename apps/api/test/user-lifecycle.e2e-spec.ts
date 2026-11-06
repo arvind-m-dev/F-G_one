@@ -234,6 +234,15 @@ describe('access for one person', () => {
     expect((await hr.put(`/api/employees/${p.id}/access`).send({ overrides: [] }).expect(403)).body.code).toBe('REAUTH_REQUIRED');
   });
 
+  it('treats an extra high role as the target’s authority: HR cannot manage someone holding an Administrator extra role', async () => {
+    const p = await person(); // main role: employee
+    // A Super Admin gave this employee the Administrator role as an extra, so their effective authority is admin.
+    await prisma.userRole.create({ data: { userId: p.id, roleId: fg.roles.administrator.id } });
+    const hr = await login(app, 'hr_admin@futuristglobal.com'); // fresh login satisfies recent-auth
+    // Would be privilege escalation: set their password, then sign in as an administrator.
+    await hr.post(`/api/employees/${p.id}/password`).send({ password: 'NewPassw0rd1' }).expect(403);
+  });
+
   it('enforces the scope ceiling and removing a block the caller could not give', async () => {
     // A people-ops lead who manages employees but only sees their own team's attendance.
     const lead = await prisma.role.create({

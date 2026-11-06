@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased: code-review fixes (branch `fix/review-highs`)
+### Security
+- **Role authority now counts extra roles.** Who may manage (set password, edit, suspend, view the full profile of) a person was decided from their main role's rank only, so someone holding a higher role as an *extra* could be managed — and impersonated via a password reset — by a lower-ranked admin. The check now uses the highest rank they hold, main or extra.
+- **Open-redirect after sign-in closed.** `?next=/.//evil.example` resolved to a same-origin path whose value (`//evil.example`) the browser then treated as another site. `safeNext` now rejects a resolved path that is protocol-relative.
+- **Temp-password sessions can't open the live socket.** The Socket.IO handshake rejected client and two-step-pending sessions but not one owing a forced password change; it now does, so no messages are readable before sign-in completes.
+### Fixed
+- **Approving an attendance correction with no finish time no longer erases an existing check-out** — a correction that fixes only the check-in keeps the recorded check-out.
+- **Idle auto check-out no longer fires the instant a long break ends.** Returning from a break counts as activity, so a break longer than the idle limit doesn't immediately close the shift (the setting is off by default).
+- **Editing an employee's role then opening the Access editor no longer silently restores the old role** — editing details now invalidates the cached access draft.
+- **Notification bell count no longer freezes after the inbox is opened once** — it follows the live unread-count poll once the inbox closes.
+- **Signing in no longer briefly shows the previous person's cached data on a shared tab** — the query cache is cleared on a fresh sign-in.
+### Changed
+- **`pnpm db:seed` refuses a non-local database** (it deletes and recreates the demo orgs). `NODE_ENV` alone was the only guard; it now also checks the `DATABASE_URL` host and needs `SEED_ALLOW_REMOTE=yes` for anything that isn't localhost.
+### Tests
+- API 215 (added: HR cannot set the password of someone holding an Administrator extra role). Web safe-next covers the `/.//` and `/./\\` payloads.
+
 ## Unreleased: demo passwordless sign-in (branch `demo-passwordless-login`)
 ### Added
 - **Demo "Sign in without a password"** (remove before go-live): with `DEMO_PASSWORDLESS_LOGIN=true` the login screen shows an underlined "Sign in without a password" link that signs in one of the `DEMO_MFA_EMAILS` accounts with no password and no two-step code. New `GET /auth/demo-accounts` (which accounts to offer) and `POST /auth/demo-login`.

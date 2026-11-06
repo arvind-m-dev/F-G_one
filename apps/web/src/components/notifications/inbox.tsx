@@ -53,7 +53,9 @@ export function NotificationInbox({ trigger, side = 'right' }: { trigger: (unrea
   const [filter, setFilter] = useState<'all' | 'unread' | 'mentions'>('all');
   const count = useUnreadNotifications();
   const list = useNotifications(filter, open);
-  const unread = list.data?.unread ?? count.data?.unread ?? 0;
+  // Prefer the open inbox's own count; once closed its query data is stale, so fall back to the
+  // polling unread-count query. Otherwise the badge freezes at whatever it was when last opened.
+  const unread = (open && list.data ? list.data.unread : count.data?.unread) ?? 0;
 
   const markRead = useMutation({
     mutationFn: (body: { ids?: string[]; all?: boolean }) => api<{ unread: number }>('/notifications/read', { body }),

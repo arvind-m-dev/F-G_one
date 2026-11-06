@@ -236,7 +236,7 @@ export class EmployeesService {
   async setPassword(auth: AuthContext, id: string, password: string) {
     if (id === auth.userId) throw new BadRequestException('To change your own password, use your profile');
     const target = await this.loadTarget(auth, id);
-    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     if (target.status === 'DEACTIVATED' || target.status === 'ARCHIVED') throw new BadRequestException('Reactivate this account first');
     const activating = target.status === 'INVITED';
     await this.prisma.$transaction([
@@ -261,14 +261,22 @@ export class EmployeesService {
   }
 
   private async loadTarget(auth: AuthContext, id: string) {
-    const target = await this.prisma.user.findFirst({ where: { id, organizationId: auth.organizationId }, include: { role: true } });
+    const target = await this.prisma.user.findFirst({
+      where: { id, organizationId: auth.organizationId },
+      include: { role: true, extraRoles: { select: { role: { select: { rank: true } } } } },
+    });
     if (!target) throw new NotFoundException('Employee not found');
     return target;
   }
 
+  /** The target's authority is the highest rank they hold, main role or any extra role. */
+  private effectiveRank(target: { role: { rank: number }; extraRoles: { role: { rank: number } }[] }) {
+    return Math.max(target.role.rank, ...target.extraRoles.map((x) => x.role.rank));
+  }
+
   async update(auth: AuthContext, id: string, input: UpdateEmployeeInput) {
     const target = await this.loadTarget(auth, id);
-    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     if (input.roleId && input.roleId !== target.roleId) {
       if (id === auth.userId) throw new ForbiddenException('You cannot change your own role');
       await this.assertRoleAuthority(auth, { roleId: input.roleId });
@@ -303,7 +311,7 @@ export class EmployeesService {
   async setActive(auth: AuthContext, id: string, active: boolean) {
     if (id === auth.userId) throw new ForbiddenException('You cannot change the status of your own account');
     const target = await this.loadTarget(auth, id);
-    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     if (!active && target.isSuperAdmin) {
       // Removing a Super Admin goes through the protected process (limit and last-admin checks).
       throw new ForbiddenException('Remove their Super Admin authority first (Super Admins page)');
@@ -332,7 +340,7 @@ export class EmployeesService {
   private async statusTarget(auth: AuthContext, id: string) {
     if (id === auth.userId) throw new ForbiddenException('You cannot change the status of your own account');
     const target = await this.loadTarget(auth, id);
-    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     return target;
   }
 
@@ -467,7 +475,7 @@ export class EmployeesService {
   /** One person's access, plus whether the caller may change it. */
   async getAccess(auth: AuthContext, id: string) {
     const target = await this.loadTarget(auth, id);
-    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     const state = await this.loadAccessState(auth.organizationId, id);
     const overrides = await this.prisma.userPermissionOverride.findMany({
       where: { userId: id, organizationId: auth.organizationId },
@@ -503,7 +511,7 @@ export class EmployeesService {
   async updateAccess(auth: AuthContext, id: string, input: UpdateEmployeeAccessInput) {
     if (id === auth.userId) throw new ForbiddenException('You cannot change your own access');
     const target = await this.loadTarget(auth, id);
-    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     if (target.status === 'ARCHIVED') throw new BadRequestException('This account is archived. Restore it first.');
     const current = await this.loadAccessState(auth.organizationId, id);
     const roleId = input.roleId ?? current.roleId;
@@ -550,7 +558,7 @@ export class EmployeesService {
 
   async listSessions(auth: AuthContext, id: string) {
     const target = await this.loadTarget(auth, id);
-    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     const rows = await this.prisma.session.findMany({
       where: { userId: id, organizationId: auth.organizationId, mfaPending: false, expiresAt: { gt: new Date() } },
       select: { id: true, ip: true, userAgent: true, createdAt: true, lastSeenAt: true, expiresAt: true },
@@ -562,7 +570,7 @@ export class EmployeesService {
   async revokeSessions(auth: AuthContext, id: string) {
     if (id === auth.userId) throw new BadRequestException('To sign out your own devices, use your security settings');
     const target = await this.loadTarget(auth, id);
-    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     const { count } = await this.prisma.session.deleteMany({ where: { userId: id, organizationId: auth.organizationId } });
     this.realtime.disconnectUser(id);
     await this.audit.log(auth, 'employee.sessions_revoked', 'user', id, { count });
@@ -576,7 +584,7 @@ export class EmployeesService {
   async changeEmail(auth: AuthContext, id: string, email: string) {
     if (id === auth.userId) throw new BadRequestException('Ask another administrator to change your own email');
     const target = await this.loadTarget(auth, id);
-    await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
     const org = await this.prisma.organization.findUniqueOrThrow({ where: { id: auth.organizationId }, select: { settings: true } });
     this.assertCompanyDomain(org.settings, email);
     if (email === target.email) throw new BadRequestException('That is already their email');
@@ -625,7 +633,7 @@ export class EmployeesService {
       },
     });
     if (!target) throw new NotFoundException('Employee not found');
-    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: target.role.rank, targetIsSuperAdmin: target.isSuperAdmin });
+    if (id !== auth.userId) await this.assertRoleAuthority(auth, { targetRank: this.effectiveRank(target), targetIsSuperAdmin: target.isSuperAdmin });
 
     const {
       failedLogins, lockedUntil, deactivatedAt, suspendedAt, suspensionReason, archivedAt, mustChangePassword, mfaEnabledAt, mfaSecretEnc, passwordHash,

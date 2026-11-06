@@ -10,7 +10,7 @@ describe('safeNext', () => {
   });
 
   it('falls back for anything that leaves the site', () => {
-    for (const bad of [null, '', 'https://evil.example', '//evil.example', '/\\evil.example', '/\t/evil.example', 'javascript:alert(1)', 'app/home']) {
+    for (const bad of [null, '', 'https://evil.example', '//evil.example', '/\\evil.example', '/\t/evil.example', '/.//evil.example', '/./\\evil.example', 'javascript:alert(1)', 'app/home']) {
       expect(safeNext(bad, origin)).toBe('/app/home');
     }
   });
