@@ -702,7 +702,7 @@ function ThreadPanel({ channel, parent, onClose }: { channel: ChannelDetails; pa
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 24, opacity: 0 }}
       // Floats over the conversation until the window is wide enough to give it its own column.
-      className="absolute inset-y-0 right-0 z-10 flex w-full flex-col border-l bg-canvas md:w-96 md:shadow-lg 2xl:static 2xl:shrink-0 2xl:shadow-none"
+      className="absolute inset-y-0 right-0 z-10 flex w-full flex-col border-l bg-canvas md:w-96 md:shadow-lg min-[1400px]:static min-[1400px]:shrink-0 min-[1400px]:shadow-none"
       aria-label="Thread"
     >
       <div className="flex h-14 items-center justify-between border-b px-4">

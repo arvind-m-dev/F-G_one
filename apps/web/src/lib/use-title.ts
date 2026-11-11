@@ -24,7 +24,9 @@ export function usePageTitle(title: string | undefined | null, unread = 0) {
     apply();
     if (!observer) {
       observer = new MutationObserver(apply);
-      observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+      // The whole document, not just <head>: Next.js can stream the route's <title> into the body
+      // after the page has loaded, which would otherwise put the generic title back.
+      observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
     }
     return () => {
       const i = stack.findIndex((e) => e.id === entry.id);

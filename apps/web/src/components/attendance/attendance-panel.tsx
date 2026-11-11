@@ -77,7 +77,8 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
       void qc.invalidateQueries({ queryKey: ['attendance-history'] });
       toast.success(v.ok);
       setRemarks('');
-      setConfirmOut(false);
+      // Only checking out closes its own confirmation. Ending a break just before must not dismiss it.
+      if (v.path === 'check-out') setConfirmOut(false);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
