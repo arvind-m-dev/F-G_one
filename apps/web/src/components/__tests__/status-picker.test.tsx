@@ -37,6 +37,23 @@ describe('StatusPicker', () => {
     expect(JSON.parse(init.body)).toMatchObject({ presence: 'lunch', emoji: null, text: null });
   });
 
+  it('a message typed just now is saved together with the preset that is picked', async () => {
+    renderPicker();
+    await userEvent.type(screen.getByLabelText('Status message'), 'Client demo');
+    await userEvent.click(screen.getByRole('option', { name: /In a meeting/ }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    const body = JSON.parse((global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1].body);
+    expect(body).toMatchObject({ presence: 'meeting', text: 'Client demo' });
+  });
+
+  it('labels the expiry choices in plain words', () => {
+    renderPicker();
+    const options = within(screen.getByLabelText('Clear after')).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toContain("Don't clear automatically");
+    expect(options).toContain('Clear after 30 minutes');
+    expect(options).toContain('Clear at the end of today');
+  });
+
   it('saves a custom message with expiry', async () => {
     renderPicker();
     await userEvent.type(screen.getByLabelText('Status message'), 'Client demo');

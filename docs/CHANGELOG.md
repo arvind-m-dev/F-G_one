@@ -17,6 +17,31 @@
 - Attendance export button says what it exports ("Export last 30 days"). Time zones are a full, grouped list with plain names. Semantic colour tokens replace raw rose/amber/emerald classes on admin and sign-in pages. Sign-in pages set a tab title and use one `h1`.
 ### Tests
 - Web unit 27 (added: live modules, first admin page, access preview without unbuilt features, filter chips, tabs, dialog guard). API: public branding exposes only the password policy flag. Playwright specs updated for the new copy and roles (not run in this branch).
+## Unreleased: employee-portal UI audit fixes (branch `fix/ui-audit-app`)
+### Chat
+- **Nothing you write is lost.** A message that fails to send stays in place marked "Not sent" with *Try again* and *Delete*; unsent text is kept per conversation (and per thread) and shows as "Draft:" in the conversation list.
+- **@mentions that work.** Typing `@` (or the Mention button) lists the people in the conversation; arrows, Enter/Tab and Esc work, and the handle inserted is one the server notifies. Only real mentions are highlighted, so an email address stays plain text.
+- **Unread handling.** A conversation is marked read only when its newest message is on screen (tab visible, scrolled to the bottom). A "New messages" line shows where you left off, and a "N new messages / Jump to latest" pill appears when you are scrolled up.
+- **Instant reactions, edits and deletes** (undone if the server refuses). Deleting a message and removing a member now ask first. Editing follows the "Send with Enter" preference and has Save/Cancel buttons; Up arrow in an empty box edits your last message.
+- **Message links and search results land on the message**, loading up to eight earlier pages to find it. Search (⌘K / Ctrl+K) now finds pages too.
+- Message list, conversation list, people picker and channel browser have proper error states with *Try again*. Reaction chips say who reacted. Links no longer swallow the full stop after them. An empty thread says so. Typing in a thread no longer shows "typing…" to the whole channel.
+- Thread and details panels: the Back button and Esc close them; they float over the conversation until the window is wide enough for a third column. On phones a conversation has one header, and the keyboard no longer opens by itself.
+### Shell and settings
+- Toasts follow the dark theme and sit at the top on phones (clear of the tab bar and the send button). The device's "reduce motion" setting now also applies to JS-driven animation.
+- A preference that fails to save is rolled back and reported. "Collapse the sidebar" takes effect at once. The phone navigation drawer is a real dialog (Esc, focus trap, no background scroll) and its menu button shows how many approvals are waiting.
+- The account menu says "Settings" (not "Preferences"); shortcut hints show ⌘ or Ctrl to match the device; the getting-started checklist is a switch.
+### Pages
+- Home opens announcements in the same reader as the Announcements page, so "I've read this" works there. The status picker fits a phone, keeps a message typed just before choosing a preset, and labels expiry in plain words.
+- Attendance: per-day worked time and "Request a correction" are available on phones; one name ("Request a correction") for the flow; working hours follow the 12/24-hour preference.
+- Leave calendar: "+N more" opens the full list for that day; the phone agenda shows real dates. Holidays: "Tomorrow / In 3 days" instead of "1 days to go".
+- Directory, Approvals, Home and the attendance panel have error states with *Try again*; filtered-empty states offer "Clear search and filters".
+### Design system
+- New tokens: `scrim` (dialog backdrop), `tooltip` / `tooltip-foreground`, and `success-ink` / `warning-ink` / `danger-ink` / `info-ink` (text on a soft state fill). Raw Tailwind palette classes and hex values in the employee portal, presence dots, reactions and badges now use tokens.
+- Shared helpers: `fmtDate`, `fmtDateTime`, `plural`, `relDays` (`lib/utils`), `useClock().hm` for wall-clock times, `useModKey` (`lib/platform`).
+### Not done
+- Muting a conversation (the API has no endpoint for it), and jumping to a message older than about 360 messages (the messages endpoint pages backwards only); a search result that is a thread reply opens its channel, not the thread (search results do not say which thread they belong to).
+### Tests
+- Web unit tests 35 (added: chat cache helpers, link punctuation, composer mentions/drafts/Up-arrow, message failed-send/delete-confirm/edit, status picker). E2E specs updated for the changed labels and the delete confirmation (not run here).
 
 ## Unreleased: code-review fixes (branch `fix/review-highs`)
 ### Security

@@ -68,7 +68,7 @@ test('attendance: check in from home with a note, take a break, check out, and s
   await expect(emp.getByRole('button', { name: 'Check in', exact: true })).toHaveCount(0);
   const today = emp.getByRole('listitem').filter({ hasText: '=SUM(1,2) client call' });
   await expect(today).toContainText('Home');
-  await expect(today.getByRole('button', { name: 'Request correction' })).toBeVisible();
+  await expect(today.getByRole('button', { name: 'Request a correction' })).toBeVisible();
 
   // The manager sees the report on the team board; the export is formula-safe.
   const mgr = await newPage(browser, 'manager@futuristglobal.com');
@@ -89,7 +89,8 @@ test('attendance: check in from home with a note, take a break, check out, and s
 test('attendance correction: a past day needs an end time; the manager applies it', async ({ browser }) => {
   const emp = await newPage(browser, worker2.email);
   await emp.goto('/app/attendance');
-  await emp.getByRole('button', { name: 'Fix a day' }).click();
+  // the section's own button comes first; each finished day has one too
+  await emp.getByRole('button', { name: 'Request a correction' }).first().click();
   const dialog = emp.getByRole('dialog');
   await dialog.getByLabel('Started at').fill('09:10');
   await dialog.getByLabel('Finished at').fill('');

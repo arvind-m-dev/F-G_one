@@ -8,9 +8,9 @@ export function Badge({ className, tone = 'default', ...props }: React.HTMLAttri
   const tones = {
     default: 'bg-surface-2 text-foreground',
     brand: 'bg-primary-soft text-primary-ink',
-    success: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    warning: 'bg-amber-500/12 text-amber-700 dark:text-amber-300',
-    danger: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+    success: 'bg-success/10 text-success-ink',
+    warning: 'bg-warning/12 text-warning-ink',
+    danger: 'bg-danger/10 text-danger-ink',
     muted: 'bg-surface-2 text-muted',
   };
   return <span className={cn('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium', tones[tone], className)} {...props} />;
@@ -48,7 +48,7 @@ export function Tooltip({ content, children, side = 'right' }: { content: React.
     <TooltipPrimitive.Root delayDuration={250}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content side={side} sideOffset={8} className="z-50 flex items-center gap-2 rounded-md bg-[#171a2b] px-2 py-1 text-xs font-medium text-white shadow-lg animate-in fade-in dark:bg-elevated dark:text-foreground">
+        <TooltipPrimitive.Content side={side} sideOffset={8} className="z-50 flex items-center gap-2 rounded-md bg-tooltip px-2 py-1 text-xs font-medium text-tooltip-foreground shadow-lg animate-in fade-in">
           {content}
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
@@ -70,7 +70,7 @@ export function InfoHint({ children, label = 'What does this mean?' }: { childre
         </button>
       </TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content side="top" sideOffset={6} className="z-50 max-w-64 rounded-lg bg-[#171a2b] px-3 py-2 text-xs leading-relaxed text-white shadow-lg dark:bg-elevated dark:text-foreground">
+        <TooltipPrimitive.Content side="top" sideOffset={6} className="z-50 max-w-64 rounded-lg bg-tooltip px-3 py-2 text-xs leading-relaxed text-tooltip-foreground shadow-lg">
           {children}
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>

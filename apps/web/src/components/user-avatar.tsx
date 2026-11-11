@@ -3,6 +3,7 @@ import { presenceMeta } from '@fg/shared';
 import { PresenceIcon, TONE_BG } from '@/components/presence';
 import { useLivePerson } from '@/lib/presence-store';
 import type { Person } from '@/lib/types';
+import { useEffect, useState } from 'react';
 import { cn, initials } from '@/lib/utils';
 
 type AvatarPerson = Pick<Person, 'id' | 'name' | 'avatarUrl' | 'avatarColor'> & Partial<Pick<Person, 'online' | 'presence' | 'statusEmoji' | 'statusText' | 'statusExpiresAt'>>;
@@ -22,12 +23,15 @@ export function UserAvatar({ person, size = 'md', showPresence = true, className
     ...person,
   });
   const meta = presenceMeta(live.presence);
-  const color = live.online && live.presence !== 'offline' ? TONE_BG[meta.tone] : 'bg-slate-400';
+  const color = live.online && live.presence !== 'offline' ? TONE_BG[meta.tone] : 'bg-subtle';
+  // A photo link that no longer loads falls back to initials instead of a broken-image icon.
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [person.avatarUrl]);
   return (
     <span className={cn('relative inline-flex shrink-0', className)}>
-      {person.avatarUrl ? (
+      {person.avatarUrl && !broken ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={person.avatarUrl} alt="" className={cn('rounded-full object-cover', sizes[size])} />
+        <img src={person.avatarUrl} alt="" onError={() => setBroken(true)} className={cn('rounded-full object-cover', sizes[size])} />
       ) : (
         <span className={cn('grid place-items-center rounded-full font-semibold ring-1 ring-inset ring-black/5 dark:ring-white/10', sizes[size])} style={{ background: `color-mix(in oklab, ${person.avatarColor} 16%, var(--surface))`, color: `color-mix(in oklab, ${person.avatarColor} 80%, var(--foreground))` }} aria-hidden>
           {initials(person.name)}
@@ -43,7 +47,7 @@ export function UserAvatar({ person, size = 'md', showPresence = true, className
   );
 }
 
-/** Emoji + text status line used in lists. */
+/** Presence icon + status text used in lists. */
 export function StatusLine({ person, className }: { person: Pick<Person, 'id' | 'online' | 'presence' | 'statusEmoji' | 'statusText' | 'statusExpiresAt'>; className?: string }) {
   const live = useLivePerson(person);
   const meta = presenceMeta(live.presence);

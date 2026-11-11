@@ -58,7 +58,7 @@ test('attendance correction: employee asks, manager approves, history updates', 
   const emp = await (await browser.newContext()).newPage();
   await signIn(emp, 'employee@futuristglobal.com');
   await emp.goto('/app/attendance');
-  await emp.getByRole('button', { name: 'Fix a day' }).click();
+  await emp.getByRole('button', { name: 'Request a correction' }).first().click();
   const date = new Date(Date.now() - 3 * 86400_000).toLocaleDateString('en-CA');
   await emp.getByLabel('Day').fill(date);
   await emp.getByLabel('Started at').fill('09:05');

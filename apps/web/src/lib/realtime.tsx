@@ -1,5 +1,6 @@
 'use client';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { RT, type PresenceEvent } from '@fg/shared';
@@ -19,6 +20,10 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const meId = useRef(me.user.id);
+  // The socket is set up once; keep the latest router for toast actions without reconnecting.
+  const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
 
   useEffect(() => {
     const s = io({ path: '/socket.io', withCredentials: true, transports: ['websocket', 'polling'] });
@@ -80,7 +85,8 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
       if (n.link && window.location.pathname === n.link.split('?')[0]) return;
       toast(n.title, {
         description: n.body ?? undefined,
-        action: n.link ? { label: 'Open', onClick: () => (window.location.href = n.link!) } : undefined,
+        // In-app navigation: a full page load would drop the cache and reconnect the socket.
+        action: n.link ? { label: 'Open', onClick: () => routerRef.current.push(n.link!) } : undefined,
       });
     });
     s.on(RT.ATTENDANCE_CHANGED, () => {

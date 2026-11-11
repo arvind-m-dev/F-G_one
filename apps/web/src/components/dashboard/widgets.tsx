@@ -1,25 +1,27 @@
 'use client';
 import { PERMISSIONS, presenceMeta, type WidgetKey } from '@fg/shared';
-import { Award, Building2, Cake, Check, CircleCheckBig, Clock, X, CalendarDays, Hash, Lock, Megaphone, MessageSquarePlus, Pin, Search, Sparkles, UserPlus, Users } from 'lucide-react';
+import { Award, Building2, Cake, Check, CircleCheckBig, X, CalendarDays, Megaphone, MessageSquarePlus, MessagesSquare, Pin, Search, Sparkles, UserPlus, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { toast } from 'sonner';
+import { AnnouncementReader } from '@/components/announcements/announcement-reader';
 import { AttendancePanel, liveWorked } from '@/components/attendance/attendance-panel';
+import { ChannelIcon } from '@/components/chat/channel-icon';
 import { PresenceIcon } from '@/components/presence';
 import { Button } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
-import { Dialog } from '@/components/ui/dialog';
 import { Badge, Kbd, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
 import { channelLabel, fmtDuration, useAttendanceToday } from '@/lib/hooks';
+import { useModKey } from '@/lib/platform';
 import { useLivePeople, useLivePerson } from '@/lib/presence-store';
 import { useCan, useClock, useModule, useSession, useUpdatePreferences } from '@/lib/session';
 import type { ChannelSummary, Person } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
-import { cn, dateInZone, greeting, minutesInZone, parseDateOnly, timeAgo, weekdayInZone } from '@/lib/utils';
+import { useUrlState } from '@/lib/url-state';
+import { cn, dateInZone, greeting, minutesInZone, parseDateOnly, relDays, timeAgo, weekdayInZone } from '@/lib/utils';
 
 export interface DashboardData {
   workday: { start: string; end: string; workingDays: number[]; timezone?: string };
@@ -58,8 +60,6 @@ export function useOpenDm() {
     }
   };
 }
-
-const relDays = (d: number) => (d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `In ${d} days`);
 
 /* ───────────── Greeting header ───────────── */
 function WelcomeWidget({ data, actions }: WidgetProps) {
@@ -101,6 +101,7 @@ function WelcomeWidget({ data, actions }: WidgetProps) {
 function QuickActionsWidget({ actions }: WidgetProps) {
   const can = useCan();
   const router = useRouter();
+  const mod = useModKey();
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="primary" onClick={actions.newMessage}>
@@ -115,7 +116,7 @@ function QuickActionsWidget({ actions }: WidgetProps) {
         </Button>
       )}
       <Button variant="ghost" onClick={actions.search} className="hidden sm:inline-flex">
-        <Search /> Search <span className="ml-1 flex gap-0.5"><Kbd>⌘</Kbd><Kbd>K</Kbd></span>
+        <Search /> Search <span className="ml-1 flex gap-0.5" aria-hidden><Kbd>{mod}</Kbd><Kbd>K</Kbd></span>
       </Button>
     </div>
   );
@@ -186,7 +187,7 @@ function ClockWidget({ data }: WidgetProps) {
   const stats = rec
     ? [
         { key: 'worked', dot: 'bg-primary', label: 'Worked', value: fmtDuration(worked) },
-        { key: 'breaks', dot: 'bg-amber-400', label: breaks.length === 1 ? '1 break' : `${breaks.length} breaks`, value: fmtDuration(breakMins) },
+        { key: 'breaks', dot: 'bg-warning', label: breaks.length === 1 ? '1 break' : `${breaks.length} breaks`, value: fmtDuration(breakMins) },
         ...(!rec.checkOutAt && workday && cur < we ? [{ key: 'left', dot: 'bg-surface-2 ring-1 ring-border-strong ring-inset', label: 'Left', value: fmtDuration(left) }] : []),
       ]
     : [];
@@ -240,7 +241,7 @@ function ClockWidget({ data }: WidgetProps) {
               {breaks.map((b) => (
                 <Tooltip key={b.id} side="top" content={`Break · ${time(b.start)} – ${b.end ? time(b.end) : 'now'} (${fmtDuration(b.mins)})`}>
                   <span
-                    className="absolute inset-y-0 bg-amber-400 bg-[repeating-linear-gradient(135deg,transparent_0_4px,rgb(0_0_0/0.12)_4px_6px)]"
+                    className="absolute inset-y-0 bg-warning bg-[repeating-linear-gradient(135deg,transparent_0_4px,color-mix(in_oklab,var(--foreground)_14%,transparent)_4px_6px)]"
                     style={{ left: `${pct(b.s)}%`, width: `${Math.max(0.8, pct(b.e) - pct(b.s))}%` }}
                   />
                 </Tooltip>
@@ -292,11 +293,7 @@ function ChatRow({ c }: { c: ChannelSummary }) {
   const other = c.participants[0];
   return (
     <Link href={`/app/chat/${c.id}`} className="group flex items-center gap-3 rounded-lg px-2 py-2.5 transition hover:bg-surface-2">
-      {c.type === 'DIRECT' && other ? (
-        <UserAvatar person={other} size="sm" />
-      ) : (
-        <span className="grid size-8 place-items-center rounded-lg bg-surface-2 text-muted">{c.type === 'PRIVATE' ? <Lock className="size-3.5" /> : <Hash className="size-3.5" />}</span>
-      )}
+      {c.type === 'DIRECT' && other ? <UserAvatar person={other} size="sm" /> : c.type === 'DIRECT' ? <span className="size-8 shrink-0 rounded-full bg-surface-2" aria-hidden /> : <ChannelIcon channel={c} />}
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
           <span className={cn('truncate text-[13px]', c.unread ? 'font-semibold' : 'font-medium')}>{channelLabel(c)}</span>
@@ -306,7 +303,7 @@ function ChatRow({ c }: { c: ChannelSummary }) {
           {c.lastMessage ? `${c.type !== 'DIRECT' && c.lastMessage.authorName ? `${c.lastMessage.authorName}: ` : ''}${c.lastMessage.body}` : 'No messages yet'}
         </span>
       </span>
-      {c.unread > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-white tabular-nums">{c.unread}</span>}
+      {c.unread > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground tabular-nums">{c.unread > 99 ? '99+' : c.unread}</span>}
     </Link>
   );
 }
@@ -316,20 +313,25 @@ function RecentChatsWidget({ data, actions }: WidgetProps) {
   return (
     <section>
       <SectionTitle
-        icon={<Sparkles />}
+        icon={unread.length ? <Sparkles /> : <MessagesSquare />}
         action={
           <Button size="sm" variant="ghost" onClick={actions.newMessage}>
-            <MessageSquarePlus /> New
+            <MessageSquarePlus /> New message
           </Button>
         }
       >
-        Needs your attention
+        {unread.length ? 'Needs your attention' : 'Recent conversations'}
       </SectionTitle>
       {data.recentChats.length === 0 ? (
-        <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted">No conversations yet. Say hello in a channel.</p>
+        <div className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted">
+          <p>No conversations yet.</p>
+          <Link href="/app/chat" className="mt-1 inline-block font-medium text-primary hover:underline">
+            Open Chat to say hello
+          </Link>
+        </div>
       ) : (
         <div className="-mx-2">
-          {unread.length === 0 && <p className="px-2 pb-1 text-[13px] text-muted">You&apos;re all caught up. Recent conversations:</p>}
+          {unread.length === 0 && <p className="px-2 pb-1 text-[13px] text-muted">You&apos;re all caught up.</p>}
           {[...unread, ...rest].map((c) => (
             <ChatRow key={c.id} c={c} />
           ))}
@@ -343,11 +345,15 @@ function RecentChatsWidget({ data, actions }: WidgetProps) {
 const priorityLabel = { NORMAL: 'Update', IMPORTANT: 'Important', CRITICAL: 'Urgent' } as const;
 const priorityTone = { NORMAL: 'muted', IMPORTANT: 'warning', CRITICAL: 'danger' } as const;
 function AnnouncementsWidget({ data }: WidgetProps) {
-  const [open, setOpen] = useState<DashboardData['announcements'][number] | null>(null);
+  // Opens in the same reader as the Announcements page (so "I've read this" works here too); kept in the address.
+  const [get, set] = useUrlState({ announcement: '' });
+  const setOpen = (a: DashboardData['announcements'][number]) => set({ announcement: a.id }, { push: true });
   const [lead, ...others] = data.announcements;
   return (
     <section>
-      <SectionTitle icon={<Megaphone />}>Announcements</SectionTitle>
+      <SectionTitle icon={<Megaphone />} action={<Link href="/app/announcements" className="text-xs text-muted hover:text-foreground">All announcements</Link>}>
+        Announcements
+      </SectionTitle>
       {!lead ? (
         <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted">No announcements right now.</p>
       ) : (
@@ -386,22 +392,7 @@ function AnnouncementsWidget({ data }: WidgetProps) {
           </ul>
         </div>
       )}
-      <Dialog
-        open={!!open}
-        onOpenChange={(o) => !o && setOpen(null)}
-        title={open?.title ?? ''}
-        description={open ? `${open.author ? `${open.author.firstName} ${open.author.lastName} · ` : ''}${new Date(open.publishedAt).toLocaleString()}` : undefined}
-      >
-        {open && (
-          <div className="space-y-3">
-            <div className="flex gap-1.5">
-              <Badge tone={priorityTone[open.priority]}>{priorityLabel[open.priority]}</Badge>
-              <Badge tone="brand">{open.department?.name ?? 'Company-wide'}</Badge>
-            </div>
-            <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{open.body}</p>
-          </div>
-        )}
-      </Dialog>
+      <AnnouncementReader id={get('announcement') || null} onClose={() => set({ announcement: null })} />
     </section>
   );
 }
@@ -426,7 +417,7 @@ function TeamWidget({ data }: WidgetProps) {
         Team pulse
       </SectionTitle>
       {people.length === 0 ? (
-        <p className="text-sm text-muted">Join a department to see your team here.</p>
+        <p className="text-sm text-muted">Your team appears here once HR adds you to a department.</p>
       ) : (
         <div className="space-y-4">
           {grouped.map((g) => (
@@ -501,7 +492,7 @@ function CelebrationsWidget({ data }: WidgetProps) {
             <span className="relative">
               <UserAvatar person={c.person} size="sm" showPresence={false} />
               <span className="absolute -right-1 -bottom-1 grid size-4 place-items-center rounded-full bg-canvas ring-1 ring-border">
-                {c.type === 'birthday' ? <Cake className="size-2.5 text-rose-500" /> : <Award className="size-2.5 text-amber-500" />}
+                {c.type === 'birthday' ? <Cake className="size-2.5 text-danger" /> : <Award className="size-2.5 text-warning" />}
               </span>
             </span>
             <span className="min-w-0 flex-1">
@@ -530,7 +521,7 @@ function OrgStatsWidget({ data }: WidgetProps) {
   const items = [
     ['People', data.orgStats.headcount],
     ['Online', data.orgStats.onlineNow],
-    ['Teams', data.orgStats.departments],
+    ['Departments', data.orgStats.departments],
     ['New this month', data.orgStats.joinersThisMonth],
   ] as const;
   return (
@@ -570,7 +561,7 @@ function GettingStartedWidget({ data, actions }: WidgetProps) {
   const steps = [
     ...(mod('attendance') ? [{ done: !!att.data?.record, title: 'Check in for today', text: 'Tell your team you’ve started and where you’re working.', action: () => router.push('/app/attendance') }] : []),
     { done: data.onboarding.statusSet, title: 'Set your status', text: 'Let people know if you’re available, in a meeting or on a break.', action: actions.setStatus },
-    ...(mod('chat') ? [{ done: data.onboarding.sentMessage, title: 'Say hello in a channel', text: 'Open #general and introduce yourself.', action: () => router.push('/app/chat') }] : []),
+    ...(mod('chat') ? [{ done: data.onboarding.sentMessage, title: 'Say hello in a channel', text: 'Pick a channel and introduce yourself.', action: () => router.push('/app/chat') }] : []),
     { done: data.onboarding.profileComplete, title: 'Complete your profile', text: 'Add a short bio and your work phone.', action: () => router.push('/app/profile') },
   ];
   const done = steps.filter((s) => s.done).length;
@@ -597,7 +588,7 @@ function GettingStartedWidget({ data, actions }: WidgetProps) {
         {steps.map((s, i) => (
           <li key={s.title}>
             <button onClick={s.action} disabled={s.done} className={cn('flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition', s.done ? 'border-transparent bg-surface-2/60' : 'hover:border-primary/40 hover:bg-primary-soft/40')}>
-              <span className={cn('mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold', s.done ? 'bg-emerald-500 text-white' : 'border border-border-strong text-muted')}>
+              <span className={cn('mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold', s.done ? 'bg-success text-white' : 'border border-border-strong text-muted')}>
                 {s.done ? <Check className="size-3" /> : i + 1}
               </span>
               <span>

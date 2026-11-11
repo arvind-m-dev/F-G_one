@@ -33,10 +33,10 @@ All live in `apps/web/src/components`. Primitives are shadcn-style wrappers over
 | `CommandPalette` | ⌘K: permission-aware search (people, channels, messages) and navigation. |
 | `dashboard/widgets` | Home widget registry: `welcome`, `quickActions`, `clock` (day timeline), `recentChats`, `announcements`, `team` (pulse), `holidays`, `celebrations`, `orgStats`. Each widget declares its column. |
 | `chat/ConversationList` | Middle pane: search, collapsible Channels and DMs sections, previews, time, unread. |
-| `chat/Conversation` | Header (mobile back button), message stream (infinite scroll, day separators), thread and details panels. |
-| `chat/MessageItem` | Hover toolbar: quick reactions, reaction picker, thread reply, copy text, copy link, edit, delete. |
-| `chat/Composer` | Auto-grow, mention trigger, Enter or ⌘Enter per user preference, typing events. |
 | `admin/*` | Admin page header (`PageHeader`, `Forbidden`, `LoadError`), audit list, `PersonPicker` (search for one active employee), `useUnsavedGuard`, `timeZoneLabel`. |
+| `chat/Conversation` | Header (mobile back button), message stream (infinite scroll, day separators, "New messages" line, jump-to-latest pill, read only when seen), thread and details panels (Back and Esc close them). |
+| `chat/MessageItem` | Hover toolbar: quick reactions, reaction picker, thread reply, copy text, copy link, edit, delete (asks first). Changes are optimistic through `chat/cache`. A failed send shows "Not sent" with Try again / Delete. |
+| `chat/Composer` | Auto-grow, `@` mention autocomplete over the conversation's members, per-conversation drafts (`lib/drafts`), Enter or ⌘/Ctrl+Enter per user preference, Up arrow edits your last message, typing events (not from threads). |
 
 ## Adding a page
 1. Create `app/app/<route>/page.tsx` (employee) or `app/admin/<route>/page.tsx` (admin).
