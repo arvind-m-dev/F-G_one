@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SUPER_ADMIN_HARD_LIMIT, superAdminInviteSchema } from '@fg/shared';
+import { STATUS_LABEL } from '@/components/admin/employee-status';
 import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
 import { isCancelled, useReauth } from '@/components/security/reauth';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
 import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
 import { Field, Input, Select } from '@/components/ui/input';
@@ -16,7 +17,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
 import { useEmployeeList } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
-import type { Person } from '@/lib/types';
+import type { Employee, Person } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
 import { cn, timeAgo } from '@/lib/utils';
 
@@ -123,7 +124,7 @@ function NominateDialog({ open, onOpenChange, data, onDone }: { open: boolean; o
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={result ? 'Nomination sent' : 'Nominate a Super Admin'} description={result ? undefined : 'They become a Super Admin only after they accept.'} className="max-w-lg">
+    <Dialog open={open} onOpenChange={onOpenChange} title={result ? 'Nomination link ready' : 'Nominate a Super Admin'} description={result ? undefined : 'They become a Super Admin only after they accept.'} className="max-w-lg" guard={!!result || !!password}>
       {reauth.dialog}
       {result ? (
         <div className="space-y-4">
@@ -156,7 +157,7 @@ function NominateDialog({ open, onOpenChange, data, onDone }: { open: boolean; o
               <li>Turn on two-step verification in Settings, Security (Super Admins must use it).</li>
               <li>Open the link and confirm with their password.</li>
             </ol>
-            <p className="mt-2 text-xs text-muted">If email is set up for your company, they also get the link by email.</p>
+            <p className="mt-2 text-xs text-muted">Send them the link yourself. They also get it by email if your company has email set up for FG One.</p>
           </div>
           <div className="flex justify-end">
             <Button onClick={() => onOpenChange(false)}>Done</Button>
@@ -378,7 +379,7 @@ function Seats({ data }: { data: SuperAdminList }) {
 
 function AuthorityBadge({ s }: { s: SuperAdmin }) {
   if (s.authorityActive) return <Badge tone="success"><ShieldCheck className="size-3" /> Active</Badge>;
-  if (s.status !== 'ACTIVE') return <Badge tone="muted">Account {s.status.toLowerCase()}</Badge>;
+  if (s.status !== 'ACTIVE') return <Badge tone="muted">{STATUS_LABEL[s.status as Employee['status']] ?? 'Not active'}</Badge>;
   return <Badge tone="warning"><ShieldOff className="size-3" /> Paused</Badge>;
 }
 
@@ -454,10 +455,8 @@ function SuperAdminsInner() {
             <p className="mt-1 text-sm text-muted">
               Super Admins must use two-step verification, so a stolen password is never enough to take over the company. Turn it on in your security settings, and this page and everything else a Super Admin can do will work straight away.
             </p>
-            <Link href="/app/settings#security">
-              <Button className="mt-4">
-                <ShieldCheck /> Turn on two-step verification
-              </Button>
+            <Link href="/app/settings#security" className={cn(buttonVariants(), 'mt-4')}>
+              <ShieldCheck /> Turn on two-step verification
             </Link>
           </div>
         </div>

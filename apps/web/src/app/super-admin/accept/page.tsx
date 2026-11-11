@@ -6,7 +6,7 @@ import { Suspense, useState } from 'react';
 import { superAdminAcceptSchema } from '@fg/shared';
 import { isCancelled, useReauth } from '@/components/security/reauth';
 import { usePageTitle } from '@/lib/use-title';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
@@ -14,6 +14,7 @@ import { api, ApiError, errorMessage } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import type { Person } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
+import { cn } from '@/lib/utils';
 
 interface Nomination {
   invitedBy: Person | null;
@@ -43,10 +44,8 @@ function Problem({ title, children }: { title: string; children: React.ReactNode
       </span>
       <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
       <div className="mt-1.5 text-sm text-muted">{children}</div>
-      <Link href="/app/home">
-        <Button variant="outline" className="mt-6">
-          Go to your workspace
-        </Button>
+      <Link href="/app/home" className={cn(buttonVariants({ variant: 'outline' }), 'mt-6')}>
+        Go to your workspace
       </Link>
     </div>
   );
@@ -93,10 +92,8 @@ function AcceptInner() {
         <Heading icon={<Crown />} title="You are now a Super Admin">
           You have full control of FG One for {me.organization.name}. Every change you make as a Super Admin is recorded in the audit log.
         </Heading>
-        <Link href="/admin/super-admins">
-          <Button size="lg" className="w-full">
-            Open the admin portal <ArrowRight />
-          </Button>
+        <Link href="/admin/super-admins" className={cn(buttonVariants({ size: 'lg' }), 'w-full')}>
+          Open the admin portal <ArrowRight />
         </Link>
       </div>
     );
@@ -189,10 +186,8 @@ function AcceptInner() {
           </div>
         </div>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-          <Link href="/app/settings#security" className="flex-1">
-            <Button className="w-full">
-              <ShieldCheck /> Turn on two-step verification
-            </Button>
+          <Link href="/app/settings#security" className={cn(buttonVariants(), 'flex-1')}>
+            <ShieldCheck /> Turn on two-step verification
           </Link>
           <Button variant="outline" onClick={() => q.refetch()} loading={q.isFetching}>
             <RefreshCw /> I have turned it on
