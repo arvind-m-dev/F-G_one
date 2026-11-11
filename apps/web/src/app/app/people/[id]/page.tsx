@@ -35,8 +35,31 @@ export default function PersonPage() {
   usePageTitle(q.data?.name);
   const live = useLivePerson(q.data ?? { id, online: false, presence: 'available', statusEmoji: null, statusText: null, statusExpiresAt: null });
 
-  if (q.isError) return <EmptyState icon={<UserRound />} title="Profile unavailable" description={errorMessage(q.error)} className="mt-20" />;
-  if (!q.data) return <div className="mx-auto max-w-5xl p-8"><Skeleton className="h-64" /></div>;
+  if (q.isError)
+    return (
+      <EmptyState
+        icon={<UserRound />}
+        title="This profile isn't available"
+        description={errorMessage(q.error)}
+        className="mt-20"
+        action={
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" loading={q.isFetching} onClick={() => void q.refetch()}>
+              Try again
+            </Button>
+            <Link href="/app/people">
+              <Button variant="ghost">Back to the directory</Button>
+            </Link>
+          </div>
+        }
+      />
+    );
+  if (!q.data)
+    return (
+      <div className="mx-auto max-w-[1100px] px-6 pt-8 sm:px-10" role="status" aria-label="Loading profile">
+        <Skeleton className="h-64" />
+      </div>
+    );
   const p = q.data;
   const bday = p.birthday ? (p.birthday.length === 5 ? parseDateOnly(`2000-${p.birthday}`) : parseDateOnly(p.birthday)) : null;
 
@@ -80,9 +103,9 @@ export default function PersonPage() {
             <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{p.bio || <span className="text-muted">No bio yet.</span>}</p>
             <div className="mt-4 grid border-t sm:grid-cols-2">
               <Row icon={Mail} label="Email" value={<a href={`mailto:${p.email}`} className="text-primary hover:underline">{p.email}</a>} />
-              <Row icon={Phone} label="Phone" value={p.phone} />
+              <Row icon={Phone} label="Phone" value={p.phone ? <a href={`tel:${p.phone.replace(/[^+\d]/g, '')}`} className="text-primary hover:underline">{p.phone}</a> : null} />
               <Row icon={Building2} label="Department" value={p.department?.name} />
-              <Row icon={Briefcase} label="Designation" value={p.designation} />
+              <Row icon={Briefcase} label="Job title" value={p.designation} />
               <Row icon={CalendarClock} label="Joined" value={p.joinedAt ? parseDateOnly(p.joinedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : null} />
               <Row icon={Cake} label="Birthday" value={bday ? bday.toLocaleDateString(undefined, { month: 'long', day: 'numeric' }) : null} />
               <Row icon={Globe} label="Time zone" value={p.timezone} />
@@ -100,7 +123,7 @@ export default function PersonPage() {
                   <span className="text-sm font-medium">{p.manager.firstName} {p.manager.lastName}</span>
                 </Link>
               ) : (
-                <p className="text-sm text-muted">—</p>
+                <p className="text-sm text-muted">No manager set</p>
               )}
             </div>
             <div>

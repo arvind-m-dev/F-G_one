@@ -1,6 +1,6 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Coffee, House, LogIn, LogOut, MapPin, Play } from 'lucide-react';
+import { Building2, Clock, Coffee, House, LogIn, LogOut, MapPin, Play } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -9,12 +9,12 @@ import { WORK_LOCATIONS } from '@fg/shared';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { InfoHint, Skeleton } from '@/components/ui/misc';
+import { EmptyState, InfoHint, Skeleton } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDuration, useAttendanceToday } from '@/lib/hooks';
 import { useClock } from '@/lib/session';
 import type { AttendanceRecord, AttendanceToday } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, fmtDate } from '@/lib/utils';
 
 export const LOCATION_ICON = { WFO: Building2, WFH: House, ON_DUTY: MapPin } as const;
 export const LOCATION_LABEL = { WFO: 'Office', WFH: 'Home', ON_DUTY: 'Client site' } as const;
@@ -48,7 +48,7 @@ export function DayBar({ r, now }: { r: AttendanceRecord; now: number }) {
       {r.breaks.map((b) => {
         const bs = new Date(b.startAt).getTime();
         const be = b.endAt ? new Date(b.endAt).getTime() : now;
-        return <span key={b.id} className={cn('absolute inset-y-0', b.kind === 'AWAY' ? 'bg-surface-2' : 'bg-amber-400')} style={{ left: `${((bs - start) / span) * 100}%`, width: `${Math.max(0.8, ((be - bs) / span) * 100)}%` }} />;
+        return <span key={b.id} className={cn('absolute inset-y-0', b.kind === 'AWAY' ? 'bg-surface-2' : 'bg-warning')} style={{ left: `${((bs - start) / span) * 100}%`, width: `${Math.max(0.8, ((be - bs) / span) * 100)}%` }} />;
       })}
     </div>
   );
@@ -56,7 +56,7 @@ export function DayBar({ r, now }: { r: AttendanceRecord; now: number }) {
 
 export function AttendancePanel({ compact }: { compact?: boolean }) {
   const qc = useQueryClient();
-  const { time: clockTime } = useClock();
+  const { time: clockTime, hm } = useClock();
   const today = useAttendanceToday();
   const [location, setLocation] = useState<'WFO' | 'WFH' | 'ON_DUTY'>('WFO');
   const [remarks, setRemarks] = useState('');
@@ -83,7 +83,20 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
   });
 
   if (today.isPending) return <Skeleton className={compact ? 'h-28' : 'h-56'} />;
-  if (today.isError) return <p className="rounded-xl border border-rose-500/30 p-4 text-sm text-danger">Attendance is unavailable right now. {errorMessage(today.error)}</p>;
+  if (today.isError)
+    return (
+      <EmptyState
+        className="rounded-xl border"
+        icon={<Clock />}
+        title="Attendance couldn't be loaded"
+        description={errorMessage(today.error)}
+        action={
+          <Button variant="outline" loading={today.isFetching} onClick={() => void today.refetch()}>
+            Try again
+          </Button>
+        }
+      />
+    );
   const d = today.data!;
   const time = (t: string | Date) => clockTime(t, d.policy.timezone);
   const allowed = WORK_LOCATIONS.filter((l) => d.policy.allowedLocations.includes(l.key));
@@ -109,7 +122,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
   const sub = !r
     ? !d.isWorkingDay && !d.onLeave
       ? "Today is a day off. If you're working anyway, check in and it's recorded as day-off work."
-      : `Working hours ${d.policy.workdayStart}–${d.policy.workdayEnd}. Choose where you're working, then check in.`
+      : `Working hours ${hm(d.policy.workdayStart)} – ${hm(d.policy.workdayEnd)}. Choose where you're working, then check in.`
     : prevShift
       ? `Your shift from ${time(r.checkInAt)} ended at ${time(r.checkOutAt!)}. Check in when your next shift starts.`
       : r.state === 'checked_out'
@@ -123,7 +136,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-xs text-muted">
-            Attendance · {new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}
+            Attendance · {fmtDate(d.date, { weekday: 'long', day: 'numeric', month: 'short' })}
             <InfoHint>Attendance records when your workday starts and ends. Your status (Available, In a meeting…) is separate and doesn&apos;t change it.</InfoHint>
           </p>
           <p className={cn('mt-1 font-semibold tracking-tight', compact ? 'text-base' : 'text-xl')} aria-live="polite">
@@ -145,7 +158,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
             <span>{time(r.checkInAt)}</span>
             <span className="flex items-center gap-3">
               <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-primary/80" /> Work</span>
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-amber-400" /> Break</span>
+              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-warning" /> Break</span>
               {hasAway && <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-surface-2 ring-1 ring-border-strong ring-inset" /> Away</span>}
             </span>
             <span>{r.checkOutAt ? time(r.checkOutAt) : 'now'}</span>
@@ -157,7 +170,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
         <motion.div key={r?.state ?? 'none'} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="mt-4">
           {(!r || prevShift) && (
             <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Where are you working today?">
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, allowed.length)}, minmax(0, 1fr))` }} role="radiogroup" aria-label="Where are you working today?">
                 {allowed.map((l) => {
                   const Icon = LOCATION_ICON[l.key];
                   return (
@@ -202,7 +215,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
               <LogIn /> Check in again
             </Button>
           )}
-          {r?.state === 'checked_out' && !canCheckInAgain && !prevShift && !compact && <p className="text-[13px] text-muted">See your history below. Talk to HR if something needs correcting.</p>}
+          {r?.state === 'checked_out' && !canCheckInAgain && !prevShift && !compact && <p className="text-[13px] text-muted">Something not right? Use “Request a correction” in your history below.</p>}
           {compact && (
             <Link href="/app/attendance" className="mt-3 inline-block text-xs text-muted hover:text-foreground">
               View attendance history
@@ -218,7 +231,7 @@ export function AttendancePanel({ compact }: { compact?: boolean }) {
         description={`You've worked ${fmtDuration(worked)} today. ${d.policy.multipleSessions ? 'You can check in again later today.' : "You can't check in again until tomorrow."}`}
         confirmLabel="Check out"
         loading={act.isPending}
-        onConfirm={() => act.mutate({ path: 'check-out', body: {}, ok: 'Checked out. Have a good evening.' })}
+        onConfirm={() => act.mutate({ path: 'check-out', body: {}, ok: 'Checked out. See you next time.' })}
       />
     </div>
   );

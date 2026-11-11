@@ -1,14 +1,14 @@
 'use client';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { HOLIDAY_TYPES } from '@fg/shared';
 import { Button } from '@/components/ui/button';
-import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
+import { Badge, EmptyState, Skeleton, Tooltip } from '@/components/ui/misc';
 import { errorMessage } from '@/lib/api';
 import { useHolidays } from '@/lib/hooks';
 import { useOrgToday } from '@/lib/session';
 import type { Holiday } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
-import { cn, parseDateOnly } from '@/lib/utils';
+import { cn, parseDateOnly, relDays } from '@/lib/utils';
 
 export const holidayLabel = (t: string) => HOLIDAY_TYPES.find((x) => x.key === t)?.label ?? t;
 export const holidayTone = { MANDATORY: 'success', COMPANY: 'brand', OPTIONAL: 'muted', SPECIAL_WORKING_DAY: 'warning' } as const;
@@ -25,7 +25,8 @@ export function HolidayList({ actions }: { actions?: (h: Holiday) => React.React
     const m = Number(h.date.slice(5, 7));
     byMonth.set(m, [...(byMonth.get(m) ?? []), h]);
   }
-  const next = q.data?.items.find((h) => h.date >= today && h.type !== 'SPECIAL_WORKING_DAY');
+  // "Next holiday" only makes sense while looking at the current year.
+  const next = year === Number(today.slice(0, 4)) ? q.data?.items.find((h) => h.date >= today && h.type !== 'SPECIAL_WORKING_DAY') : undefined;
 
   return (
     <div>
@@ -39,9 +40,11 @@ export function HolidayList({ actions }: { actions?: (h: Holiday) => React.React
         </Button>
         <span className="ml-2 flex flex-wrap gap-1.5">
           {HOLIDAY_TYPES.map((t) => (
-            <Badge key={t.key} tone={holidayTone[t.key]} title={t.description}>
-              {t.label}
-            </Badge>
+            <Tooltip key={t.key} content={t.description} side="bottom">
+              <Badge tone={holidayTone[t.key]} tabIndex={0} className="cursor-help">
+                {t.label}
+              </Badge>
+            </Tooltip>
           ))}
         </span>
       </div>
@@ -51,17 +54,16 @@ export function HolidayList({ actions }: { actions?: (h: Holiday) => React.React
           <p className="mt-1 text-xl font-semibold tracking-tight">{next.name}</p>
           <p className="text-sm text-muted">
             {parseDateOnly(next.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
-            {Math.round((parseDateOnly(next.date).getTime() - parseDateOnly(today).getTime()) / 86400_000) || 'today'}
-            {next.date !== today ? ' days to go' : ''}
+            {relDays(Math.round((parseDateOnly(next.date).getTime() - parseDateOnly(today).getTime()) / 86400_000))}
           </p>
         </div>
       )}
       {q.isPending ? (
         <Skeleton className="h-64" />
       ) : q.isError ? (
-        <EmptyState title="Holidays couldn't be loaded" description={errorMessage(q.error)} action={<Button variant="outline" onClick={() => void q.refetch()}>Try again</Button>} />
+        <EmptyState icon={<CalendarDays />} title="Holidays couldn't be loaded" description={errorMessage(q.error)} action={<Button variant="outline" onClick={() => void q.refetch()}>Try again</Button>} />
       ) : !q.data?.items.length ? (
-        <EmptyState title={`No holidays added for ${year}`} description="HR adds the company holiday calendar here." />
+        <EmptyState icon={<CalendarDays />} title={`No holidays added for ${year} yet`} description="They appear here once HR publishes the holiday calendar for that year." />
       ) : (
         <div className="space-y-8">
           {[...byMonth.entries()].map(([m, items]) => (

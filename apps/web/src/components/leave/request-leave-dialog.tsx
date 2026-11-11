@@ -83,7 +83,7 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
       open={open}
       onOpenChange={onOpenChange}
       title={record ? 'Record leave' : 'Request time off'}
-      description={record ? "For someone who was away and didn't apply. It's approved straight away and they're notified." : "Weekends and company holidays aren't counted."}
+      description={record ? "For someone who was away and didn't apply. It's approved straight away and they're notified." : "Days off and company holidays usually aren't counted. The exact number shows below before you send."}
     >
       <div className="space-y-4">
         {record && (
@@ -135,7 +135,7 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
         <Field label="Reason (optional)" htmlFor="lv-reason" hint={record ? 'They, their manager and HR can see this.' : 'Only you, your manager and HR can see this.'}>
           <Textarea id="lv-reason" rows={2} maxLength={500} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
         </Field>
-        <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-[13px] ${over ? 'bg-rose-500/8 text-danger' : 'bg-surface-2/70'}`} aria-live="polite">
+        <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-[13px] ${over ? 'bg-danger/8 text-danger-ink' : 'bg-surface-2/70'}`} aria-live="polite">
           {over ? <CircleAlert className="mt-0.5 size-4 shrink-0" /> : <Info className="mt-0.5 size-4 shrink-0 text-muted" />}
           <span>
             {!valid.success

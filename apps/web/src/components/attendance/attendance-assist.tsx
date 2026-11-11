@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { LOCATION_LABEL } from '@/components/attendance/attendance-panel';
 import { api } from '@/lib/api';
 import { useAttendanceToday } from '@/lib/hooks';
-import { useModule, useSession } from '@/lib/session';
+import { useClock, useModule, useSession } from '@/lib/session';
 import type { AttendanceToday } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
 
@@ -27,6 +27,7 @@ export function AttendanceAssist() {
   const policy = me.organization.settings.attendance;
   const today = useAttendanceToday(enabled);
   const now = useNow();
+  const { hm } = useClock();
   const day = now?.toDateString();
   const [dismissed, setDismissed] = useState<string | null>(null);
 
@@ -101,7 +102,7 @@ export function AttendanceAssist() {
         <Clock className="size-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="font-medium">You haven&apos;t checked in today.</span> <span className="text-muted">Working hours {d.policy.workdayStart}–{d.policy.workdayEnd}.</span>
+        <span className="font-medium">You haven&apos;t checked in today.</span> <span className="text-muted">Working hours {hm(d.policy.workdayStart)} – {hm(d.policy.workdayEnd)}.</span>
       </span>
       <Link href="/app/attendance" className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground transition hover:opacity-90">
         Check in
