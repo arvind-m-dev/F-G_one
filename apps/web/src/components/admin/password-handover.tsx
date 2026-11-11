@@ -86,16 +86,20 @@ export function HandoverMessage({
   const opening = reset ? `Hi ${firstName}, your ${organization} FG One password has been reset.` : `Hi ${firstName}, welcome to ${organization} on FG One!`;
   const message = `${opening}\n\nSign in: ${signIn}\nEmail: ${email}\n${label}: ${password}\n\n${after}`;
   return (
-    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4">
-      <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Send these sign-in details to {firstName}</p>
+    <div className="rounded-xl border border-success/30 bg-success/8 p-4">
+      <p className="text-sm font-semibold">Send these sign-in details to {firstName}</p>
       <p className="mt-1 text-xs text-muted">Share it privately (for example a direct message). The password is not shown again after you close this; you can always set a new one.</p>
       <Textarea readOnly value={message} rows={7} className="mt-3 font-mono text-xs" onFocus={(e) => e.target.select()} aria-label="Sign-in message" />
       <div className="mt-2 flex justify-end">
         <Button
           variant="outline"
           onClick={async () => {
-            await navigator.clipboard.writeText(message);
-            toast.success('Message copied');
+            try {
+              await navigator.clipboard.writeText(message);
+              toast.success('Message copied');
+            } catch {
+              toast.error('Copy did not work. Select the message above and copy it yourself.');
+            }
           }}
         >
           <Copy /> Copy message

@@ -37,6 +37,23 @@ export function fmtDayLabel(iso: string | Date) {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
+/** "12 Nov 2026": one date format for the whole app. A YYYY-MM-DD string is read as a calendar date. */
+export function fmtDate(d: string | Date, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }) {
+  const date = typeof d === 'string' ? (/^\d{4}-\d{2}-\d{2}$/.test(d) ? parseDateOnly(d) : new Date(d)) : d;
+  return date.toLocaleDateString(undefined, opts);
+}
+
+/** "12 Nov 2026, 1:30 PM" (or 13:30 when `h24`). */
+export function fmtDateTime(d: string | Date, h24?: boolean) {
+  return `${fmtDate(d)}, ${fmtTime(d, h24)}`;
+}
+
+/** "1 member" / "3 members". */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** "Tomorrow", "In 3 days", "Today": whole days from now to a date. */
+export const relDays = (d: number) => (d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `In ${d} days`);
+
 /** Parses a YYYY-MM-DD date as a local calendar date (no timezone shift). */
 export function parseDateOnly(s: string) {
   const [y, m, d] = s.split('-').map(Number);

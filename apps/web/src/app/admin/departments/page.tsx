@@ -5,79 +5,93 @@ import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { PERMISSIONS } from '@fg/shared';
+import { departmentSchema, PERMISSIONS, type DepartmentInput } from '@fg/shared';
+import { fieldErrors } from '@/components/admin/form-errors';
 import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
-import { Button } from '@/components/ui/button';
+import { PersonPicker } from '@/components/admin/person-picker';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ColorSwatches, LABEL_COLORS } from '@/components/ui/color-swatches';
 import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
-import { Field, Input, Select, Textarea } from '@/components/ui/input';
+import { Field, Input, Textarea } from '@/components/ui/input';
 import { EmptyState, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
-import { useDepartments, useEmployeeList } from '@/lib/hooks';
+import { useDepartments } from '@/lib/hooks';
 import { useCan } from '@/lib/session';
 import type { Department } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
-const COLORS = ['#6366f1', '#0ea5e9', '#14b8a6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
+type DeptForm = { name: string; description: string; headId: string; color: string };
+const EMPTY_FORM: DeptForm = { name: '', description: '', headId: '', color: LABEL_COLORS[0]!.value };
 
 function DeptDialog({ dept, open, onOpenChange }: { dept: Department | null; open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient();
-  const people = useEmployeeList({ pageSize: 100 });
-  const [form, setForm] = useState({ name: '', description: '', headId: '', color: COLORS[0]! });
+  const [form, setForm] = useState<DeptForm>(EMPTY_FORM);
+  const [initial, setInitial] = useState<DeptForm>(EMPTY_FORM);
+  const [errors, setErrors] = useState<Partial<Record<keyof DeptForm, string>>>({});
+  const [failure, setFailure] = useState<string | null>(null);
   const [key, setKey] = useState<string | null>(null);
   const k = dept?.id ?? 'new';
   if (open && key !== k) {
+    const start: DeptForm = { name: dept?.name ?? '', description: dept?.description ?? '', headId: dept?.headId ?? '', color: dept?.color ?? EMPTY_FORM.color };
     setKey(k);
-    setForm({ name: dept?.name ?? '', description: dept?.description ?? '', headId: dept?.headId ?? '', color: dept?.color ?? COLORS[0]! });
+    setForm(start);
+    setInitial(start);
+    setErrors({});
+    setFailure(null);
   }
   if (!open && key) setKey(null);
   const save = useMutation({
-    mutationFn: () =>
-      api(dept ? `/departments/${dept.id}` : '/departments', { method: dept ? 'PATCH' : 'POST', body: { name: form.name, description: form.description || null, headId: form.headId || null, color: form.color } }),
+    mutationFn: (body: DepartmentInput) => api(dept ? `/departments/${dept.id}` : '/departments', { method: dept ? 'PATCH' : 'POST', body }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['departments'] });
       toast.success(dept ? 'Department updated' : 'Department created');
       onOpenChange(false);
     },
-    onError: (e) => toast.error(errorMessage(e)),
+    onError: (e) => setFailure(errorMessage(e)),
   });
+  const submit = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setFailure(null);
+    const parsed = departmentSchema.safeParse({ name: form.name, description: form.description || null, headId: form.headId || null, color: form.color });
+    if (!parsed.success) return setErrors(fieldErrors<keyof DeptForm>(parsed.error, { name: 'Enter a name of 2 to 60 characters', description: 'Keep the description under 240 characters' }));
+    setErrors({});
+    save.mutate(parsed.data);
+  };
+  const dirty = JSON.stringify(form) !== JSON.stringify(initial);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={dept ? `Edit ${dept.name}` : 'New department'}>
-      <div className="space-y-4">
-        <Field label="Name" htmlFor="d-name">
-          <Input id="d-name" value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+    <Dialog open={open} onOpenChange={onOpenChange} title={dept ? `Edit ${dept.name}` : 'New department'} guard={dirty}>
+      <form className="space-y-4" noValidate onSubmit={submit}>
+        <Field label="Name" htmlFor="d-name" error={errors.name}>
+          <Input id="d-name" value={form.name} maxLength={60} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus aria-invalid={!!errors.name} />
         </Field>
-        <Field label="Description" htmlFor="d-desc">
+        <Field label="Description (optional)" htmlFor="d-desc" error={errors.description}>
           <Textarea id="d-desc" rows={2} maxLength={240} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </Field>
-        <Field label="Department head" htmlFor="d-head">
-          <Select id="d-head" value={form.headId} onChange={(e) => setForm({ ...form, headId: e.target.value })}>
-            <option value="">— None —</option>
-            {people.data?.items.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+        <Field label="Department head (optional)" htmlFor="d-head" error={errors.headId}>
+          <PersonPicker
+            id="d-head"
+            value={form.headId || null}
+            selected={dept?.head ? { id: dept.head.id, name: `${dept.head.firstName} ${dept.head.lastName}`, avatarUrl: dept.head.avatarUrl, avatarColor: dept.head.avatarColor } : null}
+            onChange={(p) => setForm({ ...form, headId: p?.id ?? '' })}
+            emptyLabel="No head"
+          />
         </Field>
-        <div>
-          <p className="mb-1.5 text-sm font-medium">Colour</p>
-          <div className="flex gap-2">
-            {COLORS.map((c) => (
-              <button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={cn('size-7 rounded-full transition hover:scale-110', form.color === c && 'ring-2 ring-primary ring-offset-2 ring-offset-surface')} style={{ background: c }} aria-label={`Colour ${c}`} aria-pressed={form.color === c} />
-            ))}
-          </div>
-        </div>
+        <ColorSwatches value={form.color} onChange={(color) => setForm({ ...form, color })} />
+        {failure && (
+          <p role="alert" className="rounded-lg bg-danger/8 px-3 py-2 text-[13px] text-danger">
+            {failure}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button loading={save.isPending} disabled={form.name.trim().length < 2} onClick={() => save.mutate()}>
+          <Button type="submit" loading={save.isPending}>
             {dept ? 'Save' : 'Create'}
           </Button>
         </div>
-      </div>
+      </form>
     </Dialog>
   );
 }
@@ -99,6 +113,7 @@ export default function DepartmentsPage() {
     onError: (e) => toast.error(errorMessage(e)),
   });
   if (!can(PERMISSIONS.DEPARTMENTS_MANAGE)) return <Forbidden />;
+  const blocked = !!deleting?.announcementCount;
   return (
     <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
       <PageHeader
@@ -115,7 +130,7 @@ export default function DepartmentsPage() {
       ) : depts.isError ? (
         <LoadError what="departments" error={depts.error} onRetry={() => depts.refetch()} />
       ) : depts.data.length === 0 ? (
-        <EmptyState icon={<Building2 />} title="No departments yet" description="Create one to group people into teams." />
+        <EmptyState icon={<Building2 />} title="No departments yet" description="Create one to group people into teams." action={<Button onClick={() => { setEditing(null); setOpen(true); }}><Plus /> New department</Button>} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {depts.data?.map((d, i) => (
@@ -147,7 +162,7 @@ export default function DepartmentsPage() {
                   ) : (
                     <span className="text-muted">No head assigned</span>
                   )}
-                  <Link href={`/app/people?dept=${d.id}`} className="flex items-center gap-1 font-medium text-primary" aria-label={`${d.memberCount} ${d.memberCount === 1 ? 'person' : 'people'} in ${d.name}`}>
+                  <Link href={`/admin/employees?dept=${d.id}`} className="flex items-center gap-1 rounded font-medium text-primary hover:underline" aria-label={`${d.memberCount} ${d.memberCount === 1 ? 'person' : 'people'} in ${d.name}. Open the list`}>
                     <Users className="size-3.5" /> {d.memberCount}
                   </Link>
                 </div>
@@ -157,15 +172,28 @@ export default function DepartmentsPage() {
         </div>
       )}
       <DeptDialog dept={editing} open={open} onOpenChange={setOpen} />
+      {/* A department that announcements are addressed to cannot be deleted: say so instead of offering a button that fails. */}
+      <Dialog open={!!deleting && blocked} onOpenChange={(o) => !o && setDeleting(null)} title={`${deleting?.name} can't be deleted yet`} className="max-w-md">
+        <p className="text-sm text-muted">
+          {deleting?.announcementCount} announcement{deleting?.announcementCount === 1 ? ' is' : 's are'} addressed to this department. Delete {deleting?.announcementCount === 1 ? 'it' : 'them'} or send {deleting?.announcementCount === 1 ? 'it' : 'them'} to everyone first, then
+          come back here.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDeleting(null)}>
+            Got it
+          </Button>
+          {can(PERMISSIONS.ANNOUNCEMENTS_MANAGE) && (
+            <Link href="/admin/announcements" className={buttonVariants()}>
+              Open announcements
+            </Link>
+          )}
+        </div>
+      </Dialog>
       <ConfirmDialog
-        open={!!deleting}
+        open={!!deleting && !blocked}
         onOpenChange={(o) => !o && setDeleting(null)}
         title={`Delete ${deleting?.name}?`}
-        description={
-          deleting?.announcementCount
-            ? `${deleting.announcementCount} announcement${deleting.announcementCount === 1 ? ' is' : 's are'} addressed to this department. Delete them or send them to everyone first.`
-            : `${deleting?.memberCount ?? 0} ${deleting?.memberCount === 1 ? 'person' : 'people'} will be left without a department. This cannot be undone.`
-        }
+        description={`${deleting?.memberCount ?? 0} ${deleting?.memberCount === 1 ? 'person' : 'people'} will be left without a department. This cannot be undone.`}
         confirmLabel="Delete"
         danger
         loading={del.isPending}

@@ -12,7 +12,7 @@ export const useEmployeeList = (q: { q?: string; departmentId?: string; status?:
 /** Display name for a channel row (DMs use participant names). */
 export function channelLabel(c: Pick<ChannelSummary, 'type' | 'name' | 'participants'>) {
   if (c.type !== 'DIRECT') return c.name ?? 'channel';
-  if (!c.participants.length) return 'Just you';
+  if (!c.participants.length) return 'Notes to self';
   return c.participants.map((p) => (c.participants.length > 1 ? p.firstName : p.name)).join(', ');
 }
 

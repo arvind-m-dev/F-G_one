@@ -14,12 +14,13 @@ import {
   type UpdateEmployeeInput,
 } from '@fg/shared';
 import { HandoverMessage, PasswordInput } from '@/components/admin/password-handover';
+import { PersonPicker, type PickedPerson } from '@/components/admin/person-picker';
 import { isCancelled, useReauth } from '@/components/security/reauth';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { api, errorMessage } from '@/lib/api';
-import { useDepartments, useEmployeeList, useRoles } from '@/lib/hooks';
+import { useDepartments, useRoles } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import type { Employee } from '@/lib/types';
 
@@ -43,10 +44,21 @@ function useSelfServicePassword() {
 
 type PeopleFields = Pick<CreateEmployeeInput, 'roleId' | 'departmentId' | 'managerId'>;
 
-function PeopleSelects({ register, excludeId, currentManager }: { register: UseFormRegister<PeopleFields>; excludeId?: string; currentManager?: Employee['manager'] }) {
+function PeopleSelects({
+  register,
+  excludeId,
+  currentManager,
+  managerId,
+  onManagerChange,
+}: {
+  register: UseFormRegister<PeopleFields>;
+  excludeId?: string;
+  currentManager?: Employee['manager'];
+  managerId: string | null;
+  onManagerChange: (p: PickedPerson | null) => void;
+}) {
   const depts = useDepartments();
   const roles = useRoles();
-  const managers = useEmployeeList({ pageSize: 100 });
   return (
     <>
       <Field label="Role" htmlFor="roleId">
@@ -54,7 +66,7 @@ function PeopleSelects({ register, excludeId, currentManager }: { register: UseF
           {roles.data?.roles.map((r) => (
             <option key={r.id} value={r.id} disabled={!r.assignable}>
               {r.name}
-              {!r.assignable ? ' (not assignable)' : ''}
+              {!r.assignable ? ' (you can’t give this)' : ''}
             </option>
           ))}
         </Select>
@@ -70,22 +82,15 @@ function PeopleSelects({ register, excludeId, currentManager }: { register: UseF
         </Select>
       </Field>
       <Field label="Reports to" htmlFor="managerId">
-        <Select id="managerId" {...register('managerId', { setValueAs: (v) => v || null })}>
-          <option value="">No manager</option>
-          {/* Keep a current manager who is no longer pickable (for example suspended), so saving doesn't drop them. */}
-          {currentManager && managers.data && !managers.data.items.some((m) => m.id === currentManager.id) && (
-            <option value={currentManager.id}>
-              {currentManager.firstName} {currentManager.lastName} (not active)
-            </option>
-          )}
-          {managers.data?.items
-            .filter((m) => m.id !== excludeId)
-            .map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} {m.designation ? `· ${m.designation}` : ''}
-              </option>
-            ))}
-        </Select>
+        {/* The current manager stays selected even if they can no longer be picked (for example suspended), so saving doesn't drop them. */}
+        <PersonPicker
+          id="managerId"
+          value={managerId}
+          selected={currentManager ? { id: currentManager.id, name: `${currentManager.firstName} ${currentManager.lastName}`, avatarUrl: currentManager.avatarUrl, avatarColor: currentManager.avatarColor } : null}
+          onChange={onManagerChange}
+          emptyLabel="No manager"
+          excludeId={excludeId}
+        />
       </Field>
     </>
   );
@@ -112,7 +117,7 @@ export function EditEmployeeDialog({ employee, onOpenChange }: { employee: Emplo
   }, [employee, form]);
   const err = form.formState.errors;
   return (
-    <Dialog open={!!employee} onOpenChange={onOpenChange} side="right" title={employee ? `Edit ${employee.name}` : ''} description={employee?.email}>
+    <Dialog open={!!employee} onOpenChange={onOpenChange} side="right" title={employee ? `Edit ${employee.name}` : ''} description={employee?.email} guard={form.formState.isDirty}>
       {employee && (
         <form
           noValidate
@@ -144,7 +149,13 @@ export function EditEmployeeDialog({ employee, onOpenChange }: { employee: Emplo
             <Field label="Employee code" htmlFor="e-code">
               <Input id="e-code" {...form.register('employeeCode')} />
             </Field>
-            <PeopleSelects register={form.register as unknown as UseFormRegister<PeopleFields>} excludeId={employee.id} currentManager={employee.manager} />
+            <PeopleSelects
+              register={form.register as unknown as UseFormRegister<PeopleFields>}
+              excludeId={employee.id}
+              currentManager={employee.manager}
+              managerId={form.watch('managerId') ?? null}
+              onManagerChange={(p) => form.setValue('managerId', p?.id ?? null, { shouldDirty: true })}
+            />
             <Field label="Work phone" htmlFor="e-phone">
               <Input id="e-phone" {...form.register('phone')} />
             </Field>
@@ -189,6 +200,7 @@ export function SetPasswordDialog({ employee, onOpenChange }: { employee: Employ
       <Dialog
         open={!!employee}
         onOpenChange={close}
+        guard={!!done || form.formState.isDirty}
         title={employee ? `Set a new password for ${employee.name}` : ''}
         description={
           selfService
@@ -220,7 +232,7 @@ export function SetPasswordDialog({ employee, onOpenChange }: { employee: Employ
               })}
             >
               <Field label="New password" htmlFor="set-password" error={form.formState.errors.password?.message} hint="10+ characters with upper, lower case and a number">
-                <PasswordInput id="set-password" autoFocus {...form.register('password')} onGenerate={(pw) => form.setValue('password', pw, { shouldValidate: true })} />
+                <PasswordInput id="set-password" autoFocus {...form.register('password')} onGenerate={(pw) => form.setValue('password', pw, { shouldValidate: true, shouldDirty: true })} />
               </Field>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => close(false)}>

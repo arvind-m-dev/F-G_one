@@ -24,7 +24,11 @@ export class OrganizationController {
     private readonly audit: AuditService,
   ) {}
 
-  /** Unauthenticated: branding for the login screen (single-company mode). Exposes no employee data. */
+  /**
+   * Unauthenticated: branding for the login screen (single-company mode). Exposes no employee data.
+   * `selfServicePassword` is the company-wide password policy, so the "Forgot your password?" page
+   * can offer an email reset only where it works. It says nothing about any account.
+   */
   @Public()
   @Get('public/branding')
   async branding() {
@@ -38,6 +42,7 @@ export class OrganizationController {
       secondaryColor: org.secondaryColor,
       tagline: s.branding.tagline,
       defaultTheme: s.branding.defaultTheme,
+      selfServicePassword: s.auth.selfServicePassword,
     };
   }
 

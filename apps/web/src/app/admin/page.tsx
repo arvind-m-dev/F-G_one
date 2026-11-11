@@ -1,22 +1,22 @@
 'use client';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Activity, Ban, Building2, CalendarDays, Copy, Crown, MailPlus, Megaphone, Palette, ScrollText, ShieldAlert, ShieldCheck, UserPlus } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Activity, Ban, CalendarDays, Crown, KeyRound, MailPlus, Megaphone, Palette, ScrollText, ShieldAlert, ShieldCheck, UserPlus, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
-import { toast } from 'sonner';
 import { PERMISSIONS } from '@fg/shared';
 import { AuditList, type AuditEntry } from '@/components/admin/audit-list';
 import { TodayAttendance } from '@/components/admin/today-attendance';
 import { Forbidden, LoadError } from '@/components/admin/page-header';
+import { PageLoading } from '@/components/page-loading';
 import { PageHeader } from '@/components/shell/page';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { SectionTitle } from '@/components/ui/card';
-import { Dialog } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
+import { firstAdminPage } from '@/lib/admin-nav';
 import { api, errorMessage } from '@/lib/api';
 import { useEmployeeList } from '@/lib/hooks';
 import { useCan, useSession } from '@/lib/session';
@@ -70,7 +70,7 @@ function PendingInvites() {
                   <span className="block truncate text-xs text-muted">{e.email} · added {timeAgo(e.createdAt)}</span>
                 </span>
               </Link>
-              <Link href="/admin/employees?status=INVITED" className="text-xs font-medium text-primary hover:underline">
+              <Link href={`/admin/employees/${e.id}`} className="text-xs font-medium text-primary hover:underline" aria-label={`Set a password for ${e.name}`}>
                 Set password
               </Link>
             </li>
@@ -103,7 +103,7 @@ function AccessAndSecurity({ a }: { a: AccessSummary }) {
   const states: { label: string; value: number; dot: string; href?: string }[] = [
     { label: 'Active', value: a.accounts.active, dot: 'bg-success', href: '/admin/employees?status=ACTIVE' },
     { label: 'Waiting for a password', value: a.accounts.waitingForPassword, dot: 'bg-warning', href: '/admin/employees?status=INVITED' },
-    { label: 'Suspended', value: a.accounts.suspended, dot: 'bg-danger' },
+    { label: 'Suspended', value: a.accounts.suspended, dot: 'bg-danger', href: '/admin/employees?status=SUSPENDED' },
     { label: 'Deactivated', value: a.accounts.deactivated, dot: 'bg-subtle', href: '/admin/employees?status=DEACTIVATED' },
     ...(a.accounts.archived ? [{ label: 'Archived', value: a.accounts.archived, dot: 'bg-border-strong' }] : []),
   ];
@@ -196,12 +196,39 @@ function AccessAndSecurity({ a }: { a: AccessSummary }) {
   );
 }
 
+/** Loading and error states for the side sections fed by the shared dashboard query. */
+function DashState({ q, what }: { q: { isPending: boolean; isError: boolean; error: unknown; refetch: () => unknown }; what: string }) {
+  if (q.isPending) return <Skeleton className="h-14" />;
+  if (!q.isError) return null;
+  return (
+    <p role="alert" className="text-[13px] text-muted">
+      We couldn&apos;t load {what}. {errorMessage(q.error)}{' '}
+      <button type="button" className="font-medium text-primary hover:underline" onClick={() => void q.refetch()}>
+        Try again
+      </button>
+    </p>
+  );
+}
+
 export default function AdminOverview() {
   const me = useSession();
   const can = useCan();
-  const q = useQuery({ queryKey: ['admin-overview'], queryFn: () => api<Overview>('/admin/overview'), enabled: can(PERMISSIONS.ANALYTICS_VIEW), refetchInterval: 30_000 });
-  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<Dash>('/dashboard') });
-  if (!can(PERMISSIONS.ANALYTICS_VIEW)) return <Forbidden />;
+  const router = useRouter();
+  const allowed = can(PERMISSIONS.ANALYTICS_VIEW);
+  // People who manage one area but cannot see company analytics start on the first page they can open.
+  const fallback = allowed ? null : firstAdminPage(can, me.isSuperAdmin || me.superAdminNeedsMfa);
+  useEffect(() => {
+    if (fallback) router.replace(fallback);
+  }, [fallback, router]);
+  const q = useQuery({ queryKey: ['admin-overview'], queryFn: () => api<Overview>('/admin/overview'), enabled: allowed, refetchInterval: 30_000 });
+  const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<Dash>('/dashboard'), enabled: allowed });
+  if (fallback)
+    return (
+      <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
+        <PageLoading />
+      </div>
+    );
+  if (!allowed) return <Forbidden />;
   const d = q.data;
   const total = d ? d.departments.reduce((n, x) => n + x.members, 0) : 0;
   const unassigned = d ? d.employees.active - total : 0;
@@ -213,21 +240,17 @@ export default function AdminOverview() {
         className="px-0 pt-0 sm:px-0"
         eyebrow="Admin portal"
         title={`${me.organization.name} at a glance`}
-        description="Live from the FG One database."
+        description="People, access and activity across your company. Updates every 30 seconds."
         actions={
           <>
             {can(PERMISSIONS.SETTINGS_MANAGE) && (
-              <Link href="/admin/settings">
-                <Button variant="outline">
-                  <Palette /> Branding
-                </Button>
+              <Link href="/admin/settings?tab=branding" className={buttonVariants({ variant: 'outline' })}>
+                <Palette /> Branding
               </Link>
             )}
             {can(PERMISSIONS.EMPLOYEES_MANAGE) && (
-              <Link href="/admin/employees?add=1">
-                <Button>
-                  <UserPlus /> Add employee
-                </Button>
+              <Link href="/admin/employees?add=1" className={buttonVariants()}>
+                <UserPlus /> Add employee
               </Link>
             )}
           </>
@@ -255,10 +278,16 @@ export default function AdminOverview() {
               </div>
               <dl className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
                 {[
-                  ['Online now', d.employees.onlineNow, 'bg-emerald-500'],
-                  ['Waiting for password', d.employees.invited, 'bg-amber-400'],
-                  ['Deactivated', d.employees.deactivated, 'bg-slate-400'],
-                  ['Channels', d.channelCount, 'bg-sky-500'],
+                  ['Online now', d.employees.onlineNow, 'bg-success'],
+                  // Account states are listed once: in Access and security when you can see it, otherwise here.
+                  ...(d.access
+                    ? []
+                    : [
+                        ['Waiting for a password', d.employees.invited, 'bg-warning'],
+                        ['Deactivated', d.employees.deactivated, 'bg-subtle'],
+                      ]),
+                  ['Departments', d.departments.length, 'bg-primary'],
+                  ['Channels', d.channelCount, 'bg-info'],
                 ].map(([k, v, c]) => (
                   <div key={k as string}>
                     <dt className="flex items-center gap-1.5 text-xs text-muted">
@@ -304,7 +333,7 @@ export default function AdminOverview() {
             </div>
             <aside className="space-y-9 lg:border-l lg:pl-10">
               <section>
-                <SectionTitle icon={<Activity />} action={<span className="text-xs text-muted tabular-nums">{msgs14} msgs</span>}>
+                <SectionTitle icon={<Activity />} action={<span className="text-xs text-muted tabular-nums">{msgs14} {msgs14 === 1 ? 'message' : 'messages'}</span>}>
                   Conversation activity
                 </SectionTitle>
                 <div className="h-24">
@@ -325,8 +354,8 @@ export default function AdminOverview() {
                 <p className="mt-1 text-xs text-muted">Last 14 days, all channels and direct messages.</p>
               </section>
               <section>
-                <SectionTitle icon={<ShieldCheck />} action={<Link href="/admin/roles" className="text-xs text-muted hover:text-foreground">Permissions</Link>}>
-                  Roles
+                <SectionTitle icon={<KeyRound />} action={<Link href="/admin/roles" className="text-xs text-muted hover:text-foreground">Roles &amp; permissions</Link>}>
+                  People in each role
                 </SectionTitle>
                 <ul className="space-y-2 text-[13px]">
                   {d.roles.map((r) => (
@@ -342,6 +371,7 @@ export default function AdminOverview() {
               </section>
               <section>
                 <SectionTitle icon={<CalendarDays />}>Upcoming holidays</SectionTitle>
+                <DashState q={dash} what="holidays" />
                 {dash.data && !dash.data.holidays.length && <p className="text-[13px] text-muted">No holidays coming up.</p>}
                 <ul className="space-y-1.5 text-[13px]">
                   {(dash.data?.holidays ?? []).slice(0, 3).map((h) => (
@@ -354,6 +384,7 @@ export default function AdminOverview() {
               </section>
               <section>
                 <SectionTitle icon={<Megaphone />}>Live announcements</SectionTitle>
+                <DashState q={dash} what="announcements" />
                 {dash.data && !dash.data.announcements.length && <p className="text-[13px] text-muted">No announcements right now.</p>}
                 <ul className="space-y-2 text-[13px]">
                   {(dash.data?.announcements ?? []).slice(0, 3).map((a) => (
@@ -365,11 +396,11 @@ export default function AdminOverview() {
                 </ul>
               </section>
               <section>
-                <SectionTitle icon={<Building2 />}>Shortcuts</SectionTitle>
+                <SectionTitle icon={<Zap />}>Shortcuts</SectionTitle>
                 <div className="flex flex-wrap gap-1.5">
-                  {can(PERMISSIONS.DEPARTMENTS_MANAGE) && <Link href="/admin/departments"><Button size="sm" variant="secondary">Departments</Button></Link>}
-                  {can(PERMISSIONS.EMPLOYEES_MANAGE) && <Link href="/admin/roles"><Button size="sm" variant="secondary">Roles</Button></Link>}
-                  {can(PERMISSIONS.SETTINGS_MANAGE) && <Link href="/admin/settings"><Button size="sm" variant="secondary">Attendance policy</Button></Link>}
+                  {can(PERMISSIONS.DEPARTMENTS_MANAGE) && <Link href="/admin/departments" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Departments</Link>}
+                  {can(PERMISSIONS.EMPLOYEES_MANAGE) && <Link href="/admin/roles" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Roles &amp; permissions</Link>}
+                  {can(PERMISSIONS.SETTINGS_MANAGE) && <Link href="/admin/settings?tab=attendance" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Attendance policy</Link>}
                 </div>
               </section>
             </aside>

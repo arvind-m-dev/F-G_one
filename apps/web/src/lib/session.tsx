@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect } from 'react';
 import { hasPermission, parseOrganizationSettings, type ModuleKey, type Permission } from '@fg/shared';
 import { useTheme } from 'next-themes';
+import { toast } from 'sonner';
 import { api } from './api';
 import type { Me } from './types';
 import { dateInZone } from './utils';
@@ -58,14 +59,26 @@ export function useModule() {
   return (m: ModuleKey) => me.organization.settings.modules[m] !== false;
 }
 
+/**
+ * Saves personal preferences. The change shows at once; if the server refuses it, the previous
+ * value comes back and the person is told. Resolves to `true` when saved (never rejects).
+ */
 export function useUpdatePreferences() {
   const qc = useQueryClient();
-  return async (patch: Partial<Me['preferences']>) => {
+  return async (patch: Partial<Me['preferences']>): Promise<boolean> => {
     // Stop any in-flight profile reload so it can't overwrite this change with older data.
     await qc.cancelQueries({ queryKey: ['me'] });
+    const before = qc.getQueryData<Me>(['me'])?.preferences;
     qc.setQueryData<Me>(['me'], (old) => (old ? { ...old, preferences: { ...old.preferences, ...patch } } : old));
-    const saved = await api<Me['preferences']>('/me/preferences', { method: 'PATCH', body: patch });
-    qc.setQueryData<Me>(['me'], (old) => (old ? { ...old, preferences: saved } : old));
+    try {
+      const saved = await api<Me['preferences']>('/me/preferences', { method: 'PATCH', body: patch });
+      qc.setQueryData<Me>(['me'], (old) => (old ? { ...old, preferences: saved } : old));
+      return true;
+    } catch {
+      if (before) qc.setQueryData<Me>(['me'], (old) => (old ? { ...old, preferences: before } : old));
+      toast.error("Couldn't save that setting", { description: 'Check your connection and try again.' });
+      return false;
+    }
   };
 }
 
@@ -77,6 +90,12 @@ export function useClock() {
   return {
     h24,
     time: (d: string | Date, tz?: string) => new Date(d).toLocaleTimeString(undefined, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !h24, timeZone: tz }),
+    /** A wall-clock "HH:mm" (working hours, a correction) in the person's 12h/24h format. */
+    hm: (hhmm: string | null | undefined) => {
+      const [h, m] = (hhmm ?? '').split(':').map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm ?? '';
+      return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: h24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !h24 });
+    },
   };
 }
 

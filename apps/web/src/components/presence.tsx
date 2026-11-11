@@ -43,16 +43,16 @@ export const PRESENCE_ICONS: Record<string, LucideIcon> = {
 };
 
 export const TONE_TEXT: Record<PresenceTone, string> = {
-  green: 'text-emerald-500',
-  red: 'text-rose-500',
-  amber: 'text-amber-500',
+  green: 'text-success',
+  red: 'text-danger',
+  amber: 'text-warning',
   gray: 'text-subtle',
 };
 export const TONE_BG: Record<PresenceTone, string> = {
-  green: 'bg-emerald-500',
-  red: 'bg-rose-500',
-  amber: 'bg-amber-400',
-  gray: 'bg-slate-400',
+  green: 'bg-success',
+  red: 'bg-danger',
+  amber: 'bg-warning',
+  gray: 'bg-subtle',
 };
 
 export function PresenceIcon({ presence, className, muted }: { presence: string; className?: string; muted?: boolean }) {
@@ -72,14 +72,14 @@ export const REACTION_ICONS: Record<string, LucideIcon> = {
   rocket: Rocket,
 };
 export const REACTION_COLORS: Record<string, string> = {
-  'thumbs-up': 'text-sky-500',
-  heart: 'text-rose-500',
-  laugh: 'text-amber-500',
-  party: 'text-violet-500',
-  check: 'text-emerald-500',
-  eyes: 'text-cyan-500',
-  flame: 'text-orange-500',
-  rocket: 'text-indigo-500',
+  'thumbs-up': 'text-info',
+  heart: 'text-danger',
+  laugh: 'text-warning',
+  party: 'text-brand-2',
+  check: 'text-success',
+  eyes: 'text-cyan',
+  flame: 'text-[color-mix(in_oklab,var(--warning)_55%,var(--danger))]',
+  rocket: 'text-primary',
 };
 export const reactionLabel = (key: string) => REACTIONS.find((r) => r.key === key)?.label ?? key;
 

@@ -7,8 +7,8 @@
 |---|---|---|
 | Workspace Home | ✅ | Greeting (updates with the time of day, also when you return to an open tab) with personal summary, day timeline (company working hours), quick actions, needs-your-attention, editorial announcements, team pulse, holidays, celebrations, company snapshot. Customize: reorder, hide, restore. |
 | Chat: channels, DMs, groups | ✅ | Public and private channels, 1:1 and group DMs, browse/join/leave, members and channel admins, rename/topic |
-| Chat: messages | ✅ | Realtime delivery, threads, icon reactions, edit/delete with permissions, copy text/link, typing, unread, infinite history, optimistic send |
-| Chat: rich composer, attachments, link previews, mentions autocomplete, pin/save, search filters | ⬜ | Phase 3 |
+| Chat: messages | ✅ | Realtime delivery, threads, icon reactions, edit/delete with permissions, copy text/link, typing, unread (read only when seen, "New messages" line, jump to latest), infinite history, optimistic send with retry, per-conversation drafts, @mention autocomplete |
+| Chat: rich composer, attachments, link previews, mute, pin/save, search filters | ⬜ | Phase 3 |
 | Presence & custom status | ✅ | 13 icon presets, custom text, expiry, live updates |
 | Directory & profiles | ✅ | List/grid, department filter, search, reporting line |
 | My profile | ✅ | Name, display name, pronouns, phone, timezone, avatar colour/photo URL, birthday privacy, password change |

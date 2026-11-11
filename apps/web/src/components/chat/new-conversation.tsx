@@ -10,6 +10,7 @@ import { createChannelSchema, type CreateChannelInput } from '@fg/shared';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Textarea } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/misc';
 import { StatusLine, UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
 import { useEmployeeList } from '@/lib/hooks';
@@ -24,14 +25,16 @@ export function PeoplePicker({ selected, onChange, exclude = [], max }: { select
   const ids = new Set(selected.map((s) => s.id));
   const toggle = (p: Employee) => {
     if (ids.has(p.id)) onChange(selected.filter((s) => s.id !== p.id));
-    else if (!max || selected.length < max) onChange([...selected, p]);
+    else if (!full) onChange([...selected, p]);
   };
+  const full = !!max && selected.length >= max;
+  const shown = (list.data?.items ?? []).filter((p) => !exclude.includes(p.id));
   return (
     <div>
       {selected.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {selected.map((p) => (
-            <span key={p.id} className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft py-0.5 pr-1 pl-0.5 text-xs font-medium text-primary">
+            <span key={p.id} className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft py-0.5 pr-1 pl-0.5 text-xs font-medium text-primary-ink">
               <UserAvatar person={p} size="xs" showPresence={false} />
               {p.firstName}
               <button type="button" onClick={() => toggle(p)} className="rounded-full p-0.5 hover:bg-primary/15" aria-label={`Remove ${p.name}`}>
@@ -46,11 +49,24 @@ export function PeoplePicker({ selected, onChange, exclude = [], max }: { select
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people by name, email or role" className="pl-9" aria-label="Search people" />
       </div>
       <ul className="scrollbar-thin mt-2 max-h-64 overflow-y-auto rounded-lg border" role="listbox" aria-multiselectable>
-        {(list.data?.items ?? [])
-          .filter((p) => !exclude.includes(p.id))
-          .map((p) => (
+        {list.isPending &&
+          Array.from({ length: 4 }).map((_, i) => (
+            <li key={i} className="flex items-center gap-3 px-3 py-2" aria-hidden>
+              <Skeleton className="size-8 rounded-full" />
+              <Skeleton className="h-3 w-40" />
+            </li>
+          ))}
+        {list.isError && !list.data && (
+          <li className="px-3 py-6 text-center text-sm">
+            <p className="text-danger" role="alert">People couldn&apos;t be loaded. {errorMessage(list.error)}</p>
+            <Button type="button" size="sm" variant="outline" className="mt-3" onClick={() => void list.refetch()}>
+              Try again
+            </Button>
+          </li>
+        )}
+        {shown.map((p) => (
             <li key={p.id}>
-              <button type="button" role="option" aria-selected={ids.has(p.id)} onClick={() => toggle(p)} className={cn('flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-2', ids.has(p.id) && 'bg-primary-soft/60')}>
+              <button type="button" role="option" aria-selected={ids.has(p.id)} aria-disabled={full && !ids.has(p.id)} onClick={() => toggle(p)} className={cn('flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-2', ids.has(p.id) && 'bg-primary-soft/60', full && !ids.has(p.id) && 'cursor-not-allowed opacity-50 hover:bg-transparent')}>
                 <UserAvatar person={p} size="sm" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{p.name}</span>
@@ -61,8 +77,13 @@ export function PeoplePicker({ selected, onChange, exclude = [], max }: { select
               </button>
             </li>
           ))}
-        {list.data && list.data.items.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">No one matches “{q}”.</li>}
+        {list.data && shown.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">{q ? `No one matches “${q}”.` : 'There is no one else to add.'}</li>}
       </ul>
+      {max && (
+        <p className={cn('mt-1.5 text-xs', full ? 'font-medium text-warning-ink' : 'text-muted')} aria-live="polite">
+          {full ? `That's the most a group can have (${max} people). Remove someone to add another.` : `${selected.length} of ${max} chosen`}
+        </p>
+      )}
     </div>
   );
 }

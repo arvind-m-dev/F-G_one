@@ -10,7 +10,7 @@ import { api, errorMessage } from '@/lib/api';
 import { useOrgToday } from '@/lib/session';
 import type { LeaveRequest } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
-import { cn } from '@/lib/utils';
+import { cn, plural } from '@/lib/utils';
 
 interface Calendar {
   month: string;
@@ -46,7 +46,7 @@ export function LeaveDetails({ leave, onClose }: { leave?: LeaveRequest; onClose
     </div>
   );
   return (
-    <Dialog open={!!leave} onOpenChange={(o) => !o && onClose()} title={leave ? `${leave.person.name} · ${leave.type.name}` : 'Leave'} description={leave ? rangeLabel(leave) : undefined}>
+    <Dialog open={!!leave} onOpenChange={(o) => !o && onClose()} title="Leave details" description={leave ? rangeLabel(leave) : undefined}>
       {leave && (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
@@ -64,7 +64,12 @@ export function LeaveDetails({ leave, onClose }: { leave?: LeaveRequest; onClose
           {b.isPending ? (
             <Skeleton className="h-36" />
           ) : b.isError ? (
-            <p className="text-sm text-danger">Couldn&apos;t load the breakdown.</p>
+            <p className="text-sm text-danger" role="alert">
+              The day-by-day breakdown couldn&apos;t be loaded.{' '}
+              <button type="button" onClick={() => void b.refetch()} className="font-medium text-primary hover:underline">
+                Try again
+              </button>
+            </p>
           ) : (
             <dl className="divide-y rounded-xl border text-[13px]">
               {row('Days in total', b.data.calendarDays)}
@@ -82,11 +87,43 @@ export function LeaveDetails({ leave, onClose }: { leave?: LeaveRequest; onClose
           )}
           {leave.approver && leave.status !== 'PENDING' && (
             <p className="text-xs text-muted">
-              {leave.status === 'APPROVED' ? 'Approved' : 'Decided'} by {leave.approver.firstName} {leave.approver.lastName}
+              {leave.status === 'APPROVED' ? 'Approved' : leave.status === 'REJECTED' ? 'Declined' : 'Decided'} by {leave.approver.firstName} {leave.approver.lastName}
               {leave.decisionNote ? ` · ${leave.decisionNote}` : ''}
             </p>
           )}
         </div>
+      )}
+    </Dialog>
+  );
+}
+
+/** Everyone away on one day: opened from "+N more" when a day has more leaves than the grid can show. */
+function DayAway({ day, leaves, onPick, onClose }: { day: string; leaves: LeaveRequest[]; onPick: (id: string) => void; onClose: () => void }) {
+  const away = day ? leaves.filter((l) => l.startDate <= day && l.endDate >= day) : [];
+  return (
+    <Dialog open={!!day} onOpenChange={(o) => !o && onClose()} title={day ? `Away on ${fmtDay(day)}` : 'Away'} description={day ? plural(away.length, 'person', 'people') : undefined} className="max-w-md">
+      {away.length === 0 ? (
+        <p className="text-sm text-muted">No one is away that day.</p>
+      ) : (
+        <ul className="divide-y rounded-xl border">
+          {away.map((l) => (
+            <li key={l.id}>
+              <button type="button" onClick={() => onPick(l.id)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-surface-2">
+                <UserAvatar person={l.person} size="sm" showPresence={false} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium">{l.person.name}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted">
+                    <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: l.type.color }} aria-hidden />
+                    <span className="truncate">
+                      {l.type.name} · {rangeLabel(l)}
+                    </span>
+                  </span>
+                </span>
+                {l.status === 'PENDING' && <LeaveStatusBadge status={l.status} />}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </Dialog>
   );
@@ -125,7 +162,7 @@ function layoutWeek(week: (string | null)[], leaves: LeaveRequest[]) {
 
 /** Month grid of who is away. Colleagues see dates only; reasons stay private. */
 export function LeaveCalendar() {
-  const [get, set] = useUrlState({ month: '', leave: '' });
+  const [get, set] = useUrlState({ month: '', leave: '', day: '' });
   const todayStr = useOrgToday().today();
   // An edited link with a month that doesn't exist shows this month instead of an error.
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(get('month')) ? get('month') : '';
@@ -158,7 +195,7 @@ export function LeaveCalendar() {
             This month
           </Button>
         )}
-        <span className="ml-auto text-xs text-muted">{cal.leaves.length} leave{cal.leaves.length === 1 ? '' : 's'} this month</span>
+        <span className="ml-auto text-xs text-muted">{cal.leaves.length ? `${plural(cal.leaves.length, 'leave')} this month` : 'No one is away this month'}</span>
       </div>
 
       {/* Desktop/tablet: month grid */}
@@ -189,7 +226,7 @@ export function LeaveCalendar() {
                     key={i}
                     className={cn(
                       'border-r last:border-r-0',
-                      !d ? 'bg-surface-2/30' : dayKind(d) === 'off' ? 'bg-[repeating-linear-gradient(135deg,var(--color-surface-2)_0_6px,transparent_6px_12px)]' : dayKind(d) === 'holiday' && 'bg-emerald-500/[0.07]',
+                      !d ? 'bg-surface-2/30' : dayKind(d) === 'off' ? 'bg-[repeating-linear-gradient(135deg,var(--color-surface-2)_0_6px,transparent_6px_12px)]' : dayKind(d) === 'holiday' && 'bg-success/[0.07]',
                     )}
                   />
                 ))}
@@ -200,11 +237,11 @@ export function LeaveCalendar() {
                   <div key={i} className="min-w-0 px-1.5 pt-1.5">
                     {d && (
                       <>
-                        <p className={cn('mb-1 text-xs tabular-nums', d === todayStr ? 'inline-grid size-5 place-items-center rounded-full bg-primary font-semibold text-white' : 'text-muted')}>{Number(d.slice(8))}</p>
+                        <p className={cn('mb-1 text-xs tabular-nums', d === todayStr ? 'inline-grid size-5 place-items-center rounded-full bg-primary font-semibold text-primary-foreground' : 'text-muted')}>{Number(d.slice(8))}</p>
                         {cal.holidays
                           .filter((h) => h.date === d)
                           .map((h) => (
-                            <p key={h.id} className={cn('mb-0.5 truncate rounded px-1 text-[10px] font-medium', h.type === 'SPECIAL_WORKING_DAY' ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300' : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300')} title={h.name}>
+                            <p key={h.id} className={cn('mb-0.5 truncate rounded px-1 text-[10px] font-medium', h.type === 'SPECIAL_WORKING_DAY' ? 'bg-info/12 text-info-ink' : 'bg-success/12 text-success-ink')} title={h.name}>
                               {h.name}
                             </p>
                           ))}
@@ -239,9 +276,16 @@ export function LeaveCalendar() {
                 })}
                 {hidden.map((n, i) =>
                   n ? (
-                    <span key={`more-${i}`} className="px-2 text-[10px] font-medium text-muted" style={{ gridColumn: i + 1, gridRow: MAX_LANES + 1 }}>
+                    <button
+                      key={`more-${i}`}
+                      type="button"
+                      onClick={() => set({ day: week[i] })}
+                      className="mx-1 rounded px-1 text-left text-[10px] font-medium text-primary hover:bg-primary-soft hover:underline"
+                      style={{ gridColumn: i + 1, gridRow: MAX_LANES + 1 }}
+                      aria-label={`${n} more away on ${week[i] ? fmtDay(week[i]!) : 'this day'}. Show everyone`}
+                    >
                       +{n} more
-                    </span>
+                    </button>
                   ) : null,
                 )}
               </div>
@@ -257,7 +301,7 @@ export function LeaveCalendar() {
             Day off
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-3 rounded-sm border bg-emerald-500/15" />
+            <span className="size-3 rounded-sm border bg-success/15" />
             Holiday
           </span>
           {[...new Map(cal.leaves.map((l) => [l.type.id, l.type])).values()].map((t) => (
@@ -281,7 +325,7 @@ export function LeaveCalendar() {
         {cal.holidays.map((h) => (
           <li key={h.id} className="flex items-center justify-between px-4 py-2.5 text-[13px]">
             <span className="font-medium">{h.name}</span>
-            <span className="text-muted">{new Date(`${h.date}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>
+            <span className="text-muted">{fmtDay(h.date)}</span>
           </li>
         ))}
         {cal.leaves.map((l) => (
@@ -291,17 +335,23 @@ export function LeaveCalendar() {
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-medium">{l.person.name}</span>
               <span className="text-xs text-muted">
-                {l.type.name} · {l.startDate === l.endDate ? l.startDate.slice(5) : `${l.startDate.slice(5)} → ${l.endDate.slice(5)}`}
-                {l.status === 'PENDING' && ' · pending'}
+                {l.type.name} · {rangeLabel(l)}
+                {l.status === 'PENDING' && ' · waiting for approval'}
               </span>
             </span>
-            <span className="text-xs text-muted tabular-nums">{l.days}d</span>
+            <span className="shrink-0 text-xs text-muted tabular-nums">{plural(l.days, 'day')}</span>
             </button>
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-xs text-subtle">Select a leave to see how its days add up. Dashed lines are requests still waiting for approval (visible to HR only).</p>
+      {cal.leaves.length > 0 && (
+        <p className="mt-2 text-xs text-subtle">
+          Select a leave to see how its days add up.
+          {cal.leaves.some((l) => l.status === 'PENDING') && <span className="hidden sm:inline"> Dashed lines are requests still waiting for approval; only HR and managers see those.</span>}
+        </p>
+      )}
       <LeaveDetails leave={cal.leaves.find((l) => l.id === get('leave'))} onClose={() => set({ leave: null })} />
+      <DayAway day={/^\d{4}-\d{2}-\d{2}$/.test(get('day')) ? get('day') : ''} leaves={cal.leaves} onPick={(id) => set({ day: null, leave: id })} onClose={() => set({ day: null })} />
     </div>
   );
 }

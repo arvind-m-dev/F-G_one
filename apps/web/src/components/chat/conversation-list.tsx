@@ -1,23 +1,24 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Compass, MessageSquarePlus, Plus, Search, Users } from 'lucide-react';
+import { ChevronDown, Compass, MessageSquarePlus, MessagesSquare, NotebookPen, PenLine, Plus, Search, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { PERMISSIONS } from '@fg/shared';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Badge, Skeleton, Tooltip } from '@/components/ui/misc';
+import { Badge, EmptyState, Skeleton, Tooltip } from '@/components/ui/misc';
 import { ChannelIcon } from '@/components/chat/channel-icon';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
+import { useDraft } from '@/lib/drafts';
 import { channelLabel, useChannels } from '@/lib/hooks';
 import { useCan } from '@/lib/session';
 import type { ChannelSummary } from '@/lib/types';
-import { cn, timeAgo } from '@/lib/utils';
+import { cn, plural, timeAgo } from '@/lib/utils';
 import { NewChannelDialog, NewMessageDialog } from './new-conversation';
 
 interface BrowseChannel {
@@ -52,6 +53,14 @@ export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; on
       </div>
       <ul className="divide-y rounded-xl border">
         {browse.isPending && <li className="p-4"><Skeleton className="h-10" /></li>}
+        {browse.isError && (
+          <li className="px-3 py-6 text-center text-sm">
+            <p className="text-danger" role="alert">Channels couldn&apos;t be loaded. {errorMessage(browse.error)}</p>
+            <Button size="sm" variant="outline" className="mt-3" onClick={() => void browse.refetch()}>
+              Try again
+            </Button>
+          </li>
+        )}
         {list.map((c) => (
           <li key={c.id} className="flex items-center gap-3 px-3 py-2.5">
             <ChannelIcon channel={{ id: c.id, type: 'PUBLIC' }} />
@@ -60,7 +69,7 @@ export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; on
                 {c.name} {c.isDefault && <Badge tone="muted">Everyone</Badge>}
               </p>
               <p className="truncate text-xs text-muted">
-                {c.memberCount} members{c.description ? ` · ${c.description}` : ''}
+                {plural(c.memberCount, 'member')}{c.description ? ` · ${c.description}` : ''}
               </p>
             </div>
             {c.isMember ? (
@@ -74,7 +83,7 @@ export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; on
             )}
           </li>
         ))}
-        {browse.data && list.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">No channels match.</li>}
+        {browse.data && list.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">{q ? `No channels match “${q}”.` : 'There are no public channels yet.'}</li>}
       </ul>
     </Dialog>
   );
@@ -84,6 +93,9 @@ function Row({ c }: { c: ChannelSummary }) {
   const pathname = usePathname();
   const active = pathname === `/app/chat/${c.id}`;
   const other = c.participants[0];
+  // What was being written here and not sent yet (hidden while the conversation is open: the box shows it).
+  const draft = useDraft(c.id);
+  const showDraft = !!draft && !active;
   return (
     <Link
       href={`/app/chat/${c.id}`}
@@ -100,7 +112,9 @@ function Row({ c }: { c: ChannelSummary }) {
         ) : other ? (
           <UserAvatar person={other} size="sm" />
         ) : (
-          <span className="size-8 rounded-full bg-surface-2" />
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-2 text-muted" aria-hidden>
+            <NotebookPen className="size-4" />
+          </span>
         )
       ) : (
         <ChannelIcon channel={c} />
@@ -111,22 +125,52 @@ function Row({ c }: { c: ChannelSummary }) {
           <span className="ml-auto shrink-0 text-[11px] text-subtle">{c.lastMessage ? timeAgo(c.lastMessage.createdAt) : ''}</span>
         </span>
         <span className="flex items-center gap-2">
-          <span className={cn('truncate text-xs', c.unread ? 'text-foreground/80' : 'text-muted')}>
-            {c.lastMessage ? `${c.type !== 'DIRECT' && c.lastMessage.authorName ? `${c.lastMessage.authorName}: ` : ''}${c.lastMessage.body}` : c.description || 'No messages yet'}
-          </span>
-          {c.unread > 0 && !active && <span className="ml-auto grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white tabular-nums">{c.unread}</span>}
+          {showDraft ? (
+            <span className="flex min-w-0 items-center gap-1 text-xs text-muted">
+              <PenLine className="size-3 shrink-0 text-primary" aria-hidden />
+              <span className="shrink-0 font-medium text-primary-ink">Draft:</span>
+              <span className="truncate">{draft}</span>
+            </span>
+          ) : (
+            <span className={cn('truncate text-xs', c.unread ? 'text-foreground/80' : 'text-muted')}>
+              {c.lastMessage ? `${c.type !== 'DIRECT' && c.lastMessage.authorName ? `${c.lastMessage.authorName}: ` : ''}${c.lastMessage.body}` : c.description || 'No messages yet'}
+            </span>
+          )}
+          {c.unread > 0 && !active && (
+            <span className="ml-auto grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums" aria-label={`${plural(c.unread, 'unread message')}`}>
+              {c.unread > 99 ? '99+' : c.unread}
+            </span>
+          )}
         </span>
       </span>
     </Link>
   );
 }
 
-function Section({ title, count, children, action }: { title: string; count: number; children: React.ReactNode; action?: React.ReactNode }) {
+function Section({ id, title, count, children, action }: { id: string; title: string; count: number; children: React.ReactNode; action?: React.ReactNode }) {
+  // Whether a section is folded away is remembered on this device.
+  const storageKey = `fg.chat.section.${id}`;
   const [open, setOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(storageKey) === 'closed') setOpen(false);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [storageKey]);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try {
+      window.localStorage.setItem(storageKey, next ? 'open' : 'closed');
+    } catch {
+      /* storage unavailable */
+    }
+  };
   return (
     <div>
       <div className="flex items-center justify-between px-2 pt-4 pb-1">
-        <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-1 text-[11px] font-medium text-subtle hover:text-foreground" aria-expanded={open}>
+        <button onClick={toggle} className="flex items-center gap-1 text-[11px] font-medium text-subtle hover:text-foreground" aria-expanded={open}>
           <ChevronDown className={cn('size-3 transition-transform', !open && '-rotate-90')} />
           {title} <span className="tabular-nums">{count}</span>
         </button>
@@ -189,16 +233,31 @@ export function ConversationList() {
               </div>
             </div>
           ))}
+        {channels.isError && !channels.data && (
+          <EmptyState
+            icon={<MessagesSquare />}
+            title="Conversations couldn't be loaded"
+            description={errorMessage(channels.error)}
+            action={
+              <Button variant="outline" loading={channels.isFetching} onClick={() => void channels.refetch()}>
+                Try again
+              </Button>
+            }
+          />
+        )}
         {channels.data && (
           <>
             <Section
+              id="channels"
               title="Channels"
               count={groups.length}
               action={
                 can(PERMISSIONS.CHANNELS_CREATE) && (
-                  <button onClick={() => setNewChannel(true)} className="rounded p-0.5 text-subtle hover:text-foreground" aria-label="Create channel">
-                    <Plus className="size-3.5" />
-                  </button>
+                  <Tooltip content="Create a channel" side="top">
+                    <button onClick={() => setNewChannel(true)} className="-my-1 grid size-7 place-items-center rounded-md text-subtle transition hover:bg-surface-2 hover:text-foreground" aria-label="Create channel">
+                      <Plus className="size-4" />
+                    </button>
+                  </Tooltip>
                 )
               }
             >
@@ -207,12 +266,15 @@ export function ConversationList() {
               ))}
             </Section>
             <Section
+              id="dms"
               title="Direct messages"
               count={dms.length}
               action={
-                <button onClick={() => setNewDm(true)} className="rounded p-0.5 text-subtle hover:text-foreground" aria-label="New direct message">
-                  <Plus className="size-3.5" />
-                </button>
+                <Tooltip content="New direct message" side="top">
+                  <button onClick={() => setNewDm(true)} className="-my-1 grid size-7 place-items-center rounded-md text-subtle transition hover:bg-surface-2 hover:text-foreground" aria-label="New direct message">
+                    <Plus className="size-4" />
+                  </button>
+                </Tooltip>
               }
             >
               {dms.map((c) => (

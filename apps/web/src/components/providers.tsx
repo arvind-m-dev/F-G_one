@@ -2,8 +2,9 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { ThemeProvider } from 'next-themes';
-import { useState } from 'react';
+import { MotionConfig } from 'motion/react';
+import { ThemeProvider, useTheme } from 'next-themes';
+import { useEffect, useState } from 'react';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/misc';
 import { ApiError } from '@/lib/api';
@@ -53,6 +54,20 @@ export function clearPersistedCache() {
   }
 }
 
+/** Toasts follow the light/dark theme and, on phones, sit at the top so they never cover the tab bar or the chat composer. */
+function AppToaster() {
+  const { resolvedTheme } = useTheme();
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const update = () => setPhone(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return <Toaster richColors closeButton theme={resolvedTheme === 'dark' ? 'dark' : 'light'} position={phone ? 'top-center' : 'bottom-right'} toastOptions={{ className: 'font-sans' }} />;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(makeClient);
   return (
@@ -68,10 +83,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
           dehydrateOptions: { shouldDehydrateQuery: (q) => q.state.status === 'success' && PERSISTED.has(String(q.queryKey[0])) },
         }}
       >
-        <TooltipProvider>
-          {children}
-          <Toaster richColors closeButton position="bottom-right" toastOptions={{ className: 'font-sans' }} />
-        </TooltipProvider>
+        {/* Honour the device's "reduce motion" setting for JS-driven animation too (CSS handles the rest). */}
+        <MotionConfig reducedMotion="user">
+          <TooltipProvider>
+            {children}
+            <AppToaster />
+          </TooltipProvider>
+        </MotionConfig>
       </PersistQueryClientProvider>
     </ThemeProvider>
   );

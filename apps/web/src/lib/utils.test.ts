@@ -1,4 +1,4 @@
-import { dateInZone, initials, minutesInZone, parseDateOnly, timeAgo, weekdayInZone } from './utils';
+import { dateInZone, fmtDate, initials, minutesInZone, parseDateOnly, plural, relDays, timeAgo, weekdayInZone } from './utils';
 import { api, ApiError } from './api';
 
 describe('utils', () => {
@@ -33,5 +33,25 @@ describe('api client', () => {
     global.fetch = vi.fn(async () => new Response(JSON.stringify({ message: 'Nope' }), { status: 403 })) as unknown as typeof fetch;
     await expect(api('/x')).rejects.toEqual(expect.objectContaining({ status: 403, message: 'Nope' }));
     await expect(api('/x')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('plural, relDays and fmtDate', () => {
+  it('agrees the noun with the number', () => {
+    expect(plural(1, 'member')).toBe('1 member');
+    expect(plural(3, 'member')).toBe('3 members');
+    expect(plural(1, 'person', 'people')).toBe('1 person');
+    expect(plural(0, 'person', 'people')).toBe('0 people');
+  });
+
+  it('names today and tomorrow instead of counting them', () => {
+    expect(relDays(0)).toBe('Today');
+    expect(relDays(1)).toBe('Tomorrow');
+    expect(relDays(4)).toBe('In 4 days');
+  });
+
+  it('reads a date-only string as that calendar day, whatever the time zone', () => {
+    expect(fmtDate('2026-11-12', { day: 'numeric' })).toBe('12');
+    expect(fmtDate('2026-01-01', { year: 'numeric' })).toBe('2026');
   });
 });
