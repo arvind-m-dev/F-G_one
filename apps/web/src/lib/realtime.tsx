@@ -92,6 +92,10 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
       void qc.invalidateQueries({ queryKey: ['announcements'] });
       void qc.invalidateQueries({ queryKey: ['dashboard'] });
     });
+    s.on(RT.WORK_CHANGED, () => {
+      void qc.invalidateQueries({ queryKey: ['work'] });
+      void qc.invalidateQueries({ queryKey: ['approvals-count'] });
+    });
     // After a reconnect (e.g. the server woke from sleep) refresh what may have changed meanwhile.
     s.io.on('reconnect', () => {
       void qc.invalidateQueries({ queryKey: ['channels'] });

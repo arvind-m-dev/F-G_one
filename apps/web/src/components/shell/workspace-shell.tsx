@@ -1,38 +1,7 @@
 'use client';
 import { useQueryClient } from '@tanstack/react-query';
 import { PERMISSIONS, presenceMeta, type Permission } from '@fg/shared';
-import {
-  ArrowLeftRight,
-  Bell,
-  CalendarDays,
-  Check,
-  ClipboardCheck,
-  Crown,
-  TreePalm,
-  Clock,
-  Megaphone,
-  Building2,
-  ChartNoAxesCombined,
-  ChevronDown,
-  House,
-  KeyRound,
-  LogOut,
-  Menu,
-  MessageSquare,
-  Monitor,
-  Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ScrollText,
-  Search,
-  Settings,
-  ShieldCheck,
-  SlidersHorizontal,
-  Sun,
-  UserRound,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { ArrowLeftRight, Bell, Building2, CalendarDays, ChartNoAxesCombined, Check, ChevronDown, ClipboardCheck, Clock, Crown, House, KeyRound, ListTodo, LogOut, Megaphone, Menu, MessageSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ScrollText, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, TreePalm, type LucideIcon, UserRound, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -129,6 +98,7 @@ function useNav(portal: Portal): NavGroup[] {
       items: [
         { href: '/app/home', label: 'Home', icon: House },
         ...(mod('chat') ? [{ href: '/app/chat', label: 'Chat', icon: MessageSquare, badge: unread }] : []),
+        ...(mod('tasks') ? [{ href: '/app/work', label: 'Work', icon: ListTodo }] : []),
         ...(mod('announcements') ? [{ href: '/app/announcements', label: 'Announcements', icon: Megaphone }] : []),
         { href: '/app/people', label: 'Directory', icon: Users },
       ],
