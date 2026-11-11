@@ -59,7 +59,7 @@ function PersonRow({ row, data, workingDays, onOpen }: { row: Workload['people']
   const { person, load, tasks } = row;
   return (
     <li>
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 text-left outline-none transition-colors hover:bg-surface-2/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:grid-cols-[220px_200px_minmax(0,1fr)_auto]">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 text-left outline-none transition-colors hover:bg-surface-2/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:grid-cols-[220px_260px_minmax(0,1fr)_auto]">
         <span className="flex min-w-0 items-center gap-2.5">
           <UserAvatar person={person} size="sm" />
           <span className="min-w-0">

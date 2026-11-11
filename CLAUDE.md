@@ -4,6 +4,7 @@ FG One is Futurist Global's internal workspace (chat, attendance, leave, announc
 
 ## Stack and layout
 - pnpm monorepo. `apps/web` is Next.js 15 / React 19 / Tailwind v4 / TanStack Query / Motion. `apps/api` is NestJS 11 / Prisma 6 / PostgreSQL / Socket.IO. `packages/shared` holds zod contracts, permissions, presence and settings used by both apps.
+- Work hub (projects, tasks, planner): API in `apps/api/src/work/` (`planner.ts` is pure and unit-tested), UI in `apps/web/src/components/work/` and `apps/web/src/app/app/work/`, data hooks in `apps/web/src/lib/work.ts`.
 - Web pages: `apps/web/src/app/app/*` (Employee portal `/app`) and `apps/web/src/app/admin/*` (Admin portal `/admin`). Shared shell: `components/shell/workspace-shell.tsx`.
 - API modules: `apps/api/src/<feature>/` (controller + service). Schema: `apps/api/prisma/schema.prisma`.
 
@@ -34,7 +35,7 @@ End-to-end tests need the stack running, the API started with `LOGIN_RATE_LIMIT_
 E2E_PASSWORD=<SEED_PASSWORD> pnpm --filter @fg/web test:e2e
 ```
 For the Super Admin browser test, seed with `SEED_E2E_TOTP=<base32 secret>` and pass the same value as `E2E_TOTP_SECRET` (otherwise that test is skipped).
-API tests use the `fgone_test` database. Apply new migrations to it too:
+API tests use the `fgone_test` database (local Postgres: `brew services start postgresql@16`). `apps/api/.env` may point at Neon: never run `prisma migrate` or the seed against it from a feature branch; pass a local `DATABASE_URL` instead. Apply new migrations to it too:
 ```bash
 DATABASE_URL=postgresql://fgone:<pw>@localhost:5432/fgone_test pnpm --filter @fg/api prisma:deploy
 ```
@@ -55,7 +56,7 @@ DATABASE_URL=postgresql://fgone:<pw>@localhost:5432/fgone_test pnpm --filter @fg
 - **D-7 file storage** for attachments: Cloudflare R2, Backblaze B2, AWS S3 or Neon. Render's disk is wiped on every deploy.
 
 ## Not built yet (PRD)
-Chat attachments, rich composer, link previews (SSRF-safe) and @mention autocomplete (needs D-7). My Work (tasks, kanban). Calendar. Ideas & Suggestions. Knowledge Base. Email notifications (Resend). Reports. A custom roles editor (Phase 4). A shift model (night shifts are flagged late).
+Chat attachments, rich composer and link previews (SSRF-safe) (need D-7). Work hub follow-ups: GitHub sync, Gmail, MCP connector for each person's Claude, message-to-task. Calendar. Ideas & Suggestions. Knowledge Base. Email notifications (Resend). Reports. A custom roles editor (Phase 4). A shift model (night shifts are flagged late).
 
 ## Before go-live
 Run `pnpm --filter @fg/api db:reset-org` against Neon to remove demo data. It's a dry run unless `CONFIRM_RESET` is set. See `docs/DEPLOY_RENDER_NEON.md` §4.

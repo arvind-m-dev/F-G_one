@@ -71,8 +71,9 @@ export function Timeline({ tasks, today, workingDays, onOpen }: { tasks: Task[];
               <div className={cn('sticky left-0 z-10 shrink-0 border-r bg-surface', LABEL)} />
               <div className="relative h-12" style={{ width: total * DAY }}>
                 {months.map((m) => (
-                  <span key={`${m.label}-${m.from}`} className="absolute top-1 truncate px-2 text-[11px] font-semibold text-muted" style={{ left: m.from * DAY, width: m.span * DAY }}>
-                    {m.span >= 3 ? m.label : ''}
+                  <span key={`${m.label}-${m.from}`} className="absolute top-1 h-4" style={{ left: m.from * DAY, width: m.span * DAY }}>
+                    {/* Sticks to the left edge while its month is on screen, so the month is always named. */}
+                    {m.span >= 3 && <span className="sticky inline-block px-2 text-[11px] font-semibold whitespace-nowrap text-muted" style={{ left: 'var(--tl-label)' }}>{m.label}</span>}
                   </span>
                 ))}
                 {days.map((d, i) => {

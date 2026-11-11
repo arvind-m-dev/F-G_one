@@ -372,8 +372,9 @@ function MobileTabs({ portal }: { portal: Portal }) {
   const pathname = usePathname();
   const groups = useNav(portal);
   const all = groups.flatMap((g) => g.items);
-  const pick = ['/app/home', '/app/chat', '/app/attendance', '/app/leave'];
-  const items = [...pick.map((h) => all.find((i) => i.href === h)).filter(Boolean) as NavItem[], { href: '/app/profile', label: 'Me', icon: UserRound }];
+  // The four most used places that are switched on, in this order; the rest is in the menu.
+  const pick = ['/app/home', '/app/chat', '/app/work', '/app/attendance', '/app/leave'];
+  const items = [...(pick.map((h) => all.find((i) => i.href === h)).filter(Boolean) as NavItem[]).slice(0, 4), { href: '/app/profile', label: 'Me', icon: UserRound }];
   if (portal === 'admin') return null;
   return (
     <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

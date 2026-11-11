@@ -74,7 +74,7 @@ export function ReliefDialog({ task, onClose }: { task: Pick<Task, 'id' | 'title
   ];
 
   return (
-    <Dialog open={!!task} onOpenChange={(o) => !o && onClose()} title="Ask for more time" description={task ? `${task.ref ? `${task.ref} · ` : ''}${task.title}` : undefined} className="max-w-xl">
+    <Dialog open={!!task} onOpenChange={(o) => !o && onClose()} title="Ask for more time" description={task ? `${task.ref ? `${task.ref} · ` : ''}${task.title}` : undefined} className="max-w-xl" guard={reason.trim().length > 0}>
       {relief.isPending ? (
         <div className="space-y-3">
           <Skeleton className="h-20" />

@@ -106,8 +106,8 @@ export function LoadMeter({ load, className, showLabel = true }: { load: Load; c
       </div>
       {showLabel && (
         <p className="mt-1 flex items-baseline justify-between gap-2 text-[11px]">
-          <span className={cn('font-medium', LEVEL_TEXT[load.level])}>{LOAD_LABEL[load.level]}</span>
-          <span className="tabular-nums text-muted">
+          <span className={cn('font-medium whitespace-nowrap', LEVEL_TEXT[load.level])}>{LOAD_LABEL[load.level]}</span>
+          <span className="truncate tabular-nums text-muted">
             {fmtEffort(load.demandDays)} of work · {load.availableDays} {load.availableDays === 1 ? 'day' : 'days'} free
           </span>
         </p>

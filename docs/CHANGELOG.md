@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased: Work hub (branch `feat/work-hub`)
+### Added
+- **Work** in the employee portal (`/app/work`): My work, Board, Timeline, Projects, Team load and Daily report, plus project pages. See `FEATURE_INVENTORY.md`.
+- **A planner that needs no AI key.** From task sizes, due dates, working days, holidays and approved leave it works out when each task will really be finished, who has more work than time, and who has room.
+- **Ask for more time.** The owner of a task asks for a later date or a handover; the project lead or manager decides on the Approvals page (new "Work requests" section, counted in the Approvals badge).
+- **Team load** proposes handovers and realistic dates and applies them with one click. **Daily report** can be copied as text.
+- API: `/work/*` (projects, tasks, comments, relief, requests, workload, report, summary); permission `work.manage` at Team or Company reach; realtime `work:changed`; notification type and preference "Tasks and projects"; ⌘K destinations.
+- Seed: two demo projects, 26 tasks and one waiting request (dated relative to today).
+### Changed
+- System settings → Modules shows "Work (projects and tasks)"; the Roles matrix shows "Plan and assign work".
+- API tests ignore a developer's local `MFA_BYPASS_LOCAL`, and the browser sign-in helper works when demo sign-in is switched on.
+### Tests
+- API 235 (planner unit tests and `work.e2e-spec.ts`: visibility, tenant isolation, who may assign, requests, workload, report). Web unit 47. Playwright `work.spec.ts` (5 flows).
+### Not built yet
+- GitHub sync (pull requests and issues become linked tasks), Gmail, and an MCP connector so each person's own Claude can read and plan work with their permissions.
+
 ## Unreleased: admin portal and sign-in UI audit (branch `fix/ui-audit-admin`)
 ### Removed (nothing shown that does not work)
 - **System settings → Modules lists only features that exist.** The switches for Daily updates, Documents, Campaigns, Events, Polls, Tasks and the AI assistant are gone. The Roles & permissions matrix, the per-person Exceptions list and the access preview hide permissions for those features too. One list drives all of it: `apps/web/src/lib/live-modules.ts`.

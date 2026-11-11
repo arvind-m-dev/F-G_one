@@ -2,7 +2,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { CalendarDays, ClipboardCheck, TreePalm, Clock, Hash, House, LogIn, Megaphone, Lock, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, UserCircle2, Users, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, Clock, Hash, House, ListTodo, Lock, LogIn, Megaphone, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, TreePalm, type LucideIcon, UserCircle2, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -98,6 +98,11 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const destinations: Destination[] = [
     { label: 'Home', icon: House, href: '/app/home', words: 'dashboard start' },
     { label: 'Chat', icon: MessagesSquare, href: '/app/chat', words: 'messages channels conversations', show: mod('chat') },
+    { label: 'My work', icon: ListTodo, href: '/app/work', words: 'tasks todo plan workload', show: mod('tasks') },
+    { label: 'New task', icon: ListTodo, href: '/app/work?new=1', words: 'add create task todo bug', show: mod('tasks') },
+    { label: 'Task board', icon: ListTodo, href: '/app/work?view=board', words: 'kanban board tasks status', show: mod('tasks') },
+    { label: 'Projects', icon: ListTodo, href: '/app/work?view=projects', words: 'projects roadmap timeline', show: mod('tasks') },
+    { label: 'Daily work report', icon: ListTodo, href: '/app/work?view=report', words: 'report done finished overdue', show: mod('tasks') },
     { label: 'Directory', icon: Users, href: '/app/people', words: 'people colleagues employees team' },
     { label: 'Check in or out', icon: LogIn, href: '/app/attendance', words: 'attendance break', show: mod('attendance') },
     { label: 'My attendance history', icon: Clock, href: '/app/attendance?range=30', words: 'hours worked correction', show: mod('attendance') },

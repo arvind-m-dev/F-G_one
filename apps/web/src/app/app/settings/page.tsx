@@ -160,6 +160,7 @@ export default function SettingsPage() {
             ['threads', 'Replies to your messages', 'When someone replies to you in a thread.'],
             ['announcements', 'Announcements', 'When a new announcement is published for you.'],
             ['requests', 'Leave and attendance requests', 'Approvals, decisions and corrections that involve you.'],
+            ['work', 'Tasks and projects', 'New tasks for you, date changes, comments and decisions on your requests.'],
           ] as const).map(([k, title, description]) => (
             <Row key={k} title={title} description={description}>
               <Switch

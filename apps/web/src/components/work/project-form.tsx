@@ -83,7 +83,7 @@ export function ProjectDialog({ open, onOpenChange, project, onSaved }: { open: 
   const taken = new Set([lead?.id, ...members.map((m) => m.id)]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={project ? 'Edit project' : 'New project'} description={project ? undefined : 'A project groups tasks, the people working on them and a target date.'} className="max-w-xl">
+    <Dialog open={open} onOpenChange={onOpenChange} title={project ? 'Edit project' : 'New project'} description={project ? undefined : 'A project groups tasks, the people working on them and a target date.'} className="max-w-xl" guard={!project && name.trim().length > 0}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_128px]">
           <Field label="Name" htmlFor="p-name" error={errors.name}>

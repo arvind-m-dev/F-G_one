@@ -98,7 +98,7 @@ export function NewTaskDialog({ open, onOpenChange, defaults, onCreated }: { ope
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="New task" description="Write down what needs doing. You can fill in the rest later." className="max-w-xl">
+    <Dialog open={open} onOpenChange={onOpenChange} title="New task" description="Write down what needs doing. You can fill in the rest later." className="max-w-xl" guard={title.trim().length > 0 || description.trim().length > 0}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         <Field label="What needs doing?" htmlFor="t-title" error={errors.title}>
           <Input id="t-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Fix the sign-in error on mobile" maxLength={200} autoFocus aria-invalid={!!errors.title} />
