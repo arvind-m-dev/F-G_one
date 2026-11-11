@@ -6,7 +6,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ANNOUNCEMENT_CATEGORIES, announcementSchema, PERMISSIONS, type AnnouncementInput } from '@fg/shared';
-import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
 import { categoryLabel, priorityLabel, priorityTone } from '@/components/announcements/announcement-reader';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
@@ -49,7 +49,7 @@ function Composer({ editing, open, onOpenChange }: { editing: Announcement | nul
   const err = form.formState.errors;
   const expires = form.watch('expiresAt');
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} side="right" title={editing ? 'Edit announcement' : 'New announcement'} description={editing ? 'Changes are visible immediately. Readers are not notified again.' : 'Everyone in the audience gets a notification.'} className="max-w-xl">
+    <Dialog open={open} onOpenChange={onOpenChange} side="right" title={editing ? 'Edit announcement' : 'New announcement'} description={editing ? 'Changes show straight away. People are not notified again.' : 'Everyone you choose below gets a notification.'} className="max-w-xl" guard={form.formState.isDirty}>
       <form
         noValidate
         className="space-y-4"
@@ -98,8 +98,8 @@ function Composer({ editing, open, onOpenChange }: { editing: Announcement | nul
               ))}
             </Select>
           </Field>
-          <Field label="Hide after (optional)" htmlFor="a-exp">
-            <Input id="a-exp" type="date" value={expires ? localYmd(expires) : ''} onChange={(e) => form.setValue('expiresAt', e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null)} />
+          <Field label="Hide after (optional)" htmlFor="a-exp" hint="It stays visible until the end of this day.">
+            <Input id="a-exp" type="date" min={localYmd(new Date().toISOString())} value={expires ? localYmd(expires) : ''} onChange={(e) => form.setValue('expiresAt', e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : null, { shouldDirty: true })} />
           </Field>
         </div>
         <div className="divide-y rounded-xl border">
@@ -108,14 +108,14 @@ function Composer({ editing, open, onOpenChange }: { editing: Announcement | nul
               <span className="block font-medium">Pin to the top</span>
               <span className="text-xs text-muted">Stays first on the Announcements page and Home.</span>
             </span>
-            <Switch checked={form.watch('pinned')} onCheckedChange={(v) => form.setValue('pinned', v)} />
+            <Switch checked={form.watch('pinned')} onCheckedChange={(v) => form.setValue('pinned', v, { shouldDirty: true })} />
           </label>
           <label className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
             <span>
               <span className="block font-medium">Ask people to confirm they read it</span>
               <span className="text-xs text-muted">You can see who has and hasn&apos;t confirmed.</span>
             </span>
-            <Switch checked={form.watch('requireAck')} onCheckedChange={(v) => form.setValue('requireAck', v)} />
+            <Switch checked={form.watch('requireAck')} onCheckedChange={(v) => form.setValue('requireAck', v, { shouldDirty: true })} />
           </label>
         </div>
         <div className="flex justify-end gap-2 pt-2">
@@ -136,9 +136,7 @@ function Readers({ a, onClose }: { a: Announcement | null; onClose: () => void }
   return (
     <Dialog open={!!a} onOpenChange={(o) => !o && onClose()} title="Read confirmations" description={a?.title}>
       {q.isError ? (
-        <p className="py-6 text-center text-sm text-muted" role="alert">
-          {errorMessage(q.error)}
-        </p>
+        <LoadError what="who has confirmed" error={q.error} onRetry={() => q.refetch()} />
       ) : !q.data ? (
         <Skeleton className="h-40" />
       ) : (
@@ -202,7 +200,7 @@ function AdminAnnouncements() {
         }
       />
       {list.isError ? (
-        <EmptyState icon={<Megaphone />} title="Announcements could not be loaded" description={errorMessage(list.error)} action={<Button variant="outline" onClick={() => void list.refetch()}>Try again</Button>} />
+        <LoadError what="the announcements" error={list.error} onRetry={() => list.refetch()} />
       ) : list.isPending ? (
         <Skeleton className="h-64" />
       ) : !list.data?.length ? (

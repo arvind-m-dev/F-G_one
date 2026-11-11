@@ -9,6 +9,10 @@ All live in `apps/web/src/components`. Primitives are shadcn-style wrappers over
 | `Input`, `Textarea`, `Select`, `Label`, `Field` | `Field` adds the label, hint and error with `role="alert"`. |
 | `Card`, `SectionTitle`, `CardHeader` | `SectionTitle` is the quiet in-page heading (icon + 13px title + optional action). |
 | `Dialog`, `ConfirmDialog` | Centred modal, or a right-side sheet with `side="right"`. Motion spring. |
+| `Dialog guard` | `guard` keeps a dialog open on an outside click or Escape while closing would lose something (unsaved input, a one-time password). The close button and the dialog's own buttons still close it. |
+| `Tabs`, `TabPanel` (`ui/tabs`) | Keyboard-accessible tabs. `variant="segmented"` (default) or `"side"` (list beside the content on desktop). Keep `value` in the URL. |
+| `FilterChips` (`ui/filter-chips`) | One-of-many filter as chips with optional counts; radio-group keyboard behaviour. Keep `value` in the URL. |
+| `ColorSwatches` (`ui/color-swatches`) | Named label colours for departments and leave types. |
 | `DropdownMenu*`, `Popover*` | Elevated surface, keyboard accessible. |
 | `Badge` | Tones `default`, `brand`, `success`, `warning`, `danger`, `muted`. |
 | `Switch`, `Tooltip`, `Kbd`, `Skeleton`, `EmptyState` | |
@@ -29,10 +33,10 @@ All live in `apps/web/src/components`. Primitives are shadcn-style wrappers over
 | `CommandPalette` | ⌘K: permission-aware search (people, channels, messages) and navigation. |
 | `dashboard/widgets` | Home widget registry: `welcome`, `quickActions`, `clock` (day timeline), `recentChats`, `announcements`, `team` (pulse), `holidays`, `celebrations`, `orgStats`. Each widget declares its column. |
 | `chat/ConversationList` | Middle pane: search, collapsible Channels and DMs sections, previews, time, unread. |
-| `chat/Conversation` | Header (mobile back button), message stream (infinite scroll, day separators), thread and details panels. |
-| `chat/MessageItem` | Hover toolbar: quick reactions, reaction picker, thread reply, copy text, copy link, edit, delete. |
-| `chat/Composer` | Auto-grow, mention trigger, Enter or ⌘Enter per user preference, typing events. |
-| `admin/*` | Admin page header, audit list. |
+| `admin/*` | Admin page header (`PageHeader`, `Forbidden`, `LoadError`), audit list, `PersonPicker` (search for one active employee), `useUnsavedGuard`, `timeZoneLabel`. |
+| `chat/Conversation` | Header (mobile back button), message stream (infinite scroll, day separators, "New messages" line, jump-to-latest pill, read only when seen), thread and details panels (Back and Esc close them). |
+| `chat/MessageItem` | Hover toolbar: quick reactions, reaction picker, thread reply, copy text, copy link, edit, delete (asks first). Changes are optimistic through `chat/cache`. A failed send shows "Not sent" with Try again / Delete. |
+| `chat/Composer` | Auto-grow, `@` mention autocomplete over the conversation's members, per-conversation drafts (`lib/drafts`), Enter or ⌘/Ctrl+Enter per user preference, Up arrow edits your last message, typing events (not from threads). |
 
 ## Adding a page
 1. Create `app/app/<route>/page.tsx` (employee) or `app/admin/<route>/page.tsx` (admin).

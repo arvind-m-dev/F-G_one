@@ -19,7 +19,7 @@ const ENTITIES: [string, string][] = [
   ['user', 'People and sign-ins'],
   ['session', 'Signed-in devices'],
   ['department', 'Departments'],
-  ['organization', 'Company settings'],
+  ['organization', 'System settings'],
   ['announcement', 'Announcements'],
   ['holiday', 'Holidays'],
   ['leave_request', 'Leave requests'],
@@ -54,12 +54,12 @@ function AuditPage() {
   const pages = list.data ? Math.max(1, Math.ceil(list.data.total / list.data.pageSize)) : 1;
   return (
     <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
-      <PageHeader title="Audit log" description="A record of sign-ins, account changes and administrative actions." />
+      <PageHeader title="Audit logs" description="A record of sign-ins, account changes and administrative actions." />
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-2 border-b p-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search actions, for example login or deactivated" className="pl-9" aria-label="Filter audit log" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search actions, for example login or deactivated" className="pl-9" aria-label="Filter audit logs" />
           </div>
           <Select value={entity} onChange={(e) => set({ entity: e.target.value, page: null })} className="sm:w-56" aria-label="What it is about">
             <option value="">Everything</option>
@@ -72,7 +72,7 @@ function AuditPage() {
           <Skeleton className="m-4 h-64" />
         ) : list.isError ? (
           <div className="p-4">
-            <LoadError what="the audit log" error={list.error} onRetry={() => list.refetch()} />
+            <LoadError what="the audit logs" error={list.error} onRetry={() => list.refetch()} />
           </div>
         ) : list.data.items.length ? (
           <AuditList items={list.data.items} />
@@ -80,12 +80,14 @@ function AuditPage() {
           <EmptyState icon={<ScrollText />} title="No matching events" description={debounced || entity ? 'Try another search or clear the filter.' : 'Sign-ins and admin actions will appear here.'} />
         )}
         <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted">
-          <span>{list.data?.total ?? 0} events</span>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <span>{page} / {pages}</span>
-            <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-          </div>
+          <span aria-live="polite">{list.data ? `${list.data.total} ${list.data.total === 1 ? 'event' : 'events'}` : list.isPending ? 'Loading…' : ''}</span>
+          {pages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+              <span>Page {page} of {pages}</span>
+              <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
+          )}
         </div>
       </Card>
     </div>

@@ -1,5 +1,7 @@
+'use client';
 import { CircleAlert, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAdminHome } from '@/lib/admin-nav';
 import { errorMessage } from '@/lib/api';
 import { PageHeader as CanvasHeader, type Crumb } from '@/components/shell/page';
 
@@ -23,9 +25,11 @@ export function PageHeader({
   children?: React.ReactNode;
 }) {
   const label = documentTitle ?? (typeof title === 'string' ? title : '');
+  // "Admin portal" leads to the overview, or to the first page this person may open.
+  const home = useAdminHome();
   return (
     <CanvasHeader
-      breadcrumbs={[{ label: 'Admin portal', href: '/admin' }, ...parents, { label }]}
+      breadcrumbs={[{ label: 'Admin portal', href: home ?? undefined }, ...parents, { label }]}
       documentTitle={`${label} · Admin`}
       title={title}
       description={description}

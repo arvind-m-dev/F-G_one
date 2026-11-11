@@ -8,17 +8,19 @@ import { toast } from 'sonner';
 import { createAccountSchema, PERMISSION_CATALOG, SCOPE_LABELS, type CreateAccountInput, type Scope } from '@fg/shared';
 import { AccessEditor } from '@/components/admin/access-editor';
 import { accessPreview, accessProblem, actorFromMe } from '@/components/admin/access-model';
+import { LoadError } from '@/components/admin/page-header';
 import { HandoverMessage, PasswordInput } from '@/components/admin/password-handover';
+import { PersonPicker, type PickedPerson } from '@/components/admin/person-picker';
 import { isCancelled, useReauth } from '@/components/security/reauth';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Select } from '@/components/ui/input';
 import { Badge, Skeleton } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
-import { useDepartments, useEmployeeList, useRoles } from '@/lib/hooks';
+import { useDepartments, useRoles } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import type { AccessValue, Employee, Role } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, parseDateOnly } from '@/lib/utils';
 
 const STEPS = [
   { key: 'person', label: 'Person', icon: UserRound },
@@ -54,7 +56,7 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
   const reauth = useReauth();
   const roles = useRoles();
   const depts = useDepartments();
-  const managers = useEmployeeList({ pageSize: 100 }, open);
+  const [manager, setManager] = useState<PickedPerson | null>(null);
   const selfService = me.organization.settings.auth.selfServicePassword;
   const domains = me.organization.settings.auth.allowedEmailDomains;
   const [step, setStep] = useState(0);
@@ -75,6 +77,7 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
 
   const reset = () => {
     form.reset({ ...EMPTY, roleId: defaultRole });
+    setManager(null);
     setStep(0);
     setResult(null);
   };
@@ -112,7 +115,6 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
 
   const role = roleList.find((r) => r.id === v.roleId);
   const dept = depts.data?.find((d) => d.id === v.departmentId);
-  const manager = managers.data?.items.find((m) => m.id === v.managerId);
 
   return (
     <>
@@ -122,6 +124,7 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
         title="Add an employee"
         description={result ? undefined : 'Create their account in four short steps. Nothing is saved until you press Create account.'}
         className="max-w-4xl"
+        guard={!!result || form.formState.isDirty}
       >
         {result ? (
           <div className="space-y-4">
@@ -210,14 +213,16 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
                   </Select>
                 </Field>
                 <Field label="Reports to" htmlFor="w-manager">
-                  <Select id="w-manager" {...form.register('managerId', { setValueAs: (x) => x || null })}>
-                    <option value="">No manager</option>
-                    {managers.data?.items.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} {m.designation ? `· ${m.designation}` : ''}
-                      </option>
-                    ))}
-                  </Select>
+                  <PersonPicker
+                    id="w-manager"
+                    value={v.managerId ?? null}
+                    selected={manager}
+                    onChange={(p) => {
+                      setManager(p);
+                      form.setValue('managerId', p?.id ?? null, { shouldDirty: true });
+                    }}
+                    emptyLabel="No manager"
+                  />
                 </Field>
                 <Field label="Employee code" htmlFor="w-code" error={err.employeeCode?.message}>
                   <Input id="w-code" placeholder="e.g. FG1042" {...form.register('employeeCode')} />
@@ -232,7 +237,7 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
               (roles.isPending ? (
                 <Skeleton className="h-64" />
               ) : roles.isError ? (
-                <p className="text-sm text-danger">Couldn&apos;t load roles. Close this and try again.</p>
+                <LoadError what="the roles" error={roles.error} onRetry={() => roles.refetch()} />
               ) : (
                 <AccessEditor
                   roles={roleList}
@@ -257,7 +262,7 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
                   error={err.password?.message}
                   hint="10+ characters with upper and lower case letters and a number. You'll get a message with it to send them."
                 >
-                  <PasswordInput id="w-password" autoFocus {...form.register('password')} onGenerate={(pw) => form.setValue('password', pw, { shouldValidate: true })} />
+                  <PasswordInput id="w-password" autoFocus {...form.register('password')} onGenerate={(pw) => form.setValue('password', pw, { shouldValidate: true, shouldDirty: true })} />
                 </Field>
                 <p className="text-xs text-muted">
                   {selfService
@@ -276,7 +281,7 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
                   <Review label="Department">{dept?.name}</Review>
                   <Review label="Reports to">{manager?.name}</Review>
                   <Review label="Employee code">{v.employeeCode}</Review>
-                  <Review label="Date of joining">{v.joinedAt}</Review>
+                  <Review label="Date of joining">{v.joinedAt ? parseDateOnly(v.joinedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : null}</Review>
                   <Review label={selfService ? 'Temporary password' : 'Password'}>Set (shown once after you create the account)</Review>
                 </dl>
                 <ReviewAccess access={access} roles={roleList} roleName={role?.name} />
@@ -303,7 +308,7 @@ export function AccountWizard({ open, onOpenChange, onCreated }: { open: boolean
                   Next <ArrowRight />
                 </Button>
               ) : (
-                <Button type="submit" variant="gradient" loading={form.formState.isSubmitting}>
+                <Button type="submit" loading={form.formState.isSubmitting}>
                   <UserPlus /> Create account
                 </Button>
               )}

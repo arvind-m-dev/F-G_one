@@ -1,6 +1,6 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, ClipboardCheck, Wrench } from 'lucide-react';
+import { CalendarClock, ClipboardCheck, PencilLine } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { CorrectionDialog, type CorrectionPrefill } from '@/components/attendance/correction-dialog';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { fmtDuration, useCorrections } from '@/lib/hooks';
 import { useCan, useClock, useOrgToday } from '@/lib/session';
 import type { AttendanceHistory } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
-import { cn, parseDateOnly } from '@/lib/utils';
+import { cn, fmtDate, parseDateOnly } from '@/lib/utils';
 
 const RANGES = [
   ['7', '7 days'],
@@ -48,7 +48,7 @@ function History() {
         action={
           <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={() => setFix({ date: yesterday })}>
-            <Wrench /> Fix a day
+            <PencilLine /> Request a correction
           </Button>
           <div className="inline-flex rounded-lg bg-surface-2 p-0.5" role="radiogroup" aria-label="Period">
             {RANGES.map(([v, label]) => (
@@ -104,21 +104,28 @@ function History() {
                     {r.dayOff && <Badge tone="success">Day-off work</Badge>}
                     {r.autoCheckedIn && <Badge>Auto check-in</Badge>}
                     {r.autoCheckOutReason && <Badge tone="warning">Auto check-out</Badge>}
-                    {r.state !== 'checked_out' && <Badge tone="success">Today</Badge>}
+                    {r.state !== 'checked_out' && <Badge tone="success">In progress</Badge>}
                   </span>
                   <span className="block text-xs text-muted tabular-nums">
                     {time(r.checkInAt)} – {r.checkOutAt ? time(r.checkOutAt) : 'now'} · breaks {fmtDuration(r.breakMinutes)}
+                    <span className="sm:hidden"> · worked {fmtDuration(r.workedMinutes)}</span>
                   </span>
                   {(r.remarks || r.checkOutRemarks) && <span className="block truncate text-xs text-subtle">{[r.remarks, r.checkOutRemarks].filter(Boolean).join(' · ')}</span>}
                 </span>
                 <span className="col-span-2 sm:col-span-1">
                   <DayBar r={r} now={Date.now()} />
+                  {/* Phones: the action sits under the day's bar (wider screens show it in the last column). */}
+                  {r.state === 'checked_out' && (
+                    <button onClick={() => setFix({ date: r.date, checkIn: hm(r.checkInAt) ?? undefined, checkOut: hm(r.checkOutAt), location: r.location })} className="mt-2 text-xs font-medium text-primary hover:underline sm:hidden">
+                      Request a correction
+                    </button>
+                  )}
                 </span>
                 <span className="hidden text-right text-sm font-medium tabular-nums sm:block">
                   {fmtDuration(r.workedMinutes)}
                   {r.state === 'checked_out' && (
                     <button onClick={() => setFix({ date: r.date, checkIn: hm(r.checkInAt) ?? undefined, checkOut: hm(r.checkOutAt), location: r.location })} className="block w-full text-right text-[11px] font-normal text-muted hover:text-primary">
-                      Request correction
+                      Request a correction
                     </button>
                   )}
                 </span>
@@ -135,6 +142,7 @@ function History() {
 
 function MyCorrections() {
   const q = useCorrections('mine');
+  const { hm } = useClock();
   if (!q.data?.length) return null;
   const tone = { PENDING: 'warning', APPROVED: 'success', REJECTED: 'danger' } as const;
   const label = { PENDING: 'Waiting for review', APPROVED: 'Applied', REJECTED: 'Declined' } as const;
@@ -144,9 +152,9 @@ function MyCorrections() {
       <ul className="divide-y rounded-xl border">
         {q.data.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-[13px]">
-            <span className="font-medium">{new Date(`${c.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+            <span className="font-medium">{fmtDate(c.date, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
             <span className="text-muted tabular-nums">
-              {c.checkIn} – {c.checkOut ?? '…'}
+              {hm(c.checkIn)} – {c.checkOut ? hm(c.checkOut) : 'still working'}
             </span>
             <span className="min-w-0 flex-1 truncate text-muted">{c.reason}</span>
             <Badge tone={tone[c.status]}>{label[c.status]}</Badge>

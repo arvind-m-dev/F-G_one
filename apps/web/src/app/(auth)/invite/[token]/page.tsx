@@ -7,11 +7,13 @@ import { useState } from 'react';
 import { NewPasswordForm } from '@/components/password-form';
 import { Skeleton } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
+import { usePageTitle } from '@/lib/use-title';
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  usePageTitle('Accept your invitation');
   const invite = useQuery({
     queryKey: ['invite', token],
     queryFn: () => api<{ email: string; firstName: string; organization: { name: string } }>(`/auth/invitations/${token}`),
@@ -22,9 +24,9 @@ export default function InvitePage() {
   if (invite.isError) {
     return (
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Invitation unavailable</h2>
+        <h1 className="text-xl font-semibold tracking-tight">This invitation can&apos;t be used</h1>
         <p className="mt-2 text-sm text-muted">{errorMessage(invite.error)}</p>
-        <Link href="/login" className="mt-6 inline-block text-sm font-medium text-primary">Go to sign in</Link>
+        <Link href="/login" className="mt-6 inline-block rounded text-sm font-medium text-primary hover:underline">Go to sign in</Link>
       </div>
     );
   }
@@ -34,7 +36,7 @@ export default function InvitePage() {
       <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-primary-soft text-primary">
         <PartyPopper className="size-5" />
       </div>
-      <h2 className="text-xl font-semibold tracking-tight">Welcome, {data.firstName}!</h2>
+      <h1 className="text-xl font-semibold tracking-tight">Welcome, {data.firstName}!</h1>
       <p className="mt-1 mb-8 text-sm text-muted">
         Set a password to join <strong className="text-foreground">{data.organization.name}</strong> on FG One as <strong className="text-foreground">{data.email}</strong>.
       </p>
@@ -50,7 +52,11 @@ export default function InvitePage() {
           }
         }}
       />
-      {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-4 rounded-lg bg-danger/8 px-3 py-2 text-[13px] text-danger">
+          {error}
+        </p>
+      )}
     </>
   );
 }

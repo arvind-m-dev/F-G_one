@@ -108,6 +108,8 @@ export interface ChatMessage {
   reactions: { emoji: string; userIds: string[]; count: number }[];
   clientId?: string;
   pending?: boolean;
+  /** Client only: the send failed and the message is waiting for Retry or Delete. */
+  failed?: boolean;
 }
 
 export interface Department {

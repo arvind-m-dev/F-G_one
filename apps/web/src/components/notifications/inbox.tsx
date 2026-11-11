@@ -1,13 +1,14 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AtSign, Bell, BellOff, CheckCheck, ClipboardCheck, Megaphone, MessageSquare, MessageSquareReply, TreePalm } from 'lucide-react';
+import { AtSign, Bell, CheckCheck, ClipboardCheck, Megaphone, MessageSquare, MessageSquareReply, SlidersHorizontal, TreePalm } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/dropdown';
 import { Skeleton, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
-import { api } from '@/lib/api';
+import { toast } from 'sonner';
+import { api, errorMessage } from '@/lib/api';
 import { useNotifications, useUnreadNotifications } from '@/lib/hooks';
 import type { AppNotification } from '@/lib/types';
 import { cn, timeAgo } from '@/lib/utils';
@@ -60,6 +61,10 @@ export function NotificationInbox({ trigger, side = 'right' }: { trigger: (unrea
   const markRead = useMutation({
     mutationFn: (body: { ids?: string[]; all?: boolean }) => api<{ unread: number }>('/notifications/read', { body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: (e, body) => {
+      // Opening an item still works if marking it read fails; only "mark all" needs saying.
+      if (body.all) toast.error("Couldn't mark everything as read", { description: errorMessage(e) });
+    },
   });
   const openItem = (n: AppNotification) => {
     if (!n.readAt) markRead.mutate({ ids: [n.id] });
@@ -81,7 +86,7 @@ export function NotificationInbox({ trigger, side = 'right' }: { trigger: (unrea
             </Tooltip>
             <Tooltip content="Notification settings" side="bottom">
               <Link href="/app/settings#notifications" onClick={() => setOpen(false)} className="grid size-7 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-foreground" aria-label="Notification settings">
-                <BellOff className="size-4" />
+                <SlidersHorizontal className="size-4" />
               </Link>
             </Tooltip>
           </div>
@@ -103,10 +108,19 @@ export function NotificationInbox({ trigger, side = 'right' }: { trigger: (unrea
               <Skeleton className="h-14" />
               <Skeleton className="h-14" />
             </div>
+          ) : list.isError && !list.data ? (
+            <div className="px-6 py-10 text-center" role="alert">
+              <Bell className="mx-auto mb-2 size-6 text-subtle" />
+              <p className="text-sm font-medium">Notifications couldn&apos;t be loaded</p>
+              <p className="mt-1 text-xs text-muted">{errorMessage(list.error)}</p>
+              <button onClick={() => void list.refetch()} className="mt-3 h-8 rounded-lg border border-border-strong bg-surface px-3 text-[13px] font-medium shadow-sm transition hover:bg-surface-2">
+                Try again
+              </button>
+            </div>
           ) : !list.data?.items.length ? (
             <div className="px-6 py-10 text-center">
               <Bell className="mx-auto mb-2 size-6 text-subtle" />
-              <p className="text-sm font-medium">{filter === 'unread' ? "You're all caught up" : 'No notifications yet'}</p>
+              <p className="text-sm font-medium">{filter === 'unread' ? "You're all caught up" : filter === 'mentions' ? 'No mentions or replies yet' : 'No notifications yet'}</p>
               <p className="mt-1 text-xs text-muted">Direct messages, @mentions, replies and announcements show up here.</p>
             </div>
           ) : (

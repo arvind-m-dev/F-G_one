@@ -299,7 +299,7 @@ test.describe('admin portal', () => {
     await hr.goto('/admin');
     await expect(hr.getByRole('heading', { name: /at a glance/ })).toBeVisible();
     await expect(hr.getByText('Active team')).toBeVisible();
-    await expect(hr.getByRole('button', { name: 'Branding' })).toHaveCount(0); // HR cannot change settings
+    await expect(hr.getByRole('link', { name: 'Branding' })).toHaveCount(0); // HR cannot change settings
     await expect(hr.getByRole('navigation', { name: 'Admin portal' }).getByRole('link', { name: 'System settings' })).toHaveCount(0);
     await hr.goto('/admin/settings');
     await expect(hr.getByText("You don't have access to this page")).toBeVisible();
@@ -311,7 +311,7 @@ test.describe('admin portal', () => {
     await admin.unroute('**/api/admin/overview');
     await admin.getByRole('button', { name: 'Try again' }).click();
     await expect(admin.getByText('Active team')).toBeVisible();
-    await expect(admin.getByRole('button', { name: 'Branding' })).toBeVisible();
+    await expect(admin.getByRole('link', { name: 'Branding' })).toHaveAttribute('href', '/admin/settings?tab=branding');
   });
 
   test('departments: create, edit, guarded delete, and the audit trail', async ({ page }) => {
@@ -321,10 +321,12 @@ test.describe('admin portal', () => {
     await page.getByRole('button', { name: 'New department' }).click();
     const dialog = page.getByRole('dialog', { name: 'New department' });
     await dialog.getByLabel('Name').fill('Q');
-    await expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled();
+    await dialog.getByRole('button', { name: 'Create' }).click();
+    await expect(dialog.getByText('Enter a name of 2 to 60 characters')).toBeVisible();
     await dialog.getByLabel('Name').fill(name);
     await dialog.getByLabel('Description').fill('Made by the QA run');
-    await dialog.getByRole('button', { name: 'Colour #22c55e' }).click();
+    await dialog.getByRole('button', { name: 'Emerald' }).click();
+    await expect(dialog.getByRole('button', { name: 'Emerald' })).toHaveAttribute('aria-pressed', 'true');
     await dialog.getByRole('button', { name: 'Create' }).click();
     await expect(page.getByText('Department created')).toBeVisible();
     await expect(page.getByRole('heading', { name })).toBeVisible();
@@ -350,9 +352,11 @@ test.describe('admin portal', () => {
     const annId = ((await ann.json()) as { id: string }).id;
     await page.reload();
     await page.getByRole('button', { name: `Delete ${name}` }).click();
+    // The dialog explains what to do first and offers no Delete button that could only fail.
     await expect(page.getByRole('dialog').getByText('1 announcement is addressed to this department.')).toBeVisible();
-    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByText(/addressed to this department/).last()).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Delete' })).toHaveCount(0);
+    expect((await page.request.delete(`/api/departments/${dept.id}`)).status()).toBe(409);
+    await page.getByRole('dialog').getByRole('button', { name: 'Got it' }).click();
     expect((await page.request.delete(`/api/announcements/${annId}`)).status()).toBe(200);
 
     await page.reload();
@@ -370,10 +374,12 @@ test.describe('admin portal', () => {
   test('roles and permissions matrix', async ({ browser }) => {
     const admin = await newSignedIn(browser, 'admin@futuristglobal.com');
     await admin.goto('/admin/roles');
-    await expect(admin.getByRole('heading', { name: 'Roles & access' })).toBeVisible();
+    await expect(admin.getByRole('heading', { name: 'Roles & permissions' })).toBeVisible();
     const table = admin.getByRole('table');
     for (const role of ['Administrator', 'Admin / HR', 'Manager', 'Employee']) await expect(table.getByRole('columnheader', { name: role })).toBeVisible();
-    await expect(table.getByRole('row').filter({ hasText: 'settings.manage' }).getByLabel('Granted', { exact: true })).toHaveCount(1);
+    await expect(table.getByRole('row').filter({ hasText: 'Manage company settings and branding' }).getByLabel('Granted', { exact: true })).toHaveCount(1);
+    // Features that do not exist yet have no row.
+    await expect(table.getByRole('row').filter({ hasText: /Ask FG One|AI providers|document library|campaigns|daily updates/i })).toHaveCount(0);
 
     const mgr = await newSignedIn(browser, 'manager@futuristglobal.com');
     await mgr.goto('/admin/roles');
@@ -394,13 +400,17 @@ test.describe('admin portal', () => {
     await page.getByRole('tab', { name: 'Modules' }).click();
     const leaveRow = page.getByRole('tabpanel').locator('div').filter({ has: page.getByRole('switch', { name: 'Leave management' }) }).first();
     await expect(leaveRow.getByText('upcoming')).toHaveCount(0);
+    // Only features that exist today can be switched on or off.
+    await expect(page.getByRole('tabpanel').getByText('upcoming')).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: 'Documents' })).toHaveCount(0);
 
     // A logo that is not a web address is refused, with the reason.
     await page.getByRole('tab', { name: 'Branding' }).click();
-    await page.getByLabel('Logo URL').fill('javascript:alert(1)');
+    await page.getByLabel('Link to your logo').fill('javascript:alert(1)');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText('Enter a full web address starting with https://')).toBeVisible();
-    await page.getByLabel('Logo URL').fill('');
+    await page.getByLabel('Link to your logo').fill('');
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled(); // nothing left to save
 
     // People choose their own passwords: on, saved, then off again.
     await page.getByRole('tab', { name: 'Sign-in & security' }).click();
@@ -408,14 +418,14 @@ test.describe('admin portal', () => {
     await expect(sw).toHaveAttribute('aria-checked', 'false');
     await sw.click();
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('Company settings saved')).toBeVisible();
+    await expect(page.getByText('System settings saved')).toBeVisible();
     const org = async () => ((await (await page.request.get('/api/organization')).json()) as { settings: { auth: { selfServicePassword: boolean } } }).settings.auth.selfServicePassword;
     expect(await org()).toBe(true);
     await page.reload();
     await expect(sw).toHaveAttribute('aria-checked', 'true');
     await sw.click();
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('Company settings saved').last()).toBeVisible();
+    await expect(page.getByText('System settings saved').last()).toBeVisible();
     expect(await org()).toBe(false);
 
     // Unsaved colour previews do not leak into the rest of the portal.
@@ -424,6 +434,8 @@ test.describe('admin portal', () => {
     const before = await brand();
     await page.getByRole('textbox', { name: 'Primary colour', exact: true }).fill('#ff0000');
     expect(await brand()).toBe('#ff0000');
+    // Leaving with unsaved changes asks first.
+    page.once('dialog', (d) => void d.accept());
     await page.getByRole('navigation', { name: 'Admin portal' }).getByRole('link', { name: 'Audit logs' }).click();
     await expect(page).toHaveURL(/\/admin\/audit/);
     expect(await brand()).toBe(before);
@@ -432,21 +444,21 @@ test.describe('admin portal', () => {
   test('audit logs: filters stay in the address bar, plain labels, empty and error states', async ({ page }) => {
     await signIn(page, 'admin@futuristglobal.com');
     await page.goto('/admin/audit');
-    await expect(page.getByRole('heading', { name: 'Audit log' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Audit logs' })).toBeVisible();
     await expect(page.getByText('signed in').first()).toBeVisible();
-    await page.getByRole('combobox', { name: 'What it is about' }).selectOption({ label: 'Company settings' });
+    await page.getByRole('combobox', { name: 'What it is about' }).selectOption({ label: 'System settings' });
     await expect(page).toHaveURL(/entity=organization/);
-    await page.getByRole('textbox', { name: 'Filter audit log' }).fill('auth.login');
+    await page.getByRole('textbox', { name: 'Filter audit logs' }).fill('auth.login');
     await expect(page).toHaveURL(/q=auth\.login/);
     await expect(page.getByText('No matching events')).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('textbox', { name: 'Filter audit log' })).toHaveValue('auth.login');
+    await expect(page.getByRole('textbox', { name: 'Filter audit logs' })).toHaveValue('auth.login');
     await page.getByRole('combobox', { name: 'What it is about' }).selectOption({ label: 'Everything' });
     await expect(page.getByText('signed in').first()).toBeVisible();
 
     await page.route('**/api/audit-logs**', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ statusCode: 500, message: 'Internal server error' }) }));
     await page.goto('/admin/audit?q=nothing-cached-here');
-    await expect(page.getByText("We couldn't load the audit log.")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("We couldn't load the audit logs.")).toBeVisible({ timeout: 20_000 });
   });
 
   test('phone: admin navigation drawer, visible department actions, no sideways scrolling', async ({ browser }) => {

@@ -58,7 +58,7 @@ const LABELS: Record<string, string> = {
   'department.created': 'created a department',
   'department.updated': 'updated a department',
   'department.deleted': 'deleted a department',
-  'settings.updated': 'updated company settings',
+  'settings.updated': 'updated system settings',
   'channel.created': 'created a channel',
   'channel.updated': 'updated a channel',
   'channel.members_added': 'added channel members',

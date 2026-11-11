@@ -3,7 +3,8 @@ import { ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { PortalGate } from '@/components/shell/portal';
 import { ADMIN_PERMS, WorkspaceShell } from '@/components/shell/workspace-shell';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useCan } from '@/lib/session';
 
 function AdminOnly({ children }: { children: React.ReactNode }) {
@@ -16,8 +17,8 @@ function AdminOnly({ children }: { children: React.ReactNode }) {
           <ShieldAlert className="mx-auto mb-3 size-8 text-subtle" />
           <p className="font-semibold">The admin portal isn&apos;t available to your role</p>
           <p className="mt-1 text-sm text-muted">Ask an administrator if you need access.</p>
-          <Link href="/app/home">
-            <Button className="mt-5">Back to workspace</Button>
+          <Link href="/app/home" className={cn(buttonVariants(), 'mt-5')}>
+            Back to workspace
           </Link>
         </div>
       </div>

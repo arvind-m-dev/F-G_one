@@ -1,26 +1,35 @@
 'use client';
-import * as Tabs from '@radix-ui/react-tabs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Blocks, Building2, CalendarCheck2, Car, Clock, House, LayoutDashboard, Palette, ShieldCheck, X } from 'lucide-react';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Blocks, CalendarCheck2, Clock, LayoutDashboard, Palette, RotateCcw, Save, ShieldCheck, X } from 'lucide-react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { MODULE_KEYS, MODULE_LABELS, PERMISSIONS, WIDGET_KEYS, WIDGET_LABELS, type OrganizationSettings } from '@fg/shared';
+import { MODULE_LABELS, PERMISSIONS, WIDGET_KEYS, WIDGET_LABELS, type OrganizationSettings } from '@fg/shared';
 import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
+import { timeZoneGroups } from '@/components/admin/timezones';
+import { useUnsavedGuard } from '@/components/admin/use-unsaved-guard';
 import { LOCATION_ICON } from '@/components/attendance/attendance-panel';
 import { BrandMark } from '@/components/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field, Input, Select } from '@/components/ui/input';
 import { Badge, Skeleton, Switch } from '@/components/ui/misc';
+import { TabPanel, Tabs, type TabItem } from '@/components/ui/tabs';
 import { api, errorMessage } from '@/lib/api';
+import { LIVE_MODULE_KEYS } from '@/lib/live-modules';
 import type { Me } from '@/lib/types';
 import { useCan, useSession } from '@/lib/session';
 import { useUrlState } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
 
-/** Modules that ship in the current milestone; the rest can be pre-configured now. */
-const LIVE_MODULES = new Set(['chat', 'holidays', 'announcements', 'recognition', 'attendance', 'leave']);
-const TAB_KEYS = ['branding', 'modules', 'dashboard', 'attendance', 'leave', 'auth'];
+const TABS = [
+  { value: 'branding', label: 'Branding', icon: Palette },
+  { value: 'modules', label: 'Modules', icon: Blocks },
+  { value: 'dashboard', label: 'Dashboard & navigation', icon: LayoutDashboard },
+  { value: 'attendance', label: 'Attendance policy', icon: Clock },
+  { value: 'leave', label: 'Leave policy', icon: CalendarCheck2 },
+  { value: 'auth', label: 'Sign-in & security', icon: ShieldCheck },
+] as const satisfies readonly TabItem[];
+type SettingsTab = (typeof TABS)[number]['value'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -50,9 +59,9 @@ function SettingsPage() {
   if (org.isPending || org.isError) {
     return (
       <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
-        <PageHeader title="Company settings" description="Branding, modules and policies for your whole workspace." />
+        <PageHeader title="System settings" description="Branding, modules and policies for your whole workspace." />
         {org.isError ? (
-          <LoadError what="company settings" error={org.error} onRetry={() => org.refetch()} />
+          <LoadError what="the settings" error={org.error} onRetry={() => org.refetch()} />
         ) : (
           <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
             <Skeleton className="h-64" />
@@ -76,7 +85,11 @@ function SettingsForm({ org }: { org: Org }) {
   const [domainDraft, setDomainDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [get, setUrl] = useUrlState({ tab: 'branding' });
-  const tab = TAB_KEYS.includes(get('tab')) ? get('tab') : 'branding';
+  const tab = (TABS.some((t) => t.value === get('tab')) ? get('tab') : 'branding') as SettingsTab;
+  const zones = useMemo(() => timeZoneGroups(org.settings.attendance.timezone), [org.settings.attendance.timezone]);
+  const dirty =
+    name !== org.name || logoUrl !== (org.logoUrl ?? '') || primary.toLowerCase() !== org.primaryColor.toLowerCase() || secondary.toLowerCase() !== org.secondaryColor.toLowerCase() || JSON.stringify(s) !== JSON.stringify(org.settings);
+  useUnsavedGuard(dirty && !saving, 'You have unsaved settings. Leave without saving them?');
   // Unsaved colour previews must not stay applied after leaving the page.
   const saved = useRef({ accent: me.preferences.accent, primary: me.organization.primaryColor, secondary: me.organization.secondaryColor });
   saved.current = { accent: me.preferences.accent, primary: me.organization.primaryColor, secondary: me.organization.secondaryColor };
@@ -95,16 +108,27 @@ function SettingsForm({ org }: { org: Org }) {
     document.documentElement.style.setProperty('--brand-2', sec);
   };
 
+  /** Fills the form from saved settings (after saving, or to discard changes). */
+  const load = (o: Org) => {
+    setName(o.name);
+    setLogoUrl(o.logoUrl ?? '');
+    setPrimary(o.primaryColor);
+    setSecondary(o.secondaryColor);
+    setS(o.settings);
+    setDomainDraft('');
+    preview(o.primaryColor, o.secondaryColor);
+  };
+
   const save = async () => {
     if (!s.attendance.workdayStart || !s.attendance.workdayEnd || s.attendance.workdayEnd <= s.attendance.workdayStart) return toast.error('Attendance policy: the workday must end after it starts');
     setSaving(true);
     try {
       const updated = await api<Org>('/organization', { method: 'PATCH', body: { name, logoUrl: logoUrl || null, primaryColor: primary, secondaryColor: secondary, settings: s } });
       qc.setQueryData(['organization-settings'], updated);
-      setS(updated.settings);
+      load(updated);
       await qc.invalidateQueries({ queryKey: ['me'] });
       await qc.invalidateQueries({ queryKey: ['dashboard'] });
-      toast.success('Company settings saved');
+      toast.success('System settings saved');
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -112,49 +136,20 @@ function SettingsForm({ org }: { org: Org }) {
     }
   };
 
-  const tabs = [
-    { v: 'branding', label: 'Branding', icon: Palette },
-    { v: 'modules', label: 'Modules', icon: Blocks },
-    { v: 'dashboard', label: 'Dashboard & navigation', icon: LayoutDashboard },
-    { v: 'attendance', label: 'Attendance policy', icon: Clock },
-    { v: 'leave', label: 'Leave policy', icon: CalendarCheck2 },
-    { v: 'auth', label: 'Sign-in & security', icon: ShieldCheck },
-  ];
-
   return (
     <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
-      <PageHeader
-        title="Company settings"
-        description="Branding, modules and policies for your whole workspace."
-        actions={
-          <Button variant="gradient" loading={saving} onClick={save}>
-            Save changes
-          </Button>
-        }
-      />
-      <Tabs.Root value={tab} onValueChange={(v) => setUrl({ tab: v })} className="grid gap-4 lg:grid-cols-[240px_1fr]" orientation="vertical">
-        <Tabs.List className="flex gap-1 overflow-x-auto lg:flex-col" aria-label="Settings sections">
-          {tabs.map((t) => (
-            <Tabs.Trigger
-              key={t.v}
-              value={t.v}
-              className="flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-foreground data-[state=active]:bg-primary-soft data-[state=active]:text-primary"
-            >
-              <t.icon className="size-4" /> {t.label}
-            </Tabs.Trigger>
-          ))}
-        </Tabs.List>
-
-        <Card className="p-6">
-          <Tabs.Content value="branding" className="space-y-6 outline-none">
+      <PageHeader title="System settings" description="Branding, modules and policies for your whole workspace. Changes apply to everyone once you save." />
+      <Tabs value={tab} onValueChange={(v) => setUrl({ tab: v })} items={TABS} label="Settings sections" variant="side" className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <Card className="min-w-0 p-6">
+          <TabPanel value="branding" className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Company name" htmlFor="org-name">
                 <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} />
               </Field>
-              <Field label="Logo URL" htmlFor="logo" hint="Square PNG/SVG over https. Leave empty to use the FG monogram.">
+              <Field label="Link to your logo" htmlFor="logo" hint="A square image works best, and the link must start with https://. Leave empty to use your company initials.">
                 <Input id="logo" value={logoUrl} placeholder="https://…" onChange={(e) => setLogoUrl(e.target.value)} />
               </Field>
-              <Field label="Tagline (login screen)" htmlFor="tagline">
+              <Field label="Tagline on the sign-in page" htmlFor="tagline">
                 <Input id="tagline" value={s.branding.tagline} maxLength={120} onChange={(e) => patch('branding', { tagline: e.target.value })} />
               </Field>
               <Field label="Default theme for new users" htmlFor="theme">
@@ -179,11 +174,11 @@ function SettingsForm({ org }: { org: Org }) {
             <div>
               <p className="mb-2 text-sm font-medium">Live preview</p>
               <div className="overflow-hidden rounded-2xl border">
-                <div className="bg-brand-gradient flex items-center gap-3 p-5 text-white">
+                <div className="bg-brand-gradient flex items-center gap-3 p-5 text-primary-foreground">
                   <BrandMark name={name} logoUrl={logoUrl || null} size={40} />
                   <div>
                     <p className="text-lg font-bold">{name || 'Company'}</p>
-                    <p className="text-sm text-white/80">{s.branding.tagline}</p>
+                    <p className="text-sm text-primary-foreground/80">{s.branding.tagline}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 bg-surface p-4">
@@ -195,23 +190,20 @@ function SettingsForm({ org }: { org: Org }) {
               </div>
               <p className="mt-2 text-xs text-muted">Colours apply to everyone after saving. Users can still pick a personal accent.</p>
             </div>
-          </Tabs.Content>
+          </TabPanel>
 
-          <Tabs.Content value="modules" className="divide-y outline-none">
+          <TabPanel value="modules" className="divide-y">
             <p className="pb-3 text-sm text-muted">Turn features on or off for the whole company. Turned-off features disappear from everyone&apos;s navigation and home page.</p>
-            {MODULE_KEYS.map((k) => (
-              <Row key={k} title={MODULE_LABELS[k]} description={LIVE_MODULES.has(k) ? undefined : 'Arrives in an upcoming milestone — you can pre-configure it now.'}>
-                <div className="flex items-center gap-3">
-                  {!LIVE_MODULES.has(k) && <Badge tone="muted">upcoming</Badge>}
-                  <Switch checked={s.modules[k]} onCheckedChange={(v) => patch('modules', { [k]: v } as Partial<OrganizationSettings['modules']>)} aria-label={MODULE_LABELS[k]} />
-                </div>
+            {LIVE_MODULE_KEYS.map((k) => (
+              <Row key={k} title={MODULE_LABELS[k]}>
+                <Switch checked={s.modules[k]} onCheckedChange={(v) => patch('modules', { [k]: v } as Partial<OrganizationSettings['modules']>)} aria-label={MODULE_LABELS[k]} />
               </Row>
             ))}
-          </Tabs.Content>
+          </TabPanel>
 
-          <Tabs.Content value="dashboard" className="outline-none">
+          <TabPanel value="dashboard">
             <p className="text-sm font-medium">Widgets available on the home dashboard</p>
-            <p className="mb-3 text-xs text-muted">Order here is the default layout for new users.</p>
+            <p className="mb-3 text-xs text-muted">Choose what people can have on Home. A widget you turn on is added after the others.</p>
             <div className="flex flex-wrap gap-2">
               {WIDGET_KEYS.map((w) => {
                 const on = s.dashboard.defaultWidgets.includes(w);
@@ -228,16 +220,16 @@ function SettingsForm({ org }: { org: Org }) {
               })}
             </div>
             <div className="mt-4 divide-y border-t">
-              <Row title="Let employees personalise their dashboard" description="Drag-and-drop layout saved per user.">
-                <Switch checked={s.dashboard.allowPersonalLayout} onCheckedChange={(v) => patch('dashboard', { allowPersonalLayout: v })} />
+              <Row title="Let employees personalise their dashboard" description="Each person can reorder and hide their own widgets.">
+                <Switch checked={s.dashboard.allowPersonalLayout} onCheckedChange={(v) => patch('dashboard', { allowPersonalLayout: v })} aria-label="Let employees personalise their dashboard" />
               </Row>
-              <Row title="Collapse sidebar by default" description="Users can still expand it; their choice is remembered.">
-                <Switch checked={s.navigation.sidebarCollapsedByDefault} onCheckedChange={(v) => patch('navigation', { sidebarCollapsedByDefault: v })} />
+              <Row title="Start with the side menu collapsed" description="People can still open it, and their choice is remembered.">
+                <Switch checked={s.navigation.sidebarCollapsedByDefault} onCheckedChange={(v) => patch('navigation', { sidebarCollapsedByDefault: v })} aria-label="Start with the side menu collapsed" />
               </Row>
             </div>
-          </Tabs.Content>
+          </TabPanel>
 
-          <Tabs.Content value="attendance" className="space-y-5 outline-none">
+          <TabPanel value="attendance" className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Workday starts" htmlFor="ws">
                 <Input id="ws" type="time" value={s.attendance.workdayStart} onChange={(e) => patch('attendance', { workdayStart: e.target.value })} />
@@ -262,7 +254,7 @@ function SettingsForm({ org }: { org: Org }) {
                         if (on && s.attendance.workingDays.length === 1) return toast.error('Keep at least one working day');
                         patch('attendance', { workingDays: on ? s.attendance.workingDays.filter((x) => x !== i) : [...s.attendance.workingDays, i].sort() });
                       }}
-                      className={cn('h-9 w-12 rounded-lg border text-sm font-medium transition', on ? 'border-primary bg-primary text-white' : 'text-muted')}
+                      className={cn('h-9 w-12 rounded-lg border text-sm font-medium transition', on ? 'border-primary bg-primary text-primary-foreground' : 'text-muted')}
                       aria-pressed={on}
                     >
                       {d}
@@ -299,8 +291,14 @@ function SettingsForm({ org }: { org: Org }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Time zone for attendance" htmlFor="att-tz" hint="Defines the attendance day and when someone counts as late.">
                 <Select id="att-tz" value={s.attendance.timezone} onChange={(e) => patch('attendance', { timezone: e.target.value })}>
-                  {[...new Set([s.attendance.timezone, 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles', 'Australia/Sydney', 'UTC'])].map((tz) => (
-                    <option key={tz}>{tz}</option>
+                  {zones.map((g) => (
+                    <optgroup key={g.region} label={g.region}>
+                      {g.zones.map((z) => (
+                        <option key={z.value} value={z.value}>
+                          {z.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </Select>
               </Field>
@@ -363,28 +361,28 @@ function SettingsForm({ org }: { org: Org }) {
               </div>
             </div>
             <p className="text-xs text-muted">Employees check in from Home or Attendance. Someone checking in after the start time plus the grace period is marked late. Night shifts can check out after midnight; the shift counts for the day it started.</p>
-          </Tabs.Content>
+          </TabPanel>
 
-          <Tabs.Content value="leave" className="divide-y outline-none">
+          <TabPanel value="leave" className="divide-y">
             <Row title="Leave year starts in">
-              <Select value={s.leave.yearStartMonth} onChange={(e) => patch('leave', { yearStartMonth: Number(e.target.value) })} className="w-44">
+              <Select value={s.leave.yearStartMonth} onChange={(e) => patch('leave', { yearStartMonth: Number(e.target.value) })} className="w-44" aria-label="Leave year starts in">
                 {MONTHS.map((m, i) => (
                   <option key={m} value={i + 1}>{m}</option>
                 ))}
               </Select>
             </Row>
             <Row title="Allow half-day leave">
-              <Switch checked={s.leave.allowHalfDay} onCheckedChange={(v) => patch('leave', { allowHalfDay: v })} />
+              <Switch checked={s.leave.allowHalfDay} onCheckedChange={(v) => patch('leave', { allowHalfDay: v })} aria-label="Allow half-day leave" />
             </Row>
-            <Row title="Require manager approval" description="When off, requests route straight to HR.">
-              <Switch checked={s.leave.requireManagerApproval} onCheckedChange={(v) => patch('leave', { requireManagerApproval: v })} />
+            <Row title="Require manager approval" description="When off, requests go straight to HR.">
+              <Switch checked={s.leave.requireManagerApproval} onCheckedChange={(v) => patch('leave', { requireManagerApproval: v })} aria-label="Require manager approval" />
             </Row>
             <Row title="Count weekends and holidays inside a leave" description="Also called the sandwich rule. Friday to Monday then uses 4 days instead of 2. Days off at the very start or end are never counted.">
-              <Switch checked={s.leave.countDaysOffInside} onCheckedChange={(v) => patch('leave', { countDaysOffInside: v })} />
+              <Switch checked={s.leave.countDaysOffInside} onCheckedChange={(v) => patch('leave', { countDaysOffInside: v })} aria-label="Count weekends and holidays inside a leave" />
             </Row>
-          </Tabs.Content>
+          </TabPanel>
 
-          <Tabs.Content value="auth" className="space-y-5 outline-none">
+          <TabPanel value="auth" className="space-y-5">
             <div>
               <p className="text-sm font-medium">Allowed email domains</p>
               <p className="mb-2 text-xs text-muted">New accounts must use one of these domains.</p>
@@ -416,8 +414,8 @@ function SettingsForm({ org }: { org: Org }) {
               </form>
             </div>
             <div className="divide-y border-t">
-              <Row title="Session length" description="How long a sign-in stays valid.">
-                <Select value={s.auth.sessionTtlHours} onChange={(e) => patch('auth', { sessionTtlHours: Number(e.target.value) })} className="w-44">
+              <Row title="Stay signed in for" description="After this long, people are asked to sign in again.">
+                <Select value={s.auth.sessionTtlHours} onChange={(e) => patch('auth', { sessionTtlHours: Number(e.target.value) })} className="w-44" aria-label="Stay signed in for">
                   {[8, 24, 72, 168, 336, 720].map((h) => (
                     <option key={h} value={h}>{h < 24 ? `${h} hours` : `${h / 24} days`}</option>
                   ))}
@@ -426,16 +424,22 @@ function SettingsForm({ org }: { org: Org }) {
               <Row title="People choose their own passwords" description="Off: only admins set and change passwords, and people sign in with the one they were given. On: admin-set passwords are temporary, people choose their own at first sign-in and can change it in their profile.">
                 <Switch checked={s.auth.selfServicePassword} onCheckedChange={(v) => patch('auth', { selfServicePassword: v })} aria-label="People choose their own passwords" />
               </Row>
-              <Row title="Public self-registration" description="Kept off: only admins create accounts.">
-                <div className="flex items-center gap-2">
-                  <Badge tone="muted">admins only</Badge>
-                  <Switch checked={false} disabled aria-label="Self-registration (disabled)" />
-                </div>
-              </Row>
+              <p className="py-4 text-xs text-muted">Only administrators create accounts. People cannot sign themselves up.</p>
             </div>
-          </Tabs.Content>
+          </TabPanel>
         </Card>
-      </Tabs.Root>
+      </Tabs>
+      <div className="sticky bottom-0 z-10 mt-4 flex flex-wrap items-center justify-end gap-2 rounded-xl border bg-elevated/95 px-4 py-3 shadow-md backdrop-blur">
+        <p className="mr-auto text-xs text-muted" aria-live="polite">
+          {dirty ? 'You have unsaved changes.' : 'No changes to save.'}
+        </p>
+        <Button variant="ghost" disabled={!dirty || saving} onClick={() => load(org)}>
+          <RotateCcw /> Discard
+        </Button>
+        <Button disabled={!dirty} loading={saving} onClick={save}>
+          <Save /> Save changes
+        </Button>
+      </div>
     </div>
   );
 }

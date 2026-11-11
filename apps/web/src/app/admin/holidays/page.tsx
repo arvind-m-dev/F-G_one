@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { HOLIDAY_TYPES, holidaySchema, PERMISSIONS } from '@fg/shared';
+import { HOLIDAY_TYPES, holidaySchema, PERMISSIONS, type HolidayInput } from '@fg/shared';
+import { fieldErrors } from '@/components/admin/form-errors';
 import { Forbidden, PageHeader } from '@/components/admin/page-header';
 import { HolidayList } from '@/components/leave/holiday-list';
 import { Button } from '@/components/ui/button';
@@ -14,22 +15,26 @@ import { api, errorMessage } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import type { Holiday } from '@/lib/types';
 
+type HolidayForm = { name: string; date: string; type: string; description: string };
+const EMPTY: HolidayForm = { name: '', date: '', type: 'MANDATORY', description: '' };
+
 function HolidayDialog({ editing, open, onOpenChange }: { editing: Holiday | null; open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: '', date: '', type: 'MANDATORY', description: '' });
+  const [form, setForm] = useState<HolidayForm>(EMPTY);
+  const [initial, setInitial] = useState<HolidayForm>(EMPTY);
+  const [errors, setErrors] = useState<Partial<Record<keyof HolidayForm, string>>>({});
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (open) {
-      setForm({ name: editing?.name ?? '', date: editing?.date ?? '', type: editing?.type ?? 'MANDATORY', description: editing?.description ?? '' });
+      const start: HolidayForm = { name: editing?.name ?? '', date: editing?.date ?? '', type: editing?.type ?? 'MANDATORY', description: editing?.description ?? '' };
+      setForm(start);
+      setInitial(start);
+      setErrors({});
       setError(null);
     }
   }, [open, editing]);
   const save = useMutation({
-    mutationFn: () => {
-      const parsed = holidaySchema.safeParse({ ...form, description: form.description || null });
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Check the form');
-      return api(editing ? `/holidays/${editing.id}` : '/holidays', { method: editing ? 'PATCH' : 'POST', body: parsed.data });
-    },
+    mutationFn: (body: HolidayInput) => api(editing ? `/holidays/${editing.id}` : '/holidays', { method: editing ? 'PATCH' : 'POST', body }),
     onSuccess: () => {
       toast.success(editing ? 'Holiday updated' : 'Holiday added');
       for (const k of ['holidays', 'dashboard', 'leave-calendar']) void qc.invalidateQueries({ queryKey: [k] });
@@ -37,15 +42,23 @@ function HolidayDialog({ editing, open, onOpenChange }: { editing: Holiday | nul
     },
     onError: (e) => setError(errorMessage(e)),
   });
+  const submit = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setError(null);
+    const parsed = holidaySchema.safeParse({ ...form, description: form.description || null });
+    if (!parsed.success) return setErrors(fieldErrors<keyof HolidayForm>(parsed.error, { name: 'Enter a name of 2 to 80 characters', date: 'Choose a date', description: 'Keep the note under 240 characters' }));
+    setErrors({});
+    save.mutate(parsed.data);
+  };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={editing ? 'Edit holiday' : 'Add a holiday'}>
-      <div className="space-y-4">
-        <Field label="Name" htmlFor="h-name">
-          <Input id="h-name" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Diwali" />
+    <Dialog open={open} onOpenChange={onOpenChange} title={editing ? 'Edit holiday' : 'Add a holiday'} guard={JSON.stringify(form) !== JSON.stringify(initial)}>
+      <form className="space-y-4" noValidate onSubmit={submit}>
+        <Field label="Name" htmlFor="h-name" error={errors.name}>
+          <Input id="h-name" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Diwali" aria-invalid={!!errors.name} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Date" htmlFor="h-date">
-            <Input id="h-date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+          <Field label="Date" htmlFor="h-date" error={errors.date}>
+            <Input id="h-date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} aria-invalid={!!errors.date} />
           </Field>
           <Field label="Kind" htmlFor="h-type">
             <Select id="h-type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
@@ -58,19 +71,23 @@ function HolidayDialog({ editing, open, onOpenChange }: { editing: Holiday | nul
           </Field>
         </div>
         <p className="text-xs text-muted">{HOLIDAY_TYPES.find((t) => t.key === form.type)?.description}</p>
-        <Field label="Note (optional)" htmlFor="h-desc">
+        <Field label="Note (optional)" htmlFor="h-desc" error={errors.description}>
           <Input id="h-desc" value={form.description} maxLength={240} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </Field>
-        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+        {error && (
+          <p role="alert" className="rounded-lg bg-danger/8 px-3 py-2 text-[13px] text-danger">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button loading={save.isPending} onClick={() => save.mutate()}>
+          <Button type="submit" loading={save.isPending}>
             {editing ? 'Save' : 'Add holiday'}
           </Button>
         </div>
-      </div>
+      </form>
     </Dialog>
   );
 }

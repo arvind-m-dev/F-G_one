@@ -2,7 +2,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
-  AlertTriangle,
   Archive,
   AtSign,
   BadgeCheck,
@@ -18,7 +17,6 @@ import {
   MoreHorizontal,
   PauseCircle,
   Pencil,
-  RotateCw,
   ShieldCheck,
   ShieldOff,
   Smartphone,
@@ -34,15 +32,18 @@ import { AuditList, type AuditEntry } from '@/components/admin/audit-list';
 import { EmployeeAccess } from '@/components/admin/employee-access';
 import { AccountStatusDialog, ChangeEmailDialog, EditEmployeeDialog, SetPasswordDialog, STATUS_ACTION_META, statusActions, type StatusAction } from '@/components/admin/employee-dialogs';
 import { STATUS_LABEL, STATUS_TONE } from '@/components/admin/employee-status';
-import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
+import { timeZoneLabel } from '@/components/admin/timezones';
+import { useUnsavedGuard } from '@/components/admin/use-unsaved-guard';
 import { LOCATION_LABEL } from '@/components/attendance/attendance-panel';
 import { isCancelled, useReauth } from '@/components/security/reauth';
 import { describeDevice } from '@/components/security/security-settings';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, SectionTitle } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from '@/components/ui/dropdown';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
+import { TabPanel, Tabs } from '@/components/ui/tabs';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { fmtDays, fmtDuration, fmtRange } from '@/lib/hooks';
@@ -116,15 +117,15 @@ interface Overview {
 }
 
 const TABS = [
-  { v: 'overview', label: 'Overview', icon: UserRound },
-  { v: 'employment', label: 'Employment', icon: Briefcase },
-  { v: 'access', label: 'Access', icon: ShieldCheck },
-  { v: 'attendance', label: 'Attendance', icon: Clock },
-  { v: 'leave', label: 'Leave', icon: CalendarDays },
-  { v: 'devices', label: 'Devices', icon: Laptop },
-  { v: 'activity', label: 'Activity', icon: Activity },
+  { value: 'overview', label: 'Overview', icon: UserRound },
+  { value: 'employment', label: 'Employment', icon: Briefcase },
+  { value: 'access', label: 'Access', icon: ShieldCheck },
+  { value: 'attendance', label: 'Attendance', icon: Clock },
+  { value: 'leave', label: 'Leave', icon: CalendarDays },
+  { value: 'devices', label: 'Devices', icon: Laptop },
+  { value: 'activity', label: 'Activity', icon: Activity },
 ] as const;
-type Tab = (typeof TABS)[number]['v'];
+type Tab = (typeof TABS)[number]['value'];
 
 const LEAVE_TONE = { PENDING: 'warning', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'muted' } as const;
 const LEAVE_LABEL = { PENDING: 'Waiting for approval', APPROVED: 'Approved', REJECTED: 'Declined', CANCELLED: 'Cancelled' } as const;
@@ -139,7 +140,15 @@ function EmployeePage() {
   const can = useCan();
   const me = useSession();
   const [get, set] = useUrlState({ tab: 'overview' });
-  const tab = (TABS.some((t) => t.v === get('tab')) ? get('tab') : 'overview') as Tab;
+  const tab = (TABS.some((t) => t.value === get('tab')) ? get('tab') : 'overview') as Tab;
+  // Unsaved changes in the Access tab: ask before another tab or page throws them away.
+  const [accessDirty, setAccessDirty] = useState(false);
+  const [leavingTo, setLeavingTo] = useState<Tab | null>(null);
+  useUnsavedGuard(accessDirty, 'You have unsaved access changes. Leave without saving them?');
+  const go = (t: Tab) => {
+    if (tab === 'access' && accessDirty && t !== 'access') setLeavingTo(t);
+    else set({ tab: t });
+  };
   const q = useQuery({
     queryKey: ['employee-overview', id],
     queryFn: () => api<Overview>(`/employees/${id}/overview`),
@@ -189,18 +198,11 @@ function EmployeePage() {
           {status403 ? (
             <Forbidden title="You can't manage this person" description="Their role is the same as or above yours, or they are a Super Admin. Ask a Super Admin if something needs to change." />
           ) : status404 ? (
-            <EmptyState icon={<UserRound />} title="This person isn't here" description="They may have been removed, or the link is wrong." action={<Link href="/admin/employees" className="inline-flex h-9 items-center rounded-lg border px-4 text-[13px] font-medium hover:bg-surface-2">Back to employees</Link>} />
+            <EmptyState icon={<UserRound />} title="This person isn't here" description="They may have been removed, or the link is wrong." action={<Link href="/admin/employees" className={buttonVariants({ variant: 'outline' })}>Back to employees</Link>} />
           ) : (
-            <EmptyState
-              icon={<AlertTriangle />}
-              title="Couldn't load this employee"
-              description={errorMessage(e)}
-              action={
-                <Button variant="outline" onClick={() => void q.refetch()}>
-                  <RotateCw /> Try again
-                </Button>
-              }
-            />
+            <div className="p-4">
+              <LoadError what="this employee" error={e} onRetry={() => q.refetch()} />
+            </div>
           )}
         </Card>
       </>,
@@ -286,33 +288,48 @@ function EmployeePage() {
         </p>
       )}
 
-      <div className="scrollbar-thin mb-6 overflow-x-auto">
-        <div className="inline-flex rounded-lg bg-surface-2 p-0.5" role="tablist" aria-label="Employee sections">
-          {TABS.map((t) => (
-            <button
-              key={t.v}
-              role="tab"
-              id={`tab-${t.v}`}
-              aria-selected={tab === t.v}
-              aria-controls="employee-panel"
-              onClick={() => set({ tab: t.v })}
-              className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition [&_svg]:size-3.5', tab === t.v ? 'bg-canvas shadow-sm' : 'text-muted hover:text-foreground')}
-            >
-              <t.icon aria-hidden /> {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Tabs value={tab} onValueChange={go} items={TABS} label="Employee sections">
+        <TabPanel value="overview">
+          <OverviewTab
+            o={o}
+            go={go}
+            actions={self ? {} : { setPassword: inactive ? undefined : () => setSettingPassword(true), liftSuspension: () => setStatus('unsuspend'), restore: () => setStatus('restore') }}
+          />
+        </TabPanel>
+        <TabPanel value="employment">
+          <EmploymentTab o={o} go={go} />
+        </TabPanel>
+        <TabPanel value="access">
+          <EmployeeAccess userId={e.id} firstName={e.firstName} onDirtyChange={setAccessDirty} />
+        </TabPanel>
+        <TabPanel value="attendance">
+          <AttendanceTab o={o} />
+        </TabPanel>
+        <TabPanel value="leave">
+          <LeaveTab o={o} />
+        </TabPanel>
+        <TabPanel value="devices">
+          <DevicesTab o={o} self={self} onSignOut={() => setSigningOut(true)} />
+        </TabPanel>
+        <TabPanel value="activity">
+          <ActivityTab o={o} />
+        </TabPanel>
+      </Tabs>
 
-      <div role="tabpanel" id="employee-panel" aria-labelledby={`tab-${tab}`}>
-        {tab === 'overview' && <OverviewTab o={o} go={(t) => set({ tab: t })} />}
-        {tab === 'employment' && <EmploymentTab o={o} go={(t) => set({ tab: t })} />}
-        {tab === 'access' && <EmployeeAccess userId={e.id} firstName={e.firstName} />}
-        {tab === 'attendance' && <AttendanceTab o={o} />}
-        {tab === 'leave' && <LeaveTab o={o} />}
-        {tab === 'devices' && <DevicesTab o={o} self={self} onSignOut={() => setSigningOut(true)} />}
-        {tab === 'activity' && <ActivityTab o={o} />}
-      </div>
+      <ConfirmDialog
+        open={!!leavingTo}
+        onOpenChange={(v) => !v && setLeavingTo(null)}
+        title="Leave without saving?"
+        description={`Your changes to ${e.firstName}'s access have not been saved. If you leave this tab they are lost.`}
+        confirmLabel="Discard changes"
+        danger
+        onConfirm={() => {
+          const t = leavingTo;
+          setLeavingTo(null);
+          setAccessDirty(false);
+          if (t) set({ tab: t });
+        }}
+      />
 
       <EditEmployeeDialog employee={editing ? e : null} onOpenChange={(v) => !v && setEditing(false)} />
       <ChangeEmailDialog employee={changingEmail ? e : null} onOpenChange={(v) => !v && setChangingEmail(false)} />
@@ -378,19 +395,33 @@ function PersonLink({ p }: { p: { id: string; firstName: string; lastName: strin
   );
 }
 
-function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
+/** Things an admin can do straight from a "needs attention" notice. Left out when not allowed (your own account, inactive accounts). */
+interface NoticeActions {
+  setPassword?: () => void;
+  liftSuspension?: () => void;
+  restore?: () => void;
+}
+
+function OverviewTab({ o, go, actions }: { o: Overview; go: (t: Tab) => void; actions: NoticeActions }) {
   const a = o.account;
   const att = o.attendance;
   const pending = o.leave.requests.filter((r) => r.status === 'PENDING').length;
-  const attention: { icon: React.ReactNode; text: string; tone: 'warning' | 'danger' }[] = [];
+  const attention: { icon: React.ReactNode; text: string; tone: 'warning' | 'danger'; action?: { label: string; onClick?: () => void; href?: string } }[] = [];
+  const act = (label: string, onClick?: () => void) => (onClick ? { label, onClick } : undefined);
   if (a.status === 'SUSPENDED')
-    attention.push({ icon: <PauseCircle />, text: `Suspended${a.suspendedAt ? ` since ${fmtWhen(a.suspendedAt)}` : ''}: they can't sign in until the suspension is lifted.${a.suspensionReason ? ` Reason: ${a.suspensionReason}` : ''}`, tone: 'danger' });
-  if (a.status === 'ARCHIVED') attention.push({ icon: <Archive />, text: `Archived${a.archivedAt ? ` on ${fmtDate(a.archivedAt)}` : ''}. Hidden from lists and pickers; their history is kept. Restore them to make changes.`, tone: 'warning' });
-  if (a.lockedUntil) attention.push({ icon: <LockKeyhole />, text: `Sign-in is locked until ${fmtWhen(a.lockedUntil)} after too many wrong passwords. Setting a new password unlocks it.`, tone: 'danger' });
-  if (!a.hasPassword) attention.push({ icon: <KeyRound />, text: 'No password yet. Set one so they can sign in.', tone: 'warning' });
+    attention.push({
+      icon: <PauseCircle />,
+      text: `Suspended${a.suspendedAt ? ` since ${fmtWhen(a.suspendedAt)}` : ''}: they can't sign in until the suspension is lifted.${a.suspensionReason ? ` Reason: ${a.suspensionReason}` : ''}`,
+      tone: 'danger',
+      action: act('Lift suspension', actions.liftSuspension),
+    });
+  if (a.status === 'ARCHIVED')
+    attention.push({ icon: <Archive />, text: `Archived${a.archivedAt ? ` on ${fmtDate(a.archivedAt)}` : ''}. Hidden from lists and pickers; their history is kept. Restore them to make changes.`, tone: 'warning', action: act('Restore', actions.restore) });
+  if (a.lockedUntil) attention.push({ icon: <LockKeyhole />, text: `Sign-in is locked until ${fmtWhen(a.lockedUntil)} after too many wrong passwords. Setting a new password unlocks it.`, tone: 'danger', action: act('Set a new password', actions.setPassword) });
+  if (!a.hasPassword) attention.push({ icon: <KeyRound />, text: 'No password yet. Set one so they can sign in.', tone: 'warning', action: act('Set a password', actions.setPassword) });
   if (a.mustChangePassword) attention.push({ icon: <KeyRound />, text: 'They will choose their own password at next sign-in.', tone: 'warning' });
   if (a.isSuperAdmin && !a.superAdminActive) attention.push({ icon: <ShieldOff />, text: 'Super Admin authority is paused until they turn on two-step verification.', tone: 'warning' });
-  if (pending) attention.push({ icon: <CalendarClock />, text: `${pending} leave request${pending === 1 ? '' : 's'} waiting for approval.`, tone: 'warning' });
+  if (pending) attention.push({ icon: <CalendarClock />, text: `${pending} leave request${pending === 1 ? '' : 's'} waiting for approval.`, tone: 'warning', action: { label: 'Review leave', href: '/admin/leave?status=PENDING' } });
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
@@ -398,9 +429,21 @@ function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
         {attention.length > 0 && (
           <ul className="space-y-2" aria-label="Needs attention">
             {attention.map((x, i) => (
-              <li key={i} className={cn('flex items-start gap-2.5 rounded-lg px-3 py-2 text-[13px] [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0', x.tone === 'danger' ? 'bg-rose-500/8 text-rose-700 dark:text-rose-300' : 'bg-amber-500/10 text-amber-800 dark:text-amber-200')}>
-                {x.icon}
-                {x.text}
+              <li key={i} className={cn('flex flex-wrap items-start gap-x-2.5 gap-y-2 rounded-lg border px-3 py-2 text-[13px]', x.tone === 'danger' ? 'border-danger/25 bg-danger/8' : 'border-warning/30 bg-warning/10')}>
+                <span className={cn('mt-0.5 shrink-0 [&_svg]:size-4', x.tone === 'danger' ? 'text-danger' : 'text-warning')} aria-hidden>
+                  {x.icon}
+                </span>
+                <span className="min-w-0 flex-1 basis-56">{x.text}</span>
+                {x.action &&
+                  (x.action.href ? (
+                    <Link href={x.action.href} className={buttonVariants({ size: 'sm', variant: 'outline' })}>
+                      {x.action.label}
+                    </Link>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={x.action.onClick}>
+                      {x.action.label}
+                    </Button>
+                  ))}
               </li>
             ))}
           </ul>
@@ -418,7 +461,7 @@ function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
               <Fact label="Last active">{a.lastSeenAt ? <span title={fmtWhen(a.lastSeenAt)}>{timeAgo(a.lastSeenAt)}</span> : 'Never'}</Fact>
               <Fact label="Two-step verification">
                 {a.mfaEnabled ? (
-                  <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+                  <span className="inline-flex items-center gap-1 text-success">
                     <BadgeCheck className="size-3.5" aria-hidden /> On
                   </span>
                 ) : (
@@ -440,7 +483,7 @@ function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
               </button>
             }
           >
-            Last 30 days
+            Attendance, last 30 days
           </SectionTitle>
           {att ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -516,7 +559,7 @@ function OverviewTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
           <dl className="space-y-3">
             <Fact label="Work email">{o.employee.email}</Fact>
             <Fact label="Work phone">{o.employee.phone}</Fact>
-            <Fact label="Time zone">{o.employee.timezone}</Fact>
+            <Fact label="Time zone">{o.employee.timezone ? timeZoneLabel(o.employee.timezone) : null}</Fact>
           </dl>
         </section>
       </aside>
@@ -540,7 +583,7 @@ function EmploymentTab({ o, go }: { o: Overview; go: (t: Tab) => void }) {
             <Fact label="Birthday">{e.birthday && e.birthday.length === 10 ? fmtDate(e.birthday, { day: 'numeric', month: 'long', year: 'numeric' }) : null}</Fact>
             <Fact label="Work phone">{e.phone}</Fact>
             <Fact label="Pronouns">{e.pronouns}</Fact>
-            <Fact label="Time zone">{e.timezone}</Fact>
+            <Fact label="Time zone">{e.timezone ? timeZoneLabel(e.timezone) : null}</Fact>
           </dl>
         </Card>
       </section>
@@ -589,7 +632,7 @@ function AttendanceTab({ o }: { o: Overview }) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted">
-        {fmtRange(att.from, att.to)} · times in {tz}
+        {fmtRange(att.from, att.to)} · times shown for {timeZoneLabel(tz)}
       </p>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         {(

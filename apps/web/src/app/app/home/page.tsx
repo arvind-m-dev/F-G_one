@@ -4,8 +4,8 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { WIDGET_LABELS, type WidgetKey } from '@fg/shared';
-import { GripVertical, Lock, RotateCcw, SlidersHorizontal } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { GripVertical, House, Lock, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { NewMessageDialog } from '@/components/chat/new-conversation';
@@ -13,7 +13,7 @@ import { WIDGETS, type DashboardData } from '@/components/dashboard/widgets';
 import { StatusPicker } from '@/components/status-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Skeleton, Switch } from '@/components/ui/misc';
+import { EmptyState, Skeleton, Switch } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
 import { useLivePerson } from '@/lib/presence-store';
 import { useSession, useUpdatePreferences } from '@/lib/session';
@@ -35,6 +35,7 @@ function SortableRow({ id, visible, onToggle }: { id: WidgetKey; visible: boolea
 }
 
 function Customize({ open, onOpenChange, allowed, initial, onSave }: { open: boolean; onOpenChange: (o: boolean) => void; allowed: WidgetKey[]; initial: WidgetKey[]; onSave: (order: WidgetKey[]) => Promise<void> }) {
+  const [saving, setSaving] = useState(false);
   // Working order includes hidden widgets (appended) so they can be re-enabled in place.
   const [order, setOrder] = useState<WidgetKey[]>([]);
   const [visible, setVisible] = useState<Set<WidgetKey>>(new Set());
@@ -79,7 +80,16 @@ function Customize({ open, onOpenChange, allowed, initial, onSave }: { open: boo
         <Button variant="ghost" onClick={() => { setOrder(allowed); setVisible(new Set(allowed)); }}>
           <RotateCcw /> Restore default
         </Button>
-        <Button onClick={() => onSave(order.filter((k) => visible.has(k) || WIDGETS[k].fixed))}>Save layout</Button>
+        <Button
+          loading={saving}
+          onClick={async () => {
+            setSaving(true);
+            await onSave(order.filter((k) => visible.has(k) || WIDGETS[k].fixed));
+            setSaving(false);
+          }}
+        >
+          Save layout
+        </Button>
       </div>
     </Dialog>
   );
@@ -88,7 +98,10 @@ function Customize({ open, onOpenChange, allowed, initial, onSave }: { open: boo
 function Home() {
   const me = useSession();
   const savePrefs = useUpdatePreferences();
-  const welcome = useSearchParams().get('welcome');
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const welcome = params.get('welcome');
   const dash = useQuery({ queryKey: ['dashboard'], queryFn: () => api<DashboardData>('/dashboard'), refetchInterval: 60_000 });
   const [customizing, setCustomizing] = useState(false);
   const [newMsg, setNewMsg] = useState(false);
@@ -104,9 +117,15 @@ function Home() {
     return base.includes('welcome') ? base : (['welcome', ...base] as WidgetKey[]);
   }, [personalKey, allowed]);
 
+  // Greet once, then take the marker out of the address so a refresh or Back doesn't greet again.
   useEffect(() => {
-    if (welcome) toast.success(`Welcome to FG One, ${me.user.firstName}`, { description: 'Set your status and say hello in #general.' });
-  }, [welcome, me.user.firstName]);
+    if (!welcome) return;
+    toast.success(`Welcome to FG One, ${me.user.firstName}`, { id: 'welcome', description: 'Set your status and say hello in a channel.' });
+    const next = new URLSearchParams(params.toString());
+    next.delete('welcome');
+    router.replace(next.size ? `${pathname}?${next}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [welcome]);
 
   const actions = { newMessage: () => setNewMsg(true), setStatus: () => setStatusOpen(true), search: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true })) };
   const render = (col: 'header' | 'main' | 'side') =>
@@ -132,12 +151,17 @@ function Home() {
             </div>
           </div>
         ) : dash.isError ? (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-6 text-sm">
-            We couldn&apos;t load your home: {errorMessage(dash.error)}{' '}
-            <button className="font-medium text-primary underline" onClick={() => dash.refetch()}>
-              Try again
-            </button>
-          </div>
+          <EmptyState
+            className="mt-10"
+            icon={<House />}
+            title="Home couldn't be loaded"
+            description={errorMessage(dash.error)}
+            action={
+              <Button variant="outline" loading={dash.isFetching} onClick={() => void dash.refetch()}>
+                Try again
+              </Button>
+            }
+          />
         ) : (
           <>
             <div className="space-y-7">{render('header')}</div>
@@ -162,13 +186,10 @@ function Home() {
         allowed={allowed}
         initial={order}
         onSave={async (o) => {
-          try {
-            await savePrefs({ dashboardWidgets: o });
-            setCustomizing(false);
-            toast.success('Home layout saved');
-          } catch (e) {
-            toast.error(errorMessage(e));
-          }
+          // A failed save is reported (and undone) by the preferences hook itself.
+          if (!(await savePrefs({ dashboardWidgets: o }))) return;
+          setCustomizing(false);
+          toast.success('Home layout saved');
         }}
       />
       <NewMessageDialog open={newMsg} onOpenChange={setNewMsg} />

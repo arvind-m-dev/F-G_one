@@ -81,7 +81,7 @@ Admin device controls (Phase 2c), with the same rank and Super Admin authority c
 | GET | `/departments` | any |
 | POST / PATCH / DELETE | `/departments[/:id]` | `departments.manage` |
 | GET | `/roles` | any. Each role has `grants[{permission, scope}]`, derived `permissions`, `assignable`, `archivedAt`, `color`, `icon`. The response also carries `catalog` (permission catalogue with supported scopes, labels, help and `sensitive`), `modules` and `scopeLabels`. |
-| 🌐 GET | `/public/branding` | Login-page branding for `DEFAULT_ORG_SLUG` |
+| 🌐 GET | `/public/branding` | Login-page branding for `DEFAULT_ORG_SLUG`: `name`, `logoUrl`, colours, `tagline`, `defaultTheme`, and `selfServicePassword` (the company password policy, so the forgot-password page offers an email reset only where it works). |
 | GET | `/organization` | any |
 | PATCH | `/organization` | `settings.manage`. `{ name?, logoUrl?, primaryColor?, secondaryColor?, settings?: deep-partial }`, deep-merged and re-validated. |
 

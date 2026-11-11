@@ -114,6 +114,8 @@ test.describe('chat', () => {
     await send(emp, doomed);
     await expect(message(emp, doomed)).toBeVisible();
     await messageAction(emp, doomed, 'Delete message');
+    // deleting asks first
+    await emp.getByRole('dialog', { name: 'Delete this message?' }).getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(emp.getByText('This message was deleted.')).toBeVisible();
 
     // the only admin cannot leave while Rohan is still here
@@ -157,11 +159,12 @@ test.describe('chat', () => {
     await mgr.keyboard.press('Escape');
 
     await messageAction(emp, text, 'Delete message');
+    await emp.getByRole('dialog', { name: 'Delete this message?' }).getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(mgr.getByText('This message was deleted.')).toBeVisible();
 
     // removal: the manager's open view loses the conversation at once
     expect((await api(emp, 'DELETE', `/channels/${ch.body.id}/members/${mgrId}`)).status).toBe(200);
-    await expect(mgr.getByText('Conversation unavailable')).toBeVisible();
+    await expect(mgr.getByText("This conversation isn't available")).toBeVisible();
     await send(emp, `after removal ${uid()}`);
     await mgr.goto('/app/chat');
     await expect(mgr.getByRole('link', { name: /qa-rt-/ })).toHaveCount(0);
@@ -177,7 +180,7 @@ test.describe('chat', () => {
     for (const email of ['hr@futuristglobal.com', 'admin@futuristglobal.com']) {
       const outsider = await as(browser, email);
       await outsider.goto(`/app/chat/${ch.body.id}`);
-      await expect(outsider.getByText('Conversation unavailable')).toBeVisible();
+      await expect(outsider.getByText("This conversation isn't available")).toBeVisible();
       expect((await api(outsider, 'GET', `/channels/${ch.body.id}/messages`)).status).toBe(404);
       const s = await api<{ messages: unknown[]; channels: unknown[] }>(outsider, 'GET', `/search?q=${word}`);
       expect(s.body.messages).toHaveLength(0);
@@ -247,7 +250,7 @@ test.describe('chat', () => {
       await emp.waitForTimeout(400);
     }
     await expect(message(emp, `page msg ${tag} n0.`)).toBeVisible();
-    await expect(emp.getByText('This is the beginning of your direct message history.')).toBeVisible();
+    await expect(emp.getByText('This is the start of your conversation.')).toBeVisible();
     await emp.context().close();
   });
 });
@@ -277,7 +280,7 @@ test.describe('announcements', () => {
     const dept = (await api<{ user: { department?: { name: string } } }>(outsider, 'GET', '/auth/me')).body.user.department?.name;
     if (dept !== 'Engineering') {
       await outsider.goto(`/app/announcements?q=${encodeURIComponent(title)}`);
-      await expect(outsider.getByText('Nothing here yet')).toBeVisible();
+      await expect(outsider.getByText('No announcements match')).toBeVisible();
       const list = await api<{ id: string }[]>(outsider, 'GET', `/announcements?q=${encodeURIComponent(title)}`);
       expect(list.body).toHaveLength(0);
     }

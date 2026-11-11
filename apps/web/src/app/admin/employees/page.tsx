@@ -1,5 +1,5 @@
 'use client';
-import { AlertTriangle, AtSign, ChevronRight, KeyRound, MoreHorizontal, Pencil, RotateCw, Search, ShieldCheck, UserPlus, UserRound, Users } from 'lucide-react';
+import { AtSign, ChevronRight, KeyRound, MoreHorizontal, Pencil, Search, ShieldCheck, UserPlus, UserRound, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -7,10 +7,11 @@ import { PERMISSIONS } from '@fg/shared';
 import { AccountWizard } from '@/components/admin/account-wizard';
 import { AccountStatusDialog, ChangeEmailDialog, EditEmployeeDialog, SetPasswordDialog, STATUS_ACTION_META, statusActions, type StatusAction } from '@/components/admin/employee-dialogs';
 import { STATUS_LABEL, STATUS_TONE } from '@/components/admin/employee-status';
-import { Forbidden, PageHeader } from '@/components/admin/page-header';
+import { Forbidden, LoadError, PageHeader } from '@/components/admin/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger } from '@/components/ui/dropdown';
+import { FilterChips } from '@/components/ui/filter-chips';
 import { Input, Select } from '@/components/ui/input';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
@@ -18,7 +19,9 @@ import { useDepartments, useEmployeeList } from '@/lib/hooks';
 import { useCan, useSession } from '@/lib/session';
 import type { Employee } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
-import { cn, timeAgo } from '@/lib/utils';
+import { timeAgo } from '@/lib/utils';
+
+const STATUS_OPTIONS = [{ value: 'ALL', label: 'All' }, ...(['ACTIVE', 'INVITED', 'SUSPENDED', 'DEACTIVATED', 'ARCHIVED'] as const).map((s) => ({ value: s, label: STATUS_LABEL[s] }))];
 
 function EmployeesAdmin() {
   const can = useCan();
@@ -28,7 +31,8 @@ function EmployeesAdmin() {
   const [get, set] = useUrlState({ q: '', status: 'ALL', dept: '', page: '1', add: '', invite: '' });
   const [q, setQ] = useState(get('q'));
   const debounced = get('q');
-  const status = get('status');
+  // An unknown status in the URL shows everyone instead of an error.
+  const status = STATUS_OPTIONS.some((o) => o.value === get('status')) ? get('status') : 'ALL';
   const dept = get('dept');
   const page = Number(get('page')) || 1;
   const setStatus = (v: string) => set({ status: v, page: null });
@@ -58,7 +62,7 @@ function EmployeesAdmin() {
         title="Employees"
         description="Add, update and manage access for everyone at your company."
         actions={
-          <Button variant="gradient" onClick={() => setAddOpen(true)}>
+          <Button onClick={() => setAddOpen(true)}>
             <UserPlus /> Add employee
           </Button>
         }
@@ -69,7 +73,7 @@ function EmployeesAdmin() {
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, email, designation" className="pl-9" aria-label="Search employees" />
           </div>
-          <Select value={dept} onChange={(e) => setDept(e.target.value)} className="md:w-48" aria-label="Department">
+          <Select value={dept} onChange={(e) => setDept(e.target.value)} className="lg:w-56" aria-label="Department">
             <option value="">All departments</option>
             {depts.data?.map((d) => (
               <option key={d.id} value={d.id}>
@@ -77,25 +81,14 @@ function EmployeesAdmin() {
               </option>
             ))}
           </Select>
-          <div className="scrollbar-thin flex overflow-x-auto rounded-lg bg-surface-2 p-0.5 text-sm">
-            {(['ALL', 'ACTIVE', 'INVITED', 'SUSPENDED', 'DEACTIVATED', 'ARCHIVED'] as const).map((s) => (
-              <button key={s} onClick={() => setStatus(s)} aria-pressed={status === s} className={cn('shrink-0 rounded-md px-3 py-1.5 text-xs font-medium transition', status === s ? 'bg-surface shadow-sm' : 'text-muted hover:text-foreground')}>
-                {s === 'ALL' ? 'All' : STATUS_LABEL[s]}
-              </button>
-            ))}
-          </div>
         </div>
-        {list.isError && (
-          <EmptyState
-            icon={<AlertTriangle />}
-            title="Couldn't load employees"
-            description="Check your connection and try again."
-            action={
-              <Button variant="outline" onClick={() => void list.refetch()}>
-                <RotateCw /> Try again
-              </Button>
-            }
-          />
+        <div className="border-b px-3 py-1.5">
+          <FilterChips label="Account status" value={status} onChange={setStatus} options={STATUS_OPTIONS} />
+        </div>
+        {list.isError && !list.data && (
+          <div className="p-4">
+            <LoadError what="the employees" error={list.error} onRetry={() => list.refetch()} />
+          </div>
         )}
         <ul className="divide-y md:hidden">
           {list.isPending &&
@@ -229,24 +222,43 @@ function EmployeesAdmin() {
         {list.data?.items.length === 0 && (
           <EmptyState
             icon={<Users />}
-            title={status === 'ARCHIVED' ? 'No archived accounts' : status === 'SUSPENDED' ? 'Nobody is suspended' : 'No employees match'}
-            description={status === 'ARCHIVED' ? 'Archive a deactivated account to hide it from everyday lists. It shows up here.' : 'Adjust the filters or add someone new.'}
+            title={debounced || dept ? 'No employees match' : status === 'ARCHIVED' ? 'No archived accounts' : status === 'SUSPENDED' ? 'Nobody is suspended' : status === 'INVITED' ? 'Nobody is waiting for a password' : 'No employees match'}
+            description={debounced || dept ? 'Try another search or department.' : status === 'ARCHIVED' ? 'Archive a deactivated account to hide it from everyday lists. It shows up here.' : status === 'ALL' || status === 'ACTIVE' ? 'Add someone to get started.' : undefined}
+            action={
+              debounced || dept ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setQ('');
+                    set({ q: null, dept: null, page: null });
+                  }}
+                >
+                  Clear search and department
+                </Button>
+              ) : undefined
+            }
           />
         )}
-        <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted">
-          <span>{list.data ? `${list.data.total} total` : ''}</span>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Previous
-            </Button>
+        {list.data && (
+          <div className="flex items-center justify-between border-t px-4 py-3 text-sm text-muted">
             <span>
-              {page} / {pages}
+              {list.data.total} {list.data.total === 1 ? 'person' : 'people'}
             </span>
-            <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-              Next
-            </Button>
+            {pages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  Previous
+                </Button>
+                <span>
+                  Page {page} of {pages}
+                </span>
+                <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </Card>
 
       <AccountWizard open={addOpen} onOpenChange={setAddOpen} onCreated={(e) => router.push(`/admin/employees/${e.id}`)} />

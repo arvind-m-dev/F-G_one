@@ -1,5 +1,6 @@
 'use client';
 import { useQueryClient } from '@tanstack/react-query';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { PERMISSIONS, presenceMeta, type Permission } from '@fg/shared';
 import {
   ArrowLeftRight,
@@ -49,8 +50,11 @@ import { StatusPicker } from '@/components/status-picker';
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger, Popover, PopoverAnchor, PopoverContent } from '@/components/ui/dropdown';
 import { Kbd, Tooltip } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
+import { ADMIN_PERMS } from '@/lib/admin-perms';
 import { api } from '@/lib/api';
+import { clearDrafts } from '@/lib/drafts';
 import { useApprovalsCount, useChannels } from '@/lib/hooks';
+import { useModKey } from '@/lib/platform';
 import { useLivePerson } from '@/lib/presence-store';
 import { useRealtime } from '@/lib/realtime';
 import { useCan, useModule, useSession, useUpdatePreferences } from '@/lib/session';
@@ -73,17 +77,7 @@ interface NavGroup {
   items: NavItem[];
 }
 
-/** Anyone holding a permission behind an admin page may open the admin portal (each page and route checks its own). */
-export const ADMIN_PERMS: Permission[] = [
-  PERMISSIONS.ANALYTICS_VIEW,
-  PERMISSIONS.EMPLOYEES_MANAGE,
-  PERMISSIONS.DEPARTMENTS_MANAGE,
-  PERMISSIONS.SETTINGS_MANAGE,
-  PERMISSIONS.AUDIT_READ,
-  PERMISSIONS.ATTENDANCE_VIEW_ALL,
-  PERMISSIONS.HOLIDAYS_MANAGE,
-  PERMISSIONS.ANNOUNCEMENTS_MANAGE,
-];
+export { ADMIN_PERMS };
 
 function useNav(portal: Portal): NavGroup[] {
   const can = useCan();
@@ -225,6 +219,7 @@ function UserMenu({ portal }: { portal: Portal }) {
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
     qc.clear();
     clearPersistedCache();
+    clearDrafts();
     router.replace('/login');
     toast.success('Signed out');
   };
@@ -272,7 +267,7 @@ function UserMenu({ portal }: { portal: Portal }) {
             <UserRound /> My profile
           </DropdownItem>
           <DropdownItem onSelect={() => router.push('/app/settings')}>
-            <Settings /> Preferences
+            <Settings /> Settings
           </DropdownItem>
           {portal === 'admin' ? (
             <DropdownItem onSelect={() => router.push('/app/home')}>
@@ -315,6 +310,7 @@ function NotificationsButton({ side }: { side?: 'right' | 'bottom' }) {
 /** Desktop top bar: search, portal switch, notifications, theme and the account menu. */
 function TopBar({ portal, onSearch }: { portal: Portal; onSearch: () => void }) {
   const can = useCan();
+  const mod = useModKey();
   const isAdmin = ADMIN_PERMS.some((p) => can(p));
   const switchLink = portal === 'admin' ? { href: '/app/home', label: 'Back to workspace', icon: ArrowLeftRight } : isAdmin ? { href: '/admin', label: 'Admin portal', icon: ShieldCheck } : null;
   return (
@@ -322,12 +318,12 @@ function TopBar({ portal, onSearch }: { portal: Portal; onSearch: () => void }) 
       <button
         onClick={onSearch}
         className="flex h-8 w-full max-w-sm items-center gap-2 rounded-lg border border-black/[0.06] bg-canvas/70 px-2.5 text-[13px] text-subtle shadow-sm transition hover:text-muted dark:border-white/[0.06] dark:bg-white/[0.03]"
-        aria-label="Search (Ctrl+K)"
+        aria-label={`Search (${mod}+K)`}
       >
-        <Search className="size-4" />
-        <span>Search people, channels and pages</span>
-        <span className="ml-auto flex gap-0.5">
-          <Kbd>⌘</Kbd>
+        <Search className="size-4 shrink-0" />
+        <span className="truncate">Search pages, people and messages</span>
+        <span className="ml-auto flex shrink-0 gap-0.5" aria-hidden>
+          <Kbd>{mod}</Kbd>
           <Kbd>K</Kbd>
         </span>
       </button>
@@ -385,9 +381,10 @@ function Rail({ portal, collapsed, onToggle, onNavigate }: { portal: Portal; col
       <div className="space-y-0.5 pt-3">
         <NavLink item={{ href: '/app/settings', label: 'Settings', icon: Settings }} collapsed={collapsed} onNavigate={onNavigate} />
         <div className={cn('flex items-center justify-between px-1 pt-2', collapsed && 'flex-col gap-2')}>
-          <span className="flex items-center gap-1.5 text-[11px] text-subtle" title={connected ? 'Live updates connected' : 'Reconnecting…'}>
-            <span className={cn('size-1.5 rounded-full', connected ? 'bg-emerald-500' : 'animate-pulse bg-amber-400')} />
-            {!collapsed && (connected ? 'Live' : 'Reconnecting')}
+          <span className="flex items-center gap-1.5 text-[11px] text-subtle" role="status" title={connected ? 'Live updates connected' : 'Reconnecting…'}>
+            <span className={cn('size-1.5 rounded-full', connected ? 'bg-success' : 'animate-pulse bg-warning')} aria-hidden />
+            {/* Read out when the rail is collapsed to icons, where only the dot shows. */}
+            <span className={cn(collapsed && 'sr-only')}>{connected ? 'Live' : 'Reconnecting…'}</span>
           </span>
           {onToggle && (
             <button onClick={onToggle} className="hidden rounded-md p-1 text-subtle transition hover:text-foreground md:block" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
@@ -413,10 +410,10 @@ function MobileTabs({ portal }: { portal: Portal }) {
       {items.map((it) => {
         const active = pathname.startsWith(it.href);
         return (
-          <Link key={it.href} href={it.href} className={cn('relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium', active ? 'text-primary' : 'text-muted')}>
+          <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} className={cn('relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium', active ? 'text-primary' : 'text-muted')}>
             <it.icon className="size-5" strokeWidth={active ? 2.1 : 1.8} />
             {it.label}
-            {!!it.badge && <span className="absolute top-1 left-1/2 ml-2 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">{it.badge}</span>}
+            {!!it.badge && <span className="absolute top-1 left-1/2 ml-2 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground tabular-nums">{it.badge > 99 ? '99+' : it.badge}</span>}
           </Link>
         );
       })}
@@ -428,7 +425,11 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
   const me = useSession();
   const pathname = usePathname();
   const savePrefs = useUpdatePreferences();
-  const [collapsed, setCollapsed] = useState(me.preferences.sidebarCollapsed ?? me.organization.settings.navigation.sidebarCollapsedByDefault);
+  // Read straight from the saved preference, so the switch in Settings and the rail's own button stay in step.
+  const collapsed = me.preferences.sidebarCollapsed ?? me.organization.settings.navigation.sidebarCollapsedByDefault;
+  const approvals = useApprovalsCount();
+  // On phones Approvals lives in the drawer, so the menu button carries its count.
+  const waiting = portal === 'app' && approvals.data?.canApprove ? approvals.data.total : 0;
   const [drawer, setDrawer] = useState(false);
   const [search, setSearch] = useState(false);
   // On tablets (768–1099px) the rail is icon-only so content keeps enough room.
@@ -441,13 +442,18 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
     return () => mq.removeEventListener('change', update);
   }, []);
   useEffect(() => setDrawer(false), [pathname]);
+  // The drawer only exists on phones: close it if the window grows, so its scroll lock never outlives it.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const close = () => mq.matches && setDrawer(false);
+    mq.addEventListener('change', close);
+    return () => mq.removeEventListener('change', close);
+  }, []);
 
-  const toggle = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    void savePrefs({ sidebarCollapsed: next });
-  };
+  const toggle = () => void savePrefs({ sidebarCollapsed: !collapsed });
   const fullBleed = pathname.startsWith('/app/chat');
+  // Inside a conversation on a phone the conversation's own header (with Back) is the only bar.
+  const inConversation = /^\/app\/chat\/.+/.test(pathname);
 
   return (
     <div className="flex h-dvh overflow-hidden bg-chrome">
@@ -455,22 +461,31 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
         <Rail portal={portal} collapsed={collapsed || narrow} onToggle={narrow ? undefined : toggle} />
       </motion.aside>
 
-      <AnimatePresence>
-        {drawer && (
-          <>
-            <motion.div className="fixed inset-0 z-40 bg-[#0b0d11]/45 md:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDrawer(false)} />
-            <motion.aside className="fixed inset-y-0 left-0 z-50 w-72 bg-chrome shadow-lg md:hidden" initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} transition={{ type: 'spring', stiffness: 400, damping: 38 }}>
-              <Rail portal={portal} collapsed={false} onNavigate={() => setDrawer(false)} />
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Phone navigation drawer: a real dialog, so Esc closes it, focus stays inside and the page behind doesn't scroll. */}
+      <DialogPrimitive.Root open={drawer} onOpenChange={setDrawer}>
+        <AnimatePresence>
+          {drawer && (
+            <DialogPrimitive.Portal forceMount>
+              <DialogPrimitive.Overlay asChild forceMount>
+                <motion.div className="fixed inset-0 z-40 bg-scrim md:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+              </DialogPrimitive.Overlay>
+              <DialogPrimitive.Content asChild forceMount aria-describedby={undefined}>
+                <motion.div className="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-chrome shadow-lg outline-none md:hidden" initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }} transition={{ type: 'spring', stiffness: 400, damping: 38 }}>
+                  <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
+                  <Rail portal={portal} collapsed={false} onNavigate={() => setDrawer(false)} />
+                </motion.div>
+              </DialogPrimitive.Content>
+            </DialogPrimitive.Portal>
+          )}
+        </AnimatePresence>
+      </DialogPrimitive.Root>
 
       <div className="flex min-w-0 flex-1 flex-col md:pr-2 md:pb-2">
         <TopBar portal={portal} onSearch={() => setSearch(true)} />
-        <div className="flex h-12 shrink-0 items-center gap-1 border-b bg-canvas px-3 md:hidden">
-          <button onClick={() => setDrawer(true)} className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label="Open navigation">
+        <div className={cn('flex h-12 shrink-0 items-center gap-1 border-b bg-canvas px-3 md:hidden', inConversation && 'hidden')}>
+          <button onClick={() => setDrawer(true)} className="relative grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2" aria-label={`Open navigation${waiting ? ` (${waiting} waiting for your approval)` : ''}`}>
             <Menu className="size-5" />
+            {waiting > 0 && <span className="absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground tabular-nums">{waiting > 99 ? '99+' : waiting}</span>}
           </button>
           <BrandMark name={me.organization.name} logoUrl={me.organization.logoUrl} size={24} />
           <span className="truncate text-sm font-semibold">{portal === 'admin' ? 'Admin' : me.organization.name}</span>
@@ -492,7 +507,7 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
           </motion.div>
         </main>
       </div>
-      {!/^\/app\/chat\/.+/.test(pathname) && <MobileTabs portal={portal} />}
+      {!inConversation && <MobileTabs portal={portal} />}
       <CommandPalette open={search} onOpenChange={setSearch} />
     </div>
   );

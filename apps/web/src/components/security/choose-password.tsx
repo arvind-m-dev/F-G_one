@@ -53,7 +53,7 @@ export function ChoosePassword({ me }: { me: Me }) {
           <Field label="Confirm new password" htmlFor="cp-confirm" error={err.confirm?.message}>
             <Input id="cp-confirm" type="password" autoComplete="new-password" {...form.register('confirm')} />
           </Field>
-          <Button type="submit" variant="gradient" size="lg" className="w-full" loading={form.formState.isSubmitting}>
+          <Button type="submit" size="lg" className="w-full" loading={form.formState.isSubmitting}>
             Save and continue
           </Button>
         </form>
