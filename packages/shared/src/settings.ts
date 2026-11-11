@@ -30,7 +30,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   campaigns: 'Campaigns & noticeboard',
   events: 'Events calendar',
   polls: 'Polls & surveys',
-  tasks: 'Tasks',
+  tasks: 'Work (projects and tasks)',
   recognition: 'Recognition & celebrations',
   ai: 'Ask FG One (AI)',
 };
@@ -197,6 +197,7 @@ export const userPreferencesSchema = z.object({
       threads: z.boolean().optional(),
       announcements: z.boolean().optional(),
       requests: z.boolean().optional(),
+      work: z.boolean().optional(),
     })
     .optional(),
 });

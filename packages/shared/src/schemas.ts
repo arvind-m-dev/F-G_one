@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { PRESENCE_KEYS, REACTION_KEYS } from './presence';
-import { isTimeZone } from './settings';
+import { HEX_COLOR, isTimeZone } from './settings';
 import { CATALOG_BY_KEY, SCOPES } from './authz';
 
 /** Request contracts shared by the API (validation) and the web app (forms). */
@@ -373,3 +373,154 @@ export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 /** Wizard step 1 (the person) and step 3 (the password) validate these slices of the same contract. */
 export const accountPersonSchema = createEmployeeSchema.pick({ firstName: true, lastName: true, email: true, designation: true, departmentId: true, managerId: true, employeeCode: true, joinedAt: true });
 export const accountPasswordSchema = createEmployeeSchema.pick({ password: true });
+
+/* ---------------- work: projects, tasks, timeline requests ---------------- */
+export const TASK_STATUSES = ['BACKLOG', 'TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE', 'CANCELLED'] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  BACKLOG: 'Later',
+  TODO: 'To do',
+  IN_PROGRESS: 'In progress',
+  IN_REVIEW: 'In review',
+  DONE: 'Done',
+  CANCELLED: 'Cancelled',
+};
+/** Statuses that still need work (they count towards someone's workload). */
+export const OPEN_TASK_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'IN_REVIEW'];
+
+export const TASK_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = { LOW: 'Low', MEDIUM: 'Normal', HIGH: 'High', URGENT: 'Urgent' };
+
+export const TASK_KINDS = ['TASK', 'BUG', 'ENHANCEMENT'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+export const TASK_KIND_LABELS: Record<TaskKind, string> = { TASK: 'Task', BUG: 'Bug', ENHANCEMENT: 'Improvement' };
+
+export const TASK_SIZES = ['XS', 'S', 'M', 'L', 'XL'] as const;
+export type TaskSize = (typeof TASK_SIZES)[number];
+/** Working days of effort each size stands for. The planner and workload figures use these. */
+export const TASK_SIZE_DAYS: Record<TaskSize, number> = { XS: 0.5, S: 1, M: 2, L: 5, XL: 10 };
+export const TASK_SIZE_LABELS: Record<TaskSize, string> = {
+  XS: 'Tiny · half a day',
+  S: 'Small · 1 day',
+  M: 'Medium · 2 days',
+  L: 'Large · 1 week',
+  XL: 'Huge · 2 weeks',
+};
+
+export const PROJECT_STATUSES = ['ACTIVE', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = { ACTIVE: 'Active', ON_HOLD: 'On hold', COMPLETED: 'Completed', ARCHIVED: 'Archived' };
+
+const optionalYmd = ymd.nullable().optional();
+const idList = z.array(z.string().min(1).max(40)).max(100).refine((ids) => new Set(ids).size === ids.length, 'Each person can only be added once');
+
+export const projectSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Give the project a name of at least 2 characters').max(80),
+    /** Short code shown before task numbers, such as WEB in WEB-12. */
+    key: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z][A-Z0-9]{1,5}$/, 'Use 2 to 6 letters or numbers, starting with a letter'),
+    description: z.string().trim().max(2000).nullable().optional(),
+    color: HEX_COLOR.default('#6366f1'),
+    status: z.enum(PROJECT_STATUSES).default('ACTIVE'),
+    leadId: z.string().min(1).max(40).nullable().optional(),
+    memberIds: idList.default([]),
+    startDate: optionalYmd,
+    targetDate: optionalYmd,
+  })
+  .refine((v) => !v.startDate || !v.targetDate || v.startDate <= v.targetDate, { path: ['targetDate'], message: 'The target date must be on or after the start date' });
+export type ProjectInput = z.infer<typeof projectSchema>;
+export const updateProjectSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Give the project a name of at least 2 characters').max(80).optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+    color: HEX_COLOR.optional(),
+    status: z.enum(PROJECT_STATUSES).optional(),
+    leadId: z.string().min(1).max(40).nullable().optional(),
+    memberIds: idList.optional(),
+    startDate: optionalYmd,
+    targetDate: optionalYmd,
+  })
+  .refine((v) => !v.startDate || !v.targetDate || v.startDate <= v.targetDate, { path: ['targetDate'], message: 'The target date must be on or after the start date' });
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+
+/** A link on a task, for example a pull request or a design file. Web addresses only. */
+export const taskLinkSchema = z.object({
+  label: z.string().trim().max(80).default(''),
+  url: z.string().trim().url('Enter a full web address starting with https://').max(500).refine((u) => /^https?:\/\//i.test(u), 'Enter a full web address starting with https://'),
+});
+export type TaskLink = z.infer<typeof taskLinkSchema>;
+
+const taskFields = {
+  title: z.string().trim().min(2, 'Describe the task in a few words').max(200),
+  description: z.string().trim().max(8000).nullable().optional(),
+  projectId: z.string().min(1).max(40).nullable().optional(),
+  kind: z.enum(TASK_KINDS).default('TASK'),
+  status: z.enum(TASK_STATUSES).default('TODO'),
+  priority: z.enum(TASK_PRIORITIES).default('MEDIUM'),
+  size: z.enum(TASK_SIZES).default('M'),
+  assigneeId: z.string().min(1).max(40).nullable().optional(),
+  startDate: optionalYmd,
+  dueDate: optionalYmd,
+  links: z.array(taskLinkSchema).max(10).default([]),
+};
+const datesInOrder = (v: { startDate?: string | null; dueDate?: string | null }) => !v.startDate || !v.dueDate || v.startDate <= v.dueDate;
+const datesMessage = { path: ['dueDate'], message: 'The due date must be on or after the start date' };
+export const taskSchema = z.object(taskFields).refine(datesInOrder, datesMessage);
+export type TaskInput = z.infer<typeof taskSchema>;
+/** Partial update. `position` orders cards within a board column. `projectId` cannot change after creation. */
+export const updateTaskSchema = z
+  .object({
+    title: taskFields.title.optional(),
+    description: taskFields.description,
+    kind: z.enum(TASK_KINDS).optional(),
+    status: z.enum(TASK_STATUSES).optional(),
+    priority: z.enum(TASK_PRIORITIES).optional(),
+    size: z.enum(TASK_SIZES).optional(),
+    assigneeId: taskFields.assigneeId,
+    startDate: optionalYmd,
+    dueDate: optionalYmd,
+    links: z.array(taskLinkSchema).max(10).optional(),
+    position: z.number().finite().optional(),
+  })
+  .refine(datesInOrder, datesMessage);
+export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+
+export const taskListSchema = z.object({
+  /** mine: assigned to me. team: people who report to me. all: everything I may see. */
+  scope: z.enum(['mine', 'team', 'all']).default('mine'),
+  projectId: z.string().max(40).optional(),
+  assigneeId: z.string().max(40).optional(),
+  status: z.enum([...TASK_STATUSES, 'OPEN', 'ALL']).default('ALL'),
+  q: z.string().trim().max(80).optional(),
+});
+export type TaskListQuery = z.infer<typeof taskListSchema>;
+
+export const taskCommentSchema = z.object({ body: z.string().trim().min(1, 'Write a comment first').max(4000) });
+
+export const WORK_REQUEST_KINDS = ['MOVE_DATE', 'REASSIGN'] as const;
+export type WorkRequestKind = (typeof WORK_REQUEST_KINDS)[number];
+/** "I can't finish this on time": ask for a later date or for someone else to take it. A lead or manager decides. */
+export const workRequestSchema = z
+  .object({
+    kind: z.enum(WORK_REQUEST_KINDS),
+    reason: z.string().trim().min(5, 'Say briefly why, so your lead can decide quickly').max(500),
+    proposedDueDate: optionalYmd,
+    proposedAssigneeId: z.string().min(1).max(40).nullable().optional(),
+  })
+  .refine((v) => v.kind !== 'MOVE_DATE' || !!v.proposedDueDate, { path: ['proposedDueDate'], message: 'Choose the new date' });
+export type WorkRequestInput = z.infer<typeof workRequestSchema>;
+export const workRequestListSchema = z.object({
+  scope: z.enum(['mine', 'approvals']).default('mine'),
+  status: z.enum(['PENDING', 'APPROVED', 'DECLINED', 'CANCELLED', 'ALL']).default('ALL'),
+});
+/** Decision on a request. When the person asking named nobody, the approver chooses who takes the task. */
+export const workDecisionSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  note: z.string().trim().max(300).nullable().optional(),
+  assigneeId: z.string().min(1).max(40).nullable().optional(),
+});

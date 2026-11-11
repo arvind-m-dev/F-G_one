@@ -3,14 +3,15 @@ import { RT } from '@fg/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
-export type NotificationType = 'dm' | 'mention' | 'thread' | 'announcement' | 'leave' | 'correction';
-const PREF_KEY: Record<NotificationType, 'dm' | 'mentions' | 'threads' | 'announcements' | 'requests'> = {
+export type NotificationType = 'dm' | 'mention' | 'thread' | 'announcement' | 'leave' | 'correction' | 'work';
+const PREF_KEY: Record<NotificationType, 'dm' | 'mentions' | 'threads' | 'announcements' | 'requests' | 'work'> = {
   dm: 'dm',
   mention: 'mentions',
   thread: 'threads',
   announcement: 'announcements',
   leave: 'requests',
   correction: 'requests',
+  work: 'work',
 };
 
 export interface NotifyInput {

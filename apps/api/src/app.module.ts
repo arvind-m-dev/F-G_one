@@ -33,6 +33,8 @@ import { SuperAdminsService } from './super-admins/super-admins.service';
 import { RealtimeGateway } from './realtime/realtime.gateway';
 import { RolesController } from './roles/roles.controller';
 import { SearchController } from './search/search.controller';
+import { WorkController } from './work/work.controller';
+import { WorkService } from './work/work.service';
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { SearchController } from './search/search.controller';
     LeaveController,
     ApprovalsController,
     SuperAdminsController,
+    WorkController,
   ],
   providers: [
     AuditService,
@@ -71,6 +74,7 @@ import { SearchController } from './search/search.controller';
     NotificationsService,
     LeaveService,
     SuperAdminsService,
+    WorkService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
   ],
