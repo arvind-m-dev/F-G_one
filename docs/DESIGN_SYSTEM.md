@@ -32,6 +32,8 @@ The source of truth is `apps/web/src/app/globals.css` (tokens) and `packages/sha
 | `danger` | `#F43F5E` | Destructive actions, busy presence, "now" marker |
 | `info` | `#0EA5E9` | Informational |
 
+`success-ink`, `warning-ink`, `danger-ink` and `info-ink` are the readable text colours on a soft state fill (badges, notices). `scrim` is the dimmed backdrop behind dialogs and drawers; `tooltip` / `tooltip-foreground` are the tooltip surface. Use these instead of Tailwind palette classes (`emerald-500`, `amber-400`, …) or hex values.
+
 `primary-soft` (brand at 9% / 18% in dark) is the selection and active fill. `primary-ink` is a darker or lighter brand for text on soft fills.
 
 **Accent palette** (user-selectable): Indigo, Violet, Sky, Cyan, Emerald, Amber, Rose. Admins may set any brand colour in System settings.
@@ -51,7 +53,7 @@ The source of truth is `apps/web/src/app/globals.css` (tokens) and `packages/sha
 ## Motion
 * 150–250ms with ease-out or spring (stiffness ~400, damping ~38) for the rail, drawers and dialogs.
 * Page transition: 160ms fade with a 4px rise. Lists stagger 20–50ms.
-* `prefers-reduced-motion` disables animations globally.
+* `prefers-reduced-motion` disables animations globally: CSS via the media query in `globals.css`, Motion via `<MotionConfig reducedMotion="user">` in `components/providers.tsx`.
 * Auth pages use CSS (`tw-animate-css`) instead of JS animation, so they render even before hydration.
 
 ## Presence
@@ -64,7 +66,7 @@ The source of truth is `apps/web/src/app/globals.css` (tokens) and `packages/sha
 | Away (amber) | Away, Short break, Lunch break, Stepped out |
 | Offline (grey) | Appear offline, or disconnected |
 
-A custom status is free text with suggestions ("Working on QA", "In a meeting", …) and optional expiry.
+A custom status is free text with suggestions ("Working on QA", "In a client call", …) and optional expiry.
 
 ## Reactions
 A fixed icon set, stored by key and validated by the API: `thumbs-up` (Agree), `heart` (Love), `laugh` (Funny), `party` (Celebrate), `check` (Done), `eyes` (Looking), `flame` (Great), `rocket` (Ship it).
