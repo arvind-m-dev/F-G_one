@@ -35,6 +35,15 @@
   --danger: #f43f5e;
   --info: #0ea5e9;
   --cyan: #06b6d4;
+  /* Readable text on a soft state fill (badges, notices). */
+  --success-ink: color-mix(in oklab, var(--success) 62%, #171a2b);
+  --warning-ink: color-mix(in oklab, var(--warning) 58%, #171a2b);
+  --danger-ink: color-mix(in oklab, var(--danger) 70%, #171a2b);
+  --info-ink: color-mix(in oklab, var(--info) 62%, #171a2b);
+  /* Dimmed backdrop behind dialogs and drawers; tooltip surface. */
+  --scrim: rgb(11 13 17 / 0.45);
+  --tooltip: #171a2b;
+  --tooltip-foreground: #ffffff;
 
   --shadow-sm: 0 1px 2px rgb(23 26 43 / 0.05);
   --shadow-md: 0 1px 2px rgb(23 26 43 / 0.04), 0 6px 20px -6px rgb(23 26 43 / 0.1);
@@ -59,6 +68,13 @@
   --primary: color-mix(in oklab, var(--brand) 88%, white);
   --primary-soft: color-mix(in oklab, var(--brand) 18%, transparent);
   --primary-ink: color-mix(in oklab, var(--brand) 55%, white);
+  --success-ink: color-mix(in oklab, var(--success) 60%, white);
+  --warning-ink: color-mix(in oklab, var(--warning) 60%, white);
+  --danger-ink: color-mix(in oklab, var(--danger) 60%, white);
+  --info-ink: color-mix(in oklab, var(--info) 60%, white);
+  --scrim: rgb(0 0 0 / 0.6);
+  --tooltip: var(--elevated);
+  --tooltip-foreground: var(--foreground);
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 24px -8px rgb(0 0 0 / 0.55);
   --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 56px -12px rgb(0 0 0 / 0.7);
@@ -94,6 +110,13 @@
   --color-danger: var(--danger);
   --color-info: var(--info);
   --color-cyan: var(--cyan);
+  --color-success-ink: var(--success-ink);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger-ink: var(--danger-ink);
+  --color-info-ink: var(--info-ink);
+  --color-scrim: var(--scrim);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
