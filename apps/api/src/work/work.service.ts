@@ -143,9 +143,26 @@ export class WorkService {
     throw new ForbiddenException('You can give tasks to yourself and to people who report to you');
   }
 
-  private broadcast(organizationId: string) {
-    // Empty payload: clients simply refetch what they are allowed to see.
-    this.realtime.server?.to(`org:${organizationId}`).emit(RT.WORK_CHANGED, {});
+  /**
+   * Tells the people a change concerns to refresh: everyone on the project, the people named,
+   * their managers and the caller's other tabs. The payload carries no data; clients refetch what
+   * they are allowed to see. Deliberately not sent to the whole company: a busy board would make
+   * every signed-in person refetch on every card move.
+   */
+  private async touch(auth: AuthContext, o: { projectId?: string | null; userIds?: (string | null | undefined)[]; requests?: boolean } = {}) {
+    try {
+      const ids = new Set<string>([auth.userId]);
+      for (const u of o.userIds ?? []) if (u) ids.add(u);
+      if (o.projectId) {
+        const p = await this.prisma.project.findUnique({ where: { id: o.projectId }, select: { leadId: true, createdById: true, members: { select: { userId: true } } } });
+        for (const u of p ? [p.leadId, p.createdById, ...p.members.map((m) => m.userId)] : []) if (u) ids.add(u);
+      }
+      const managers = await this.prisma.user.findMany({ where: { id: { in: [...ids] }, organizationId: auth.organizationId, managerId: { not: null } }, select: { managerId: true } });
+      for (const m of managers) ids.add(m.managerId!);
+      for (const id of ids) this.realtime.toUser(id, RT.WORK_CHANGED, { requests: !!o.requests });
+    } catch {
+      // Live refresh is best effort; the change itself is already saved.
+    }
   }
 
   private log(db: Db, auth: AuthContext, taskId: string, kind: string, data: Prisma.InputJsonObject = {}) {
@@ -366,7 +383,7 @@ export class WorkService {
         title: `You were added to the project ${p.name}`,
         link: `/app/work/projects/${p.id}`,
       });
-      this.broadcast(auth.organizationId);
+      await this.touch(auth, { projectId: p.id });
       return this.serializeProject(auth, p);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException('Another project already uses that short code');
@@ -426,7 +443,7 @@ export class WorkService {
         link: `/app/work/projects/${id}`,
       });
     }
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: id, userIds: current });
     return this.getProject(auth, id);
   }
 
@@ -438,7 +455,7 @@ export class WorkService {
     if (tasks) throw new ConflictException('This project has tasks. Archive it instead to keep its history.');
     await this.prisma.project.delete({ where: { id } });
     await this.audit.log(auth, 'project.deleted', 'project', id, { name: p.name, key: p.key });
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { userIds: [p.lead?.id, ...p.members.map((m) => m.user.id)] });
     return { ok: true };
   }
 
@@ -510,7 +527,7 @@ export class WorkService {
       return t;
     });
     if (assigneeId) await this.notifyAssigned(auth, created);
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: project?.id, userIds: [assigneeId] });
     const [out] = await this.serializeTasks(auth, [created]);
     return out!;
   }
@@ -595,7 +612,7 @@ export class WorkService {
         groupKey: `task:${id}:status`,
       });
     }
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: t.projectId, userIds: [t.assigneeId, updated.assigneeId, t.createdById], requests: assigneeChanged || (!!body.status && !isOpen(body.status)) });
     const [out] = await this.serializeTasks(auth, [updated]);
     return out!;
   }
@@ -605,7 +622,7 @@ export class WorkService {
     if (!this.canManageTask(auth, t)) throw new ForbiddenException('Only the lead for this task can delete it');
     await this.prisma.task.delete({ where: { id } });
     await this.audit.log(auth, 'task.deleted', 'task', id, { title: t.title, ref: this.taskRef(t) });
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: t.projectId, userIds: [t.assigneeId, t.createdById] });
     return { ok: true };
   }
 
@@ -622,7 +639,7 @@ export class WorkService {
       link: `/app/work?task=${id}`,
       groupKey: `task:${id}:comments`,
     });
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: t.projectId, userIds: [t.assigneeId, t.createdById] });
     return { id: c.id, body: c.body, author: toMini(c.author), createdAt: c.createdAt };
   }
 
@@ -734,7 +751,7 @@ export class WorkService {
       body: `${t.title}: ${body.reason}`,
       link: '/app/approvals?tab=work',
     });
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: t.projectId, userIds: approvers.map((a) => a.id), requests: true });
     return this.serializeRequest(auth, created);
   }
 
@@ -807,17 +824,17 @@ export class WorkService {
     if (newOwner) {
       await this.notifications.notify({ organizationId: auth.organizationId, userIds: [newOwner], actorId: auth.userId, type: 'work', title: `New task for you: ${r.task.title}`, body: `Handed over from ${toMini(r.requester)!.name}`, link: `/app/work?task=${r.taskId}` });
     }
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: r.task.projectId, userIds: [r.requesterId, newOwner], requests: true });
     const fresh = await this.prisma.workRequest.findUniqueOrThrow({ where: { id }, include: requestInclude });
     return this.serializeRequest(auth, fresh);
   }
 
   async cancelRequest(auth: AuthContext, id: string) {
-    const r = await this.prisma.workRequest.findFirst({ where: { id, organizationId: auth.organizationId, requesterId: auth.userId } });
+    const r = await this.prisma.workRequest.findFirst({ where: { id, organizationId: auth.organizationId, requesterId: auth.userId }, include: { task: { select: { projectId: true } } } });
     if (!r) throw new NotFoundException('Request not found');
     const done = await this.prisma.workRequest.updateMany({ where: { id, status: 'PENDING' }, data: { status: 'CANCELLED', decidedAt: new Date() } });
     if (!done.count) throw new ConflictException('This request was already decided');
-    this.broadcast(auth.organizationId);
+    await this.touch(auth, { projectId: r.task.projectId, requests: true });
     return { ok: true };
   }
 

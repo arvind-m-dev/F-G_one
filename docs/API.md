@@ -235,7 +235,7 @@ The session cookie is authenticated at handshake. The server assigns rooms: `org
 | `notification:new` | `{ id, type, title, body, link }`, to that user only |
 | `attendance:changed` | `{ userId }` |
 | `announcements:changed` | `{}` |
-| `work:changed` | `{}`, to the organization. Clients refetch what they may see. |
+| `work:changed` | `{ requests }`, only to the people a change concerns (project members and lead, the people named, their managers). Carries no data; clients refetch what they may see. |
 
 | Event (client → server) | Payload |
 |---|---|

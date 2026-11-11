@@ -30,7 +30,7 @@ pnpm --filter @fg/web test
 ```bash
 pnpm -r typecheck
 ```
-End-to-end tests need the stack running, the API started with `LOGIN_RATE_LIMIT_PER_MIN=1000`, and a fresh seed:
+End-to-end tests need the stack running, the API started with `LOGIN_RATE_LIMIT_PER_MIN=1000 RATE_LIMIT_PER_MIN=5000` (every test user comes from one address), and a fresh seed. They are steadier against a production web build (`pnpm --filter @fg/web build && pnpm --filter @fg/web start`) than against `next dev`, whose first compile of a page can outlast a test's wait:
 ```bash
 E2E_PASSWORD=<SEED_PASSWORD> pnpm --filter @fg/web test:e2e
 ```

@@ -39,8 +39,8 @@ import { WorkService } from './work/work.service';
 @Module({
   imports: [
     PrismaModule,
-    // Global default: 300 req/min per IP; auth endpoints declare stricter limits.
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: env().NODE_ENV === 'test' ? 10_000 : 300 }], skipIf: () => env().NODE_ENV === 'test' }),
+    // Global default: RATE_LIMIT_PER_MIN (300) requests a minute per IP; auth endpoints declare stricter limits.
+    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: env().NODE_ENV === 'test' ? 10_000 : env().RATE_LIMIT_PER_MIN }], skipIf: () => env().NODE_ENV === 'test' }),
   ],
   controllers: [
     HealthController,
