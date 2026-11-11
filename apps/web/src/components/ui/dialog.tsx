@@ -3,6 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { Button } from './button';
 
 export function Dialog({
   open,
@@ -12,6 +13,7 @@ export function Dialog({
   children,
   className,
   side,
+  guard = false,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -21,6 +23,11 @@ export function Dialog({
   className?: string;
   /** "right" renders a slide-over drawer instead of a centred modal */
   side?: 'right';
+  /**
+   * Set while closing would lose something (unsaved input, a password shown only once).
+   * A click outside or Escape then no longer closes it; the close button and the dialog's own buttons still do.
+   */
+  guard?: boolean;
 }) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -30,7 +37,12 @@ export function Dialog({
             <DialogPrimitive.Overlay asChild forceMount>
               <motion.div className="fixed inset-0 z-50 bg-[#0b0d11]/45" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
             </DialogPrimitive.Overlay>
-            <DialogPrimitive.Content asChild forceMount>
+            <DialogPrimitive.Content
+              asChild
+              forceMount
+              onInteractOutside={guard ? (e) => e.preventDefault() : undefined}
+              onEscapeKeyDown={guard ? (e) => e.preventDefault() : undefined}
+            >
               <motion.div
                 className={cn(
                   'fixed z-50 flex flex-col border bg-elevated shadow-lg focus:outline-none',
@@ -90,16 +102,12 @@ export function ConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange} title={title} className="max-w-md">
       <p className="text-sm text-muted">{description}</p>
       <div className="mt-6 flex justify-end gap-2">
-        <button className="h-9 rounded-lg px-4 text-sm font-medium hover:bg-surface-2" onClick={() => onOpenChange(false)}>
+        <Button variant="ghost" onClick={() => onOpenChange(false)}>
           Cancel
-        </button>
-        <button
-          className={cn('inline-flex h-9 items-center rounded-lg px-4 text-sm font-medium text-white disabled:opacity-60', danger ? 'bg-danger' : 'bg-primary')}
-          disabled={loading}
-          onClick={onConfirm}
-        >
-          {loading ? 'Working…' : confirmLabel}
-        </button>
+        </Button>
+        <Button variant={danger ? 'danger' : 'primary'} loading={loading} onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
       </div>
     </Dialog>
   );
