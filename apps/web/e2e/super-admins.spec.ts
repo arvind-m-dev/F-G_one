@@ -115,7 +115,7 @@ test.describe('Super Admins', () => {
     await expect(dialog.getByRole('alert')).toContainText('That password is not correct');
     await dialog.getByLabel('Your password').fill(PASSWORD);
     await dialog.getByRole('button', { name: 'Nominate Zara' }).click();
-    const sent = page.getByRole('dialog', { name: 'Nomination sent' });
+    const sent = page.getByRole('dialog', { name: 'Nomination link ready' });
     const link = await sent.getByLabel('Nomination link').inputValue();
     expect(link).toMatch(/\/super-admin\/accept\?token=/);
     await expect(sent.getByText('Turn on two-step verification in Settings, Security')).toBeVisible();
@@ -184,7 +184,7 @@ test.describe('Super Admins', () => {
     await again.getByRole('option', { name: /Rahul Desai/ }).click();
     await again.getByLabel('Your password').fill(PASSWORD);
     await again.getByRole('button', { name: 'Nominate Rahul' }).click();
-    await page.getByRole('dialog', { name: 'Nomination sent' }).getByRole('button', { name: 'Done' }).click();
+    await page.getByRole('dialog', { name: 'Nomination link ready' }).getByRole('button', { name: 'Done' }).click();
     await page.getByRole('button', { name: 'Withdraw the nomination for Rahul Desai' }).click();
     await page.getByRole('dialog', { name: /Withdraw Rahul Desai's nomination/ }).getByRole('button', { name: 'Withdraw' }).click();
     await expect(page.getByText('Nomination withdrawn. The link no longer works.')).toBeVisible();

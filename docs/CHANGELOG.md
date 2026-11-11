@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased: admin portal and sign-in UI audit (branch `fix/ui-audit-admin`)
+### Removed (nothing shown that does not work)
+- **System settings → Modules lists only features that exist.** The switches for Daily updates, Documents, Campaigns, Events, Polls, Tasks and the AI assistant are gone. The Roles & permissions matrix, the per-person Exceptions list and the access preview hide permissions for those features too. One list drives all of it: `apps/web/src/lib/live-modules.ts`.
+- The always-off "Public self-registration" switch, the "later milestone" note on Roles, and raw permission keys in the matrix.
+### Added
+- **Forgot your password** sends a reset link by email where people choose their own passwords; where administrators set passwords it keeps the "ask your administrator" guidance. `GET /public/branding` now carries `selfServicePassword` so the page knows which to show.
+- **Leave requests in the admin portal**: Approve and Decline are labelled buttons that open a confirmation with an optional note; search by person, filter by leave type, "Show more", and names link to the person's leave.
+- **Unsaved-changes protection**: System settings has a save bar (unsaved state, Discard, Save) and asks before you leave; the Access tab asks before another tab discards a draft; dialogs with typed input or a one-time password no longer close on a stray click or Escape (`Dialog guard`).
+- **Admin landing page**: `/admin` and the "Admin portal" breadcrumb take people who cannot see the overview to the first admin page they can open. Unknown `/admin/...` addresses show a not-found screen inside the admin navigation. `global-error.tsx` covers a failed root layout.
+- Admin Attendance shows a link when attendance corrections are waiting, and names open the person's attendance. "Needs attention" notices on an employee carry their action (Set a password, Lift suspension, Restore, Review leave).
+- Shared UI: `Tabs`/`TabPanel`, `FilterChips`, `ColorSwatches` (named colours) in `components/ui`, and a searchable `PersonPicker` for managers and department heads (replaces lists capped at 100 people).
+### Changed
+- Page titles match the navigation: "Roles & permissions", "System settings", "Audit logs". Overview shortcuts open the right settings tab; "Set password" opens that person; account counts appear once.
+- Department, holiday and leave-type dialogs are real forms (Enter submits) with a message under each field. A department that announcements are addressed to explains why it cannot be deleted instead of offering a Delete that fails.
+- Attendance export button says what it exports ("Export last 30 days"). Time zones are a full, grouped list with plain names. Semantic colour tokens replace raw rose/amber/emerald classes on admin and sign-in pages. Sign-in pages set a tab title and use one `h1`.
+### Tests
+- Web unit 27 (added: live modules, first admin page, access preview without unbuilt features, filter chips, tabs, dialog guard). API: public branding exposes only the password policy flag. Playwright specs updated for the new copy and roles (not run in this branch).
+
 ## Unreleased: code-review fixes (branch `fix/review-highs`)
 ### Security
 - **Role authority now counts extra roles.** Who may manage (set password, edit, suspend, view the full profile of) a person was decided from their main role's rank only, so someone holding a higher role as an *extra* could be managed — and impersonated via a password reset — by a lower-ranked admin. The check now uses the highest rank they hold, main or extra.

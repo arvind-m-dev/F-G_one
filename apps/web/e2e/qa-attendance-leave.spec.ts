@@ -77,7 +77,7 @@ test('attendance: check in from home with a note, take a break, check out, and s
 
   await hr.goto('/admin/attendance');
   const download = hr.waitForEvent('download');
-  await hr.getByRole('button', { name: 'Export CSV' }).click();
+  await hr.getByRole('button', { name: 'Export last 30 days' }).click();
   const file = await download;
   expect(await file.failure()).toBeNull();
   const csv = readFileSync((await file.path())!, 'utf8');
@@ -204,7 +204,7 @@ test('admin leave: record on behalf, and no approve buttons on your own request'
 
   // An unknown status in the link falls back to the pending list.
   await hr.goto('/admin/leave?status=BOGUS');
-  await expect(hr.getByRole('radio', { name: 'pending' })).toHaveAttribute('aria-checked', 'true');
+  await expect(hr.getByRole('radio', { name: 'Waiting for approval' })).toHaveAttribute('aria-checked', 'true');
 });
 
 test('holidays: an edit that collides with another holiday shows an error; a bad year link shows this year', async ({ browser }) => {
@@ -246,7 +246,8 @@ test('settings: work locations use icons, and the last working day or location c
   for (const d of ['Mon', 'Tue', 'Wed', 'Thu']) await admin.getByRole('button', { name: d, exact: true }).click();
   await admin.getByRole('button', { name: 'Fri', exact: true }).click();
   await expect(admin.getByText('Keep at least one working day')).toBeVisible();
-  // Nothing was saved.
+  // Nothing was saved (reloading with unsaved changes asks first).
+  admin.on('dialog', (d) => void d.accept());
   await admin.reload();
 });
 
