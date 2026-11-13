@@ -2,38 +2,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { PERMISSIONS, presenceMeta, type Permission } from '@fg/shared';
-import {
-  ArrowLeftRight,
-  Bell,
-  CalendarDays,
-  Check,
-  ClipboardCheck,
-  Crown,
-  TreePalm,
-  Clock,
-  Megaphone,
-  Building2,
-  ChartNoAxesCombined,
-  ChevronDown,
-  House,
-  KeyRound,
-  LogOut,
-  Menu,
-  MessageSquare,
-  Monitor,
-  Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ScrollText,
-  Search,
-  Settings,
-  ShieldCheck,
-  SlidersHorizontal,
-  Sun,
-  UserRound,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { ArrowLeftRight, Bell, Building2, CalendarDays, ChartNoAxesCombined, Check, ChevronDown, ClipboardCheck, Clock, Crown, House, KeyRound, ListTodo, LogOut, Megaphone, Menu, MessageSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ScrollText, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, TreePalm, type LucideIcon, UserRound, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -123,6 +92,7 @@ function useNav(portal: Portal): NavGroup[] {
       items: [
         { href: '/app/home', label: 'Home', icon: House },
         ...(mod('chat') ? [{ href: '/app/chat', label: 'Chat', icon: MessageSquare, badge: unread }] : []),
+        ...(mod('tasks') ? [{ href: '/app/work', label: 'Work', icon: ListTodo }] : []),
         ...(mod('announcements') ? [{ href: '/app/announcements', label: 'Announcements', icon: Megaphone }] : []),
         { href: '/app/people', label: 'Directory', icon: Users },
       ],
@@ -402,8 +372,9 @@ function MobileTabs({ portal }: { portal: Portal }) {
   const pathname = usePathname();
   const groups = useNav(portal);
   const all = groups.flatMap((g) => g.items);
-  const pick = ['/app/home', '/app/chat', '/app/attendance', '/app/leave'];
-  const items = [...pick.map((h) => all.find((i) => i.href === h)).filter(Boolean) as NavItem[], { href: '/app/profile', label: 'Me', icon: UserRound }];
+  // The four most used places that are switched on, in this order; the rest is in the menu.
+  const pick = ['/app/home', '/app/chat', '/app/work', '/app/attendance', '/app/leave'];
+  const items = [...(pick.map((h) => all.find((i) => i.href === h)).filter(Boolean) as NavItem[]).slice(0, 4), { href: '/app/profile', label: 'Me', icon: UserRound }];
   if (portal === 'admin') return null;
   return (
     <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t bg-canvas/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

@@ -200,6 +200,28 @@ Created for DMs (grouped per conversation while unread), `@firstname` mentions o
 | DELETE | `/messages/:id` | Author or channel admin (audited). Soft delete. |
 | POST | `/messages/:id/reactions` | `{ emoji }` toggle |
 
+## Work (projects, tasks, timeline requests)
+Everyone signed in (internal accounts) may call these. What each person sees and may change is decided in `WorkService`:
+**see** = your own tasks, tasks you created, tasks of projects you lead or are on, your direct reports' tasks (`work.manage` at Team), or everything (`work.manage` at Company). **Manage a task** (title, dates, owner, size, delete) = company-wide planners, the project lead, whoever created it, the owner's manager. The owner without manage rights may change status, details, links and start date only. Other tenants and invisible rows return 404.
+
+| Method & path | Notes |
+|---|---|
+| `GET /work/summary` | Your load, counts, and `can: { createProject, plan, reach }` |
+| `GET /work/projects?include=active\|all` · `POST /work/projects` | Create needs `work.manage` (Team or Company). Body `projectSchema`. 409 when the short code is taken. The lead is always a member. |
+| `GET\|PATCH\|DELETE /work/projects/:id` | Edit: lead, creator or company-wide planner. Removing a member with open tasks → 409. Delete only when the project has no tasks (409 otherwise: archive instead). Audited. |
+| `GET /work/tasks?scope=mine\|team\|all&projectId&assigneeId&status&q` | `assigneeId=none` = unassigned. `status=OPEN` = not done or cancelled. Each open task carries `plan: { start, end, late }` from the planner. |
+| `POST /work/tasks` | Body `taskSchema`. Personal task (no `projectId`) defaults to yourself. Project tasks get the next number (`WEB-12`). Who may be chosen as owner: yourself; a direct report (Team); any project member (lead or Company). |
+| `GET\|PATCH\|DELETE /work/tasks/:id` · `POST /work/tasks/:id/comments` | Detail includes comments, history and requests. `updateTaskSchema`. |
+| `GET /work/tasks/:id/relief` | For the owner (or a manager of the task): load, realistic finish date, up to 5 colleagues who could take it, and who decides. |
+| `POST /work/tasks/:id/requests` | Owner only. `workRequestSchema`: `MOVE_DATE` with `proposedDueDate`, or `REASSIGN` with optional `proposedAssigneeId`. One pending request per task (409). |
+| `GET /work/requests?scope=mine\|approvals&status` · `POST /work/requests/:id/decision` · `POST /work/requests/:id/cancel` | Decide: project lead, the requester's manager (Team) or a company-wide planner; never your own (403). `workDecisionSchema` (`assigneeId` when approving a handover with nobody named). Approval applies the change. Audited. |
+| `GET /work/workload?projectId` | Managers and project leads (403 otherwise). People, each with `load`, their queue and plan; `suggestions` (`REASSIGN` or `MOVE_DATE`). Apply a suggestion with `PATCH /work/tasks/:id`. |
+| `GET /work/report?date=YYYY-MM-DD` | Finished and started that day; overdue and likely-late now; per person. Managers see their people, everyone else themselves. |
+
+**Planner** (`apps/api/src/work/planner.ts`, pure functions, unit-tested). Size = effort in working days (`TASK_SIZE_DAYS`: XS 0.5, S 1, M 2, L 5, XL 10). Work in progress has 60% left, in review 20%; parked ("Later"), done and cancelled tasks need none. Each person's open tasks are queued by due date, then priority, and laid end to end from today on working days (company working days, minus holidays and approved full-day leave). **Load** = work due within the next 10 working days (plus undated work) ÷ the person's working days in that window. Suggestions only move work that has not been started, to someone eligible (project members; teammates for a personal task) who stays at or under 90% and can finish on time; otherwise they propose the earliest date the plan can meet.
+
+`GET /approvals/count` now also returns `work` (included in `total`).
+
 ## WebSocket (Socket.IO, path `/socket.io/`)
 The session cookie is authenticated at handshake. The server assigns rooms: `org:<id>`, `user:<id>`, `channel:<id>`.
 
@@ -213,6 +235,7 @@ The session cookie is authenticated at handshake. The server assigns rooms: `org
 | `notification:new` | `{ id, type, title, body, link }`, to that user only |
 | `attendance:changed` | `{ userId }` |
 | `announcements:changed` | `{}` |
+| `work:changed` | `{ requests }`, only to the people a change concerns (project members and lead, the people named, their managers). Carries no data; clients refetch what they may see. |
 
 | Event (client → server) | Payload |
 |---|---|

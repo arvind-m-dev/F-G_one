@@ -44,7 +44,7 @@ export const useLeaveBalances = (userId?: string, enabled = true, at?: string) =
 export const useLeaveRequests = (scope: 'mine' | 'approvals' | 'all', status = 'ALL', enabled = true) =>
   useQuery({ queryKey: ['leave-requests', scope, status], queryFn: () => api<LeaveRequest[]>('/leave/requests', { query: { scope, status } }), enabled, placeholderData: (p) => p });
 export const useHolidays = (year: number) => useQuery({ queryKey: ['holidays', year], queryFn: () => api<{ year: number; items: Holiday[] }>('/holidays', { query: { year } }), placeholderData: (p) => p });
-export const useApprovalsCount = () => useQuery({ queryKey: ['approvals-count'], queryFn: () => api<{ canApprove: boolean; leave: number; corrections: number; total: number }>('/approvals/count'), refetchInterval: 120_000 });
+export const useApprovalsCount = () => useQuery({ queryKey: ['approvals-count'], queryFn: () => api<{ canApprove: boolean; leave: number; corrections: number; work: number; total: number }>('/approvals/count'), refetchInterval: 120_000 });
 export const useCorrections = (scope: 'mine' | 'approvals', enabled = true) => useQuery({ queryKey: ['corrections', scope], queryFn: () => api<Correction[]>('/attendance/corrections', { query: { scope } }), enabled });
 
 export const fmtDays = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} day${n === 1 ? '' : 's'}`;

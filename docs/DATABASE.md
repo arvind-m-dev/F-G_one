@@ -77,6 +77,18 @@ Migration `…_attendance_announcements_notifications` also adds the new Home wi
 * `User.suspendedAt`, `suspensionReason`, `archivedAt` (migration `20261104120000_user_suspend_archive`, additive).
 * New audit actions: `employee.suspended`, `employee.unsuspended`, `employee.archived`, `employee.restored`, `employee.access_changed` (diff), `superadmin.limit_changed`.
 
+## Added (Work hub)
+Migration `20261112090000_work_hub`. It also grants `work.manage` to existing roles (Administrator at ORG; Manager and Admin / HR at TEAM).
+
+| Model | Purpose |
+|---|---|
+| `Project` | `organizationId`, `key` (short code, unique per organization), name, colour, `status` (ACTIVE, ON_HOLD, COMPLETED, ARCHIVED), `leadId`, start and target dates, `taskSeq` (last task number). |
+| `ProjectMember` | Who is on a project (`projectId`, `userId`). The lead is always a member. |
+| `Task` | `organizationId`, optional `projectId` (null = personal task) and `number`, title, `kind` (TASK, BUG, ENHANCEMENT), `status` (BACKLOG, TODO, IN_PROGRESS, IN_REVIEW, DONE, CANCELLED), `priority`, `size` (XS–XL), `assigneeId`, `createdById`, start and due dates, `completedAt`, `position`, `links` (JSON, validated by `taskLinkSchema`). |
+| `TaskComment` | Comments on a task. |
+| `TaskActivity` | History (created, status, assignee, due, size, priority, request, request_decided). Feeds the daily report. |
+| `WorkRequest` | "Ask for more time": `kind` (MOVE_DATE, REASSIGN), reason, previous and proposed due date, proposed assignee, the planner's rationale, `status` (PENDING, APPROVED, DECLINED, CANCELLED), decider and note. |
+
 ## Planned models (added by later milestones, no changes to existing tables)
 
 | Milestone | Models |

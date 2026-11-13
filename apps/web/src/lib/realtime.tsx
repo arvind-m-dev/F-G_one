@@ -98,6 +98,19 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
       void qc.invalidateQueries({ queryKey: ['announcements'] });
       void qc.invalidateQueries({ queryKey: ['dashboard'] });
     });
+    // Several changes in a row (a few cards moved on a board) become one refresh.
+    let workTimer: ReturnType<typeof setTimeout> | null = null;
+    let workRequests = false;
+    s.on(RT.WORK_CHANGED, (p?: { requests?: boolean }) => {
+      workRequests ||= !!p?.requests;
+      if (workTimer) return;
+      workTimer = setTimeout(() => {
+        workTimer = null;
+        void qc.invalidateQueries({ queryKey: ['work'] });
+        if (workRequests) void qc.invalidateQueries({ queryKey: ['approvals-count'] });
+        workRequests = false;
+      }, 800);
+    });
     // After a reconnect (e.g. the server woke from sleep) refresh what may have changed meanwhile.
     s.io.on('reconnect', () => {
       void qc.invalidateQueries({ queryKey: ['channels'] });
@@ -106,6 +119,7 @@ export function RealtimeProvider({ me, children }: { me: Me; children: React.Rea
       void qc.invalidateQueries({ queryKey: ['attendance-today'] });
     });
     return () => {
+      if (workTimer) clearTimeout(workTimer);
       s.disconnect();
     };
   }, [qc]);

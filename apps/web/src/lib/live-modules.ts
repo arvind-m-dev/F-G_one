@@ -5,7 +5,7 @@ import { CATALOG_BY_KEY, LEGACY_PERMISSION_MAP, MODULE_KEYS, type ModuleKey, typ
  * portal: System settings (Modules), the Roles & permissions matrix and the per-person Exceptions
  * list all read it. Add the module key here when its feature ships.
  */
-export const LIVE_MODULES: readonly ModuleKey[] = ['chat', 'attendance', 'leave', 'holidays', 'announcements', 'recognition'];
+export const LIVE_MODULES: readonly ModuleKey[] = ['chat', 'attendance', 'leave', 'holidays', 'announcements', 'tasks', 'recognition'];
 
 const live = new Set<ModuleKey>(LIVE_MODULES);
 
@@ -19,6 +19,7 @@ export const LIVE_MODULE_KEYS: ModuleKey[] = MODULE_KEYS.filter((k) => live.has(
 const PERMISSION_MODULE_FEATURE: Record<string, ModuleKey> = {
   attendance: 'attendance',
   leave: 'leave',
+  work: 'tasks',
   chat: 'chat',
   announcements: 'announcements',
   calendar: 'holidays',

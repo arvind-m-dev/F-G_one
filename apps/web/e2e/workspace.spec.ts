@@ -13,7 +13,7 @@ test('wrong password shows a generic error', async ({ page }) => {
   await page.getByLabel('Work email').fill('employee@futuristglobal.com');
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByLabel('Password', { exact: true }).fill('definitely-wrong');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Invalid email or password' })).toBeVisible();
 });
 
@@ -25,7 +25,7 @@ test('recent accounts are remembered on this device only and can be removed', as
   await expect(page.getByRole('heading', { name: 'Choose an account' })).toBeVisible();
   await page.getByRole('button', { name: /employee@futuristglobal\.com/ }).first().click();
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/home/);
   await page.goto('about:blank');
   await page.context().clearCookies();

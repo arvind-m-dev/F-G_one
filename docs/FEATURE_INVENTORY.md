@@ -24,7 +24,11 @@
 | Holidays | ✅ | Year view by month, next-holiday banner, categories: public, company, optional, special working day |
 | Approvals | ✅ | For managers (direct reports) and HR: leave and attendance corrections, approve/decline with note, badge count |
 | Attendance corrections | ✅ | "Fix a day" or per-day "Request correction"; applied in the organization's time zone when approved; status shown on the Attendance page |
-| My Work, Calendar, Ideas, Knowledge Base | ⬜ | Planned |
+| Work: projects and tasks | ✅ | `/app/work`. **My work**: your next two weeks as one plan lane (each open task on the days the planner gives it; work that will finish late is striped), workload meter, quick add, tasks grouped Late / Due today / This week / Later. **Board** (drag a card or use its status button), **Timeline** (planned bar per task against its due date), **Projects** (short code, lead, people, target date, progress; project page with board, list, timeline and team load). Task panel opened by `?task=`: status, owner, dates, size, priority, kind, details, links (pull requests), comments, history. Personal tasks are seen by their owner and the owner's manager. |
+| Work: ask for more time | ✅ | The owner of a task cannot change a date someone else set. "Ask for more time" shows what the plan says (work due, days available, realistic finish date, colleagues with room) and sends a request to move the date or hand the task over. The project lead (else the manager, else company-wide planners) decides on the Approvals page; nothing changes until then. |
+| Work: team load and daily report | ✅ | **Team load** (managers and project leads): each person's work against their working days for the next ten working days (weekends, holidays and approved leave removed), who will finish late, and proposals to even things out (hand unstarted work to someone with room, or the earliest date the plan can meet) applied with one click. **Daily report**: finished, started, overdue, likely late, by person, for any day, with "Copy as text". Rule-based, no AI key needed. |
+| Work: GitHub sync (pull requests, issues), Gmail, AI assistant through an MCP connector | ⬜ | Planned. Tasks carry manual links to pull requests today. |
+| Calendar, Ideas, Knowledge Base | ⬜ | Planned |
 
 ## Admin portal (`/admin`)
 | Module | Status |
@@ -40,7 +44,7 @@
 | Announcements management | ✅ Publish, edit, delete, target a department, pin, expiry, ask for confirmation, see who has and hasn't confirmed |
 | Leave management | ✅ All requests by status, decide, company calendar (including pending), leave types (allowance, paid, colour, hide) |
 | Holiday management | ✅ Add, edit and remove with categories |
-| Channel and task management, reports | ⬜ |
+| Channel management, reports | ⬜ |
 
 ## Platform
 | Capability | Status |
@@ -54,4 +58,5 @@
 | Super Admin requires two-step verification | ✅ Authority is paused until it is on; Settings → Security explains this to the Super Admin. |
 | Client accounts default-denied; suspended and archived statuses | ✅ enforced; client portal (5b) and suspend actions (3) not built |
 | Realtime with reconnection | ✅ Socket.IO with automatic reconnect and an indicator in the rail |
-| File storage, email notifications, notification inbox | ⬜ |
+| Work permission (`work.manage` at Team or Company reach; granted to Manager, Admin / HR and Administrator) and the `tasks` module switch | ✅ |
+| File storage, email notifications | ⬜ |

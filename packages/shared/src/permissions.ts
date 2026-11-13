@@ -17,6 +17,8 @@ export const PERMISSIONS = {
   ATTENDANCE_VIEW_TEAM: 'attendance.view_team',
   ATTENDANCE_VIEW_ALL: 'attendance.view_all',
   LEAVE_APPROVE: 'leave.approve',
+  WORK_MANAGE_TEAM: 'work.manage_team',
+  WORK_MANAGE_ALL: 'work.manage_all',
   UPDATES_VIEW_TEAM: 'updates.view_team',
   UPDATES_VIEW_ALL: 'updates.view_all',
   CAMPAIGNS_MANAGE: 'campaigns.manage',
@@ -43,6 +45,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'attendance.view_team': 'View team attendance',
   'attendance.view_all': 'View all attendance',
   'leave.approve': 'Approve leave requests',
+  'work.manage_team': 'Create projects and plan work for their team',
+  'work.manage_all': 'Manage every project and task',
   'updates.view_team': 'View team daily updates',
   'updates.view_all': 'View all daily updates',
   'campaigns.manage': 'Manage campaigns and promotions',
@@ -67,6 +71,7 @@ const MANAGER_PERMS: Permission[] = [
   P.ATTENDANCE_VIEW_TEAM,
   P.LEAVE_APPROVE,
   P.UPDATES_VIEW_TEAM,
+  P.WORK_MANAGE_TEAM,
 ];
 const HR_PERMS: Permission[] = [
   ...MANAGER_PERMS,

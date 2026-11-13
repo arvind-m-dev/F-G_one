@@ -25,6 +25,11 @@ const envSchema = z.object({
    */
   MFA_ENCRYPTION_KEY: z.string().optional().default(''),
   /**
+   * Requests one address may make per minute across the whole API (sign-in routes have their own,
+   * stricter limits). Raise it only for automated browser tests, which run every user from one address.
+   */
+  RATE_LIMIT_PER_MIN: z.coerce.number().int().min(60).max(100_000).default(300),
+  /**
    * Local development only: skip the two-step verification code at sign-in and re-auth.
    * The API refuses to start if this is set while NODE_ENV=production.
    */

@@ -15,6 +15,7 @@ export async function signIn(page: Page, email: string, password = PASSWORD) {
   await emailField.fill(email);
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  // Exact: demo deployments also show "Sign in without a password".
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/app\/home/);
 }

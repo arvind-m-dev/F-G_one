@@ -43,7 +43,7 @@ async function signInWithCode(page: Page, email: string, secret: string) {
   await page.getByLabel('Work email').fill(email);
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Two-step verification' })).toBeVisible();
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.getByLabel('Code').fill(await freshCode(page, secret));

@@ -773,6 +773,120 @@ async function seedAudit(ctx: SeedContext) {
 
 // ─────────────── organization ───────────────
 
+/**
+ * Work hub demo: two projects and personal tasks, dated relative to today so the planner always has
+ * something to say. Ananya (employee@) carries three large tasks while Kabir has small ones, so
+ * Team load proposes a handover, and one "more time" request is waiting for the manager.
+ */
+async function seedWork(ctx: SeedContext) {
+  const id = (email: string) => ctx.users[`${email}@futuristglobal.com`]!.id;
+  const day = (n: number) => new Date(`${addDays(ctx.today, n)}T00:00:00.000Z`);
+  const ago = (days: number, hour = 11) => new Date(Date.now() - days * 86400_000 - (new Date().getHours() - hour) * 3600_000);
+  type T = { title: string; who?: string; size?: 'XS' | 'S' | 'M' | 'L' | 'XL'; status?: 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE'; kind?: 'TASK' | 'BUG' | 'ENHANCEMENT'; priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'; due?: number; start?: number; doneAgo?: number; description?: string; links?: { label: string; url: string }[]; comments?: [string, string][] };
+  const projects: { key: string; name: string; description: string; color: string; lead: string; members: string[]; target: number; tasks: T[] }[] = [
+    {
+      key: 'FG',
+      name: 'FG One web app',
+      description: 'The internal workspace: chat, attendance, leave and the new Work hub.',
+      color: '#6366F1',
+      lead: 'manager',
+      members: ['employee', 'kabir.singh', 'meera.nair', 'vikram.rao', 'nisha.arora'],
+      target: 45,
+      tasks: [
+        { title: 'Rich message composer', who: 'employee', size: 'L', status: 'IN_PROGRESS', kind: 'ENHANCEMENT', priority: 'HIGH', due: 6, start: -3, description: 'Bold, lists and inline code in the chat composer. Keep Enter-to-send working.', links: [{ label: 'Pull request', url: 'https://github.com/futurist-global/fg-one/pull/41' }], comments: [['manager', 'Keep the first version small: bold, italic, lists.'], ['employee', 'Agreed. Code blocks can follow in a second pull request.']] },
+        { title: 'Link previews in chat', who: 'employee', size: 'L', kind: 'ENHANCEMENT', due: 9, description: 'Fetch titles and images on the server so private addresses can never be reached.' },
+        { title: 'Notification settings redesign', who: 'employee', size: 'L', due: 11 },
+        { title: 'Unread count is wrong after reconnect', who: 'kabir.singh', size: 'S', kind: 'BUG', priority: 'URGENT', status: 'IN_PROGRESS', due: 1, links: [{ label: 'Pull request', url: 'https://github.com/futurist-global/fg-one/pull/44' }] },
+        { title: 'Add request ids to API logs', who: 'kabir.singh', size: 'XS', due: 4 },
+        { title: 'Tidy seed script output', who: 'kabir.singh', size: 'XS', priority: 'LOW', due: 8 },
+        { title: 'Build Docker images in CI', who: 'meera.nair', size: 'M', status: 'IN_REVIEW', due: 2, links: [{ label: 'Pull request', url: 'https://github.com/futurist-global/fg-one/pull/39' }] },
+        { title: 'Move presence to Redis', who: 'meera.nair', size: 'L', due: 14, description: 'Presence resets when the API restarts. Use the Socket.IO Redis adapter.' },
+        { title: 'Attendance export times are off by one hour', who: 'vikram.rao', size: 'S', kind: 'BUG', priority: 'HIGH', due: -1 },
+        { title: 'Roles editor screens', who: 'nisha.arora', size: 'XL', kind: 'ENHANCEMENT', status: 'IN_PROGRESS', due: 20, start: -5 },
+        { title: 'Keyboard shortcuts help', size: 'S', kind: 'ENHANCEMENT' },
+        { title: 'Dark mode contrast pass', who: 'nisha.arora', size: 'M', status: 'BACKLOG', priority: 'LOW' },
+        { title: 'Calendar module: first sketch', size: 'L', status: 'BACKLOG', kind: 'ENHANCEMENT' },
+        { title: 'Two-step verification screens', who: 'employee', size: 'M', status: 'DONE', doneAgo: 0, due: 0 },
+        { title: 'Leave calendar on phones', who: 'vikram.rao', size: 'M', status: 'DONE', doneAgo: 1, due: -1, kind: 'BUG' },
+        { title: 'Session list in settings', who: 'kabir.singh', size: 'S', status: 'DONE', doneAgo: 3, due: -2 },
+      ],
+    },
+    {
+      key: 'MOB',
+      name: 'Mobile app',
+      description: 'Check-in, leave and chat on phones.',
+      color: '#10B981',
+      lead: 'siddharth.agarwal',
+      members: ['neha.reddy', 'vikram.rao', 'omkar.pawar'],
+      target: 75,
+      tasks: [
+        { title: 'Check in from the phone', who: 'neha.reddy', size: 'L', status: 'IN_PROGRESS', kind: 'ENHANCEMENT', priority: 'HIGH', due: 12, start: -2 },
+        { title: 'Push notifications', who: 'neha.reddy', size: 'L', due: 25 },
+        { title: 'Release pipeline for test builds', who: 'omkar.pawar', size: 'M', due: 7 },
+        { title: 'Offline message queue', who: 'vikram.rao', size: 'L', kind: 'ENHANCEMENT', due: 18 },
+        { title: 'App icon and splash screen', size: 'S' },
+      ],
+    },
+  ];
+  let tasks = 0;
+  let moreTimeTask: { id: string; dueDate: Date | null } | null = null;
+  for (const p of projects) {
+    const memberIds = [...new Set([p.lead, ...p.members])].map(id);
+    const project = await prisma.project.create({
+      data: { organizationId: ctx.organizationId, key: p.key, name: p.name, description: p.description, color: p.color, leadId: id(p.lead), createdById: id(p.lead), startDate: day(-30), targetDate: day(p.target), taskSeq: p.tasks.length, members: { create: memberIds.map((userId) => ({ userId })) } },
+    });
+    for (const [i, t] of p.tasks.entries()) {
+      const status = t.status ?? 'TODO';
+      const createdAt = ago(14 - Math.min(i, 10));
+      const task = await prisma.task.create({
+        data: {
+          organizationId: ctx.organizationId, projectId: project.id, number: i + 1, title: t.title, description: t.description ?? null, kind: t.kind ?? 'TASK', status, priority: t.priority ?? 'MEDIUM', size: t.size ?? 'M',
+          assigneeId: t.who ? id(t.who) : null, createdById: id(p.lead), startDate: t.start !== undefined ? day(t.start) : null, dueDate: t.due !== undefined ? day(t.due) : null,
+          completedAt: status === 'DONE' ? ago(t.doneAgo ?? 0) : null, position: i + 1, links: t.links ?? [], createdAt,
+          activity: {
+            create: [
+              { organizationId: ctx.organizationId, actorId: id(p.lead), kind: 'created', data: { status: 'TODO' }, createdAt },
+              ...(status === 'IN_PROGRESS' || status === 'IN_REVIEW' || status === 'DONE' ? [{ organizationId: ctx.organizationId, actorId: t.who ? id(t.who) : id(p.lead), kind: 'status', data: { from: 'TODO', to: 'IN_PROGRESS' }, createdAt: ago(status === 'DONE' ? (t.doneAgo ?? 0) + 2 : i % 2, 10) }] : []),
+              ...(status === 'IN_REVIEW' ? [{ organizationId: ctx.organizationId, actorId: id(t.who!), kind: 'status', data: { from: 'IN_PROGRESS', to: 'IN_REVIEW' }, createdAt: ago(0, 9) }] : []),
+              ...(status === 'DONE' ? [{ organizationId: ctx.organizationId, actorId: id(t.who!), kind: 'status', data: { from: 'IN_PROGRESS', to: 'DONE' }, createdAt: ago(t.doneAgo ?? 0) }] : []),
+            ],
+          },
+          comments: { create: (t.comments ?? []).map(([who, body], n) => ({ organizationId: ctx.organizationId, authorId: id(who), body, createdAt: ago(2 - n) })) },
+        },
+      });
+      tasks++;
+      if (t.title === 'Link previews in chat') moreTimeTask = task;
+    }
+  }
+  // Personal tasks: seen by their owner and the owner's manager.
+  const personal: (T & { who: string; by?: string })[] = [
+    { title: 'Prepare the sprint demo', who: 'employee', size: 'S', due: 2, by: 'manager' },
+    { title: 'Renew AWS certification', who: 'employee', size: 'M', status: 'BACKLOG' },
+    { title: 'Write the quarterly engineering update', who: 'manager', size: 'M', due: 5 },
+    { title: 'Interview: frontend engineer', who: 'manager', size: 'XS', due: 1, priority: 'HIGH' },
+    { title: 'Read the security handbook', who: 'kabir.singh', size: 'XS', by: 'manager' },
+  ];
+  for (const [i, t] of personal.entries()) {
+    await prisma.task.create({
+      data: { organizationId: ctx.organizationId, title: t.title, status: t.status ?? 'TODO', priority: t.priority ?? 'MEDIUM', size: t.size ?? 'M', assigneeId: id(t.who), createdById: id(t.by ?? t.who), dueDate: t.due !== undefined ? day(t.due) : null, position: 100 + i, activity: { create: [{ organizationId: ctx.organizationId, actorId: id(t.by ?? t.who), kind: 'created', data: { status: 'TODO' } }] } },
+    });
+    tasks++;
+  }
+  // Ananya has more than fits and has asked for a later date; Rohan (her lead) has not decided yet.
+  let requests = 0;
+  if (moreTimeTask) {
+    await prisma.workRequest.create({
+      data: {
+        organizationId: ctx.organizationId, taskId: moreTimeTask.id, requesterId: id('employee'), kind: 'MOVE_DATE', reason: 'The composer is taking longer than planned and I am on leave next week.',
+        previousDueDate: moreTimeTask.dueDate, proposedDueDate: day(16), rationale: 'More work is due in the next two weeks than there are working days available. At the current pace this task finishes after its due date.', createdAt: ago(0, 10),
+      },
+    });
+    await prisma.taskActivity.create({ data: { organizationId: ctx.organizationId, taskId: moreTimeTask.id, actorId: id('employee'), kind: 'request', data: { kind: 'MOVE_DATE', to: addDays(ctx.today, 16) }, createdAt: ago(0, 10) } });
+    requests = 1;
+  }
+  return { projects: projects.length, tasks, workRequests: requests };
+}
+
 async function seedOrg(opts: { name: string; slug: string; domain: string; password: string; minimal?: boolean }) {
   await prisma.organization.deleteMany({ where: { slug: opts.slug } });
   const settings = organizationSettingsSchema.parse({ auth: { allowedEmailDomains: [opts.domain] } });
@@ -844,6 +958,7 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
   const chat = await seedChat(ctx);
   const notifications = await seedNotifications(ctx);
   const audit = await seedAudit(ctx);
+  const work = await seedWork(ctx);
   const counts = {
     people: PEOPLE.length + 1,
     active: PEOPLE.filter((p) => !p.status).length,
@@ -861,6 +976,7 @@ async function seedOrg(opts: { name: string; slug: string; domain: string; passw
     ...chat,
     notifications,
     auditEntries: audit,
+    ...work,
   };
   return { org, counts };
 }

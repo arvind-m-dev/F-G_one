@@ -11,6 +11,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Field, Textarea } from '@/components/ui/input';
 import { EmptyState, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
+import { WorkRequestsSection } from '@/components/work/requests-section';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDays, fmtRange, useApprovalsCount, useCorrections, useLeaveRequests } from '@/lib/hooks';
 import type { Person } from '@/lib/types';
@@ -76,7 +77,7 @@ export default function ApprovalsPage() {
 
   return (
     <div className="mx-auto max-w-[900px] px-6 pt-8 pb-14 sm:px-10">
-      <PageHeader className="px-0 pt-0 sm:px-0" title="Approvals" description="Leave requests and attendance corrections from your team that need a decision." />
+      <PageHeader className="px-0 pt-0 sm:px-0" title="Approvals" description="Leave, attendance corrections and work requests from your team that need a decision." />
       {count.isPending ? (
         <Skeleton className="h-40" />
       ) : count.isError && !count.data ? (
@@ -142,6 +143,7 @@ export default function ApprovalsPage() {
               </ul>
             )}
           </section>
+          <WorkRequestsSection />
         </div>
       )}
       <Dialog open={!!pending} onOpenChange={(o) => !o && close()} title={pending?.decision === 'APPROVED' ? 'Approve request?' : 'Decline request?'} description={`${pending?.who ?? 'They'} will be notified${note.trim() ? ' and will see your note' : ''}.`} className="max-w-md">
