@@ -2,7 +2,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { CalendarDays, ClipboardCheck, Clock, Hash, House, Keyboard, ListTodo, Lock, LogIn, Megaphone, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, TreePalm, type LucideIcon, UserCircle2, Users } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, Clock, Hash, House, Keyboard, ListTodo, Lock, LogIn, Megaphone, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, TreePalm, type LucideIcon, UserCircle2, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -68,21 +68,47 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       const tag = n.tagName;
       return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || n.isContentEditable;
     };
+    // Two-key "g + <letter>" navigation. The "g" is remembered for ~1.2 s only.
+    let pendingG = 0;
+    const NAV: Record<string, { href: string; show: boolean }> = {
+      h: { href: '/app/home', show: true },
+      c: { href: '/app/chat', show: mod('chat') },
+      w: { href: '/app/work', show: mod('tasks') },
+      a: { href: '/app/attendance', show: mod('attendance') },
+      l: { href: '/app/leave', show: mod('leave') },
+      p: { href: '/app/people', show: true },
+    };
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         onOpenChange(!open);
         return;
       }
-      // Global "?" opens keyboard shortcuts. Only when nothing else owns the keyboard.
-      if (!open && !isTyping(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
+      if (open || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      // Global "?" opens keyboard shortcuts.
+      if (e.key === '?') {
         e.preventDefault();
         router.push('/app/help/keys');
+        return;
+      }
+      // Two-key nav: g, then one of h/c/w/a/l/p within 1.2 s.
+      const k = e.key.toLowerCase();
+      if (k === 'g' && !e.shiftKey) {
+        pendingG = Date.now();
+        return;
+      }
+      if (pendingG && Date.now() - pendingG < 1200) {
+        pendingG = 0;
+        const target = NAV[k];
+        if (target?.show) {
+          e.preventDefault();
+          router.push(target.href);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onOpenChange, router]);
+  }, [open, onOpenChange, router, mod]);
 
   const go = (href: string) => {
     onOpenChange(false);
@@ -126,6 +152,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     { label: 'My profile', icon: UserCircle2, href: '/app/profile', words: 'photo bio password account' },
     { label: 'Settings', icon: Settings, href: '/app/settings', words: 'preferences theme notifications security' },
     { label: 'Keyboard shortcuts', icon: Keyboard, href: '/app/help/keys', words: 'keys shortcuts help hotkeys' },
+    { label: "What's new", icon: Sparkles, href: '/app/help/changelog', words: 'changelog release notes updates' },
     { label: 'Admin portal', icon: ShieldCheck, href: '/admin', words: 'administration manage', show: isAdmin },
     { label: 'System settings', icon: SlidersHorizontal, href: '/admin/settings', words: 'company organization configuration', show: can(PERMISSIONS.SETTINGS_MANAGE) },
     {

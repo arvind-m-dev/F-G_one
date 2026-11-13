@@ -1,6 +1,6 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Download, KeyRound, Laptop, LogOut, ShieldAlert, ShieldCheck, Smartphone } from 'lucide-react';
+import { CheckCircle2, Copy, Download, History, KeyRound, Laptop, LogOut, ShieldAlert, ShieldCheck, Smartphone, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { mfaCodeSchema } from '@fg/shared';
@@ -26,6 +26,30 @@ interface DeviceSession {
   lastSeenAt: string;
   current: boolean;
 }
+
+interface LoginEvent {
+  id: string;
+  action: string;
+  createdAt: string;
+  ip: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+const LOGIN_EVENT_LABELS: Record<string, { text: string; tone: 'ok' | 'warn' }> = {
+  'auth.login': { text: 'Signed in', tone: 'ok' },
+  'auth.demo_login': { text: 'Signed in (demo passwordless)', tone: 'ok' },
+  'auth.logout': { text: 'Signed out', tone: 'ok' },
+  'auth.locked': { text: 'Too many wrong passwords — account locked', tone: 'warn' },
+  'auth.mfa_failed': { text: 'Two-step verification code refused', tone: 'warn' },
+  'auth.password_reset': { text: 'Password reset using an email link', tone: 'ok' },
+  'auth.password_reset_requested': { text: 'Asked for a password reset link', tone: 'ok' },
+  'auth.password_changed': { text: 'Password changed', tone: 'ok' },
+  'auth.reauthenticated': { text: 'Confirmed identity to continue', tone: 'ok' },
+  'auth.reauth_failed': { text: "Couldn't confirm identity", tone: 'warn' },
+  'auth.session_revoked': { text: 'Signed out of a device', tone: 'ok' },
+  'auth.sessions_revoked': { text: 'Signed out of other devices', tone: 'ok' },
+  'auth.invitation_accepted': { text: 'Accepted the invitation', tone: 'ok' },
+};
 
 /** "Chrome on macOS" from a user-agent string. Good enough to recognise your own devices. */
 export function describeDevice(ua: string | null) {
@@ -157,6 +181,7 @@ export function SecuritySettings() {
   const reauth = useReauth();
   const status = useQuery({ queryKey: ['mfa'], queryFn: () => api<MfaStatus>('/auth/mfa') });
   const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api<DeviceSession[]>('/auth/sessions') });
+  const history = useQuery({ queryKey: ['login-history'], queryFn: () => api<LoginEvent[]>('/auth/login-history') });
   const [setupOpen, setSetupOpen] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const [newCodes, setNewCodes] = useState<string[] | null>(null);
@@ -298,6 +323,38 @@ export function SecuritySettings() {
             </ul>
           )}
         </div>
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-2 flex items-center gap-2">
+          <History className="size-4 text-muted" />
+          <h3 className="text-sm font-medium">Recent sign-in activity</h3>
+        </div>
+        <p className="mb-3 text-[13px] text-muted">The last 50 account events we recorded for your user. Something you don&apos;t recognise? Change your password and sign out of other devices above.</p>
+        {history.isPending ? (
+          <Skeleton className="h-28" />
+        ) : (history.data?.length ?? 0) === 0 ? (
+          <p className="rounded-xl border bg-surface-2/40 p-3 text-[13px] text-muted">No activity recorded yet.</p>
+        ) : (
+          <ul className="divide-y rounded-xl border bg-surface">
+            {history.data!.map((h) => {
+              const meta = LOGIN_EVENT_LABELS[h.action] ?? { text: h.action.replace(/^auth\./, '').replace(/_/g, ' '), tone: 'ok' as const };
+              const Icon = meta.tone === 'warn' ? XCircle : CheckCircle2;
+              return (
+                <li key={h.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <Icon className={`size-4 shrink-0 ${meta.tone === 'warn' ? 'text-danger' : 'text-success'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">{meta.text}</p>
+                    <p className="truncate text-[12px] text-muted">
+                      {when(h.createdAt)}
+                      {h.ip ? ` · ${h.ip}` : ''}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       <SetupDialog open={setupOpen} onOpenChange={setSetupOpen} onDone={() => void refresh()} />

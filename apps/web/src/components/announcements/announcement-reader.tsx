@@ -1,6 +1,6 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Pin } from 'lucide-react';
+import { CheckCircle2, Link2, Pin } from 'lucide-react';
 import { toast } from 'sonner';
 import { ANNOUNCEMENT_CATEGORIES } from '@fg/shared';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,14 @@ export function AnnouncementReader({ id, onClose }: { id: string | null; onClose
               </span>
             )}
             <span className="text-xs text-muted">· {a.department?.name ?? 'Everyone'}</span>
+            <button
+              type="button"
+              onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/app/announcements?open=${a.id}`).then(() => toast.success('Link copied'), () => toast.error("Couldn't copy"))}
+              className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted transition hover:bg-surface-2 hover:text-foreground"
+              aria-label="Copy a link to this announcement"
+            >
+              <Link2 className="size-3" /> Copy link
+            </button>
           </div>
           {a.author && (
             <div className="mt-4 flex items-center gap-2.5">

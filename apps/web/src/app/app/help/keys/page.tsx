@@ -30,6 +30,17 @@ export default function ShortcutsPage() {
           ],
     },
     {
+      title: 'Go somewhere (press g, then…)',
+      rows: [
+        { keys: ['G', 'H'], label: 'Home' },
+        { keys: ['G', 'C'], label: 'Chat' },
+        { keys: ['G', 'W'], label: 'Work' },
+        { keys: ['G', 'A'], label: 'Attendance' },
+        { keys: ['G', 'L'], label: 'Leave' },
+        { keys: ['G', 'P'], label: 'Directory' },
+      ],
+    },
+    {
       title: 'Dialogs',
       rows: [{ keys: ['Esc'], label: 'Close the open dialog or menu' }],
     },
