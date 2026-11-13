@@ -52,11 +52,13 @@ function CardFace({ task, today, showProject, dragging }: { task: Task; today: s
 
 function Card({ task, today, showProject, onOpen }: { task: Task; today: string; showProject: boolean; onOpen: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !task.can.update, data: { status: task.status } });
+  // When the card can't be dragged, dnd-kit still returns `aria-disabled="true"`, which blocks
+  // the click for touch and screen readers. Drop the drag attrs in that case; opening still works.
+  const dragProps = task.can.update ? { ...attributes, ...listeners } : {};
   return (
     <li ref={setNodeRef} className={cn('group relative', isDragging && 'opacity-40')}>
       <div
-        {...attributes}
-        {...listeners}
+        {...dragProps}
         role="button"
         tabIndex={0}
         aria-roledescription={task.can.update ? 'Task card. Press Enter to open, or use the status button to move it' : 'Task card'}

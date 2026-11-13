@@ -13,7 +13,10 @@ export function useUrlState(defaults: Record<string, string>) {
   const get = (k: string) => params.get(k) ?? defaults[k] ?? '';
   const set = useCallback(
     (patch: Record<string, string | null | undefined>, opts: { push?: boolean } = {}) => {
-      const next = new URLSearchParams(params.toString());
+      // Read the live URL, not the captured `params`: back-to-back `set` calls in the same tick
+      // would otherwise each start from the same stale snapshot and clobber each other's keys.
+      const current = typeof window === 'undefined' ? params.toString() : window.location.search.replace(/^\?/, '');
+      const next = new URLSearchParams(current);
       for (const [k, v] of Object.entries(patch)) {
         if (v === null || v === undefined || v === '' || v === defaults[k]) next.delete(k);
         else next.set(k, v);

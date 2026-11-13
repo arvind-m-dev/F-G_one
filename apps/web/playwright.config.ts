@@ -9,6 +9,9 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
+  // The specs share the same seeded demo accounts (employee@, manager@, hr@, admin@): running
+  // files in parallel workers lets one test's preference or status change bleed into another.
+  workers: 1,
   retries: 0,
   use: { baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000', trace: 'retain-on-failure' },
   projects: [

@@ -62,7 +62,7 @@ test.describe('sign-in', () => {
     await page.getByLabel('Password', { exact: true }).fill('Wrong-Password-1');
     await page.getByRole('button', { name: 'Show password' }).click();
     await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'text');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'Invalid email or password' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Forgot your password?' }).click();
@@ -81,7 +81,7 @@ test.describe('sign-in', () => {
       await page.getByLabel('Work email').fill('employee@futuristglobal.com');
       await page.getByRole('button', { name: 'Continue' }).click();
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.getByRole('button', { name: 'Sign in', exact: true }).click();
       await expect(page).toHaveURL(/localhost:\d+\/app\/home/);
       await ctx.close();
     }
@@ -93,7 +93,7 @@ test.describe('sign-in', () => {
     await page.getByLabel('Work email').fill('admin@futuristglobal.com');
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page).toHaveURL(/\/admin\/audit\?entity=department/);
     await expect(page.getByRole('combobox', { name: 'What it is about' })).toHaveValue('department');
   });
@@ -112,7 +112,7 @@ test.describe('sign-in', () => {
     await page.getByRole('button', { name: /manager@futuristglobal\.com/ }).first().click();
     await expect(page.getByRole('heading', { name: /Welcome back/ })).toBeVisible();
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(page).toHaveURL(/\/app\/home/);
   });
 
@@ -161,7 +161,7 @@ test.describe('Settings → Security', () => {
     await second.getByLabel('Work email').fill(person.email);
     await second.getByRole('button', { name: 'Continue' }).click();
     await second.getByLabel('Password', { exact: true }).fill(person.password);
-    await second.getByRole('button', { name: 'Sign in' }).click();
+    await second.getByRole('button', { name: 'Sign in', exact: true }).click();
     await expect(second.getByRole('heading', { name: 'Two-step verification' })).toBeVisible();
     await second.getByRole('button', { name: 'Verify and sign in' }).click();
     await expect(second.getByText('Enter the 6-digit code', { exact: true })).toBeVisible();

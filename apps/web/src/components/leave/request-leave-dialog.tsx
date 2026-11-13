@@ -88,7 +88,7 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
       <div className="space-y-4">
         {record && (
           <Field label="Employee" htmlFor="lv-user" error={errors.userId}>
-            <Select id="lv-user" value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })} disabled={employees.isPending}>
+            <Select id="lv-user" value={form.userId} onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, userId: v })); }} disabled={employees.isPending}>
               <option value="">{employees.isPending ? 'Loading…' : 'Choose an employee'}</option>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -100,7 +100,7 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
           </Field>
         )}
         <Field label="Type of leave" htmlFor="lv-type" hint={balances.data && !balances.data.items.length ? 'No leave types are set up yet. HR can add them in Admin portal → Leave.' : undefined}>
-          <Select id="lv-type" value={form.typeId} onChange={(e) => setForm({ ...form, typeId: e.target.value })} disabled={!balances.data?.items.length}>
+          <Select id="lv-type" value={form.typeId} onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, typeId: v })); }} disabled={!balances.data?.items.length}>
             {record && !form.userId && <option value="">Choose an employee first</option>}
             {balances.isFetching && !balances.data && (!record || form.userId) && <option value="">Loading…</option>}
             {balances.data && !balances.data.items.length && <option value="">No leave types available</option>}
@@ -113,10 +113,10 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="From" htmlFor="lv-from">
-            <Input id="lv-from" type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value, endDate: e.target.value > form.endDate ? e.target.value : form.endDate })} />
+            <Input id="lv-from" type="date" value={form.startDate} onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, startDate: v, endDate: v > f.endDate ? v : f.endDate })); }} />
           </Field>
           <Field label="To" htmlFor="lv-to" error={errors.endDate}>
-            <Input id="lv-to" type="date" min={form.startDate} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value, halfDay: e.target.value === form.startDate ? form.halfDay : 'NONE' })} />
+            <Input id="lv-to" type="date" min={form.startDate} value={form.endDate} onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, endDate: v, halfDay: v === f.startDate ? f.halfDay : 'NONE' })); }} />
           </Field>
         </div>
         {single && me.organization.settings.leave.allowHalfDay && (
@@ -126,14 +126,14 @@ export function RequestLeaveDialog({ open, onOpenChange, record = false }: { ope
               ['FIRST_HALF', 'Morning off'],
               ['SECOND_HALF', 'Afternoon off'],
             ] as const).map(([v, label]) => (
-              <button key={v} role="radio" aria-checked={form.halfDay === v} onClick={() => setForm({ ...form, halfDay: v })} className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition ${form.halfDay === v ? 'bg-canvas shadow-sm' : 'text-muted'}`}>
+              <button key={v} role="radio" aria-checked={form.halfDay === v} onClick={() => setForm((f) => ({ ...f, halfDay: v }))} className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition ${form.halfDay === v ? 'bg-canvas shadow-sm' : 'text-muted'}`}>
                 {label}
               </button>
             ))}
           </div>
         )}
         <Field label="Reason (optional)" htmlFor="lv-reason" hint={record ? 'They, their manager and HR can see this.' : 'Only you, your manager and HR can see this.'}>
-          <Textarea id="lv-reason" rows={2} maxLength={500} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+          <Textarea id="lv-reason" rows={2} maxLength={500} value={form.reason} onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, reason: v })); }} />
         </Field>
         <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 text-[13px] ${over ? 'bg-danger/8 text-danger-ink' : 'bg-surface-2/70'}`} aria-live="polite">
           {over ? <CircleAlert className="mt-0.5 size-4 shrink-0" /> : <Info className="mt-0.5 size-4 shrink-0 text-muted" />}
