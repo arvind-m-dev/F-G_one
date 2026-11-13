@@ -2,7 +2,7 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
-import { CalendarDays, ClipboardCheck, Clock, Hash, House, ListTodo, Lock, LogIn, Megaphone, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, TreePalm, type LucideIcon, UserCircle2, Users } from 'lucide-react';
+import { CalendarDays, ClipboardCheck, Clock, Hash, House, Keyboard, ListTodo, Lock, LogIn, Megaphone, MessageSquareText, MessagesSquare, Moon, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, TreePalm, type LucideIcon, UserCircle2, Users } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -62,15 +62,27 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const results = useQuery({ queryKey: ['search', term], queryFn: () => api<SearchResult>('/search', { query: { q: term } }), enabled: term.length >= 2 });
 
   useEffect(() => {
+    const isTyping = (el: EventTarget | null) => {
+      const n = el as HTMLElement | null;
+      if (!n) return false;
+      const tag = n.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || n.isContentEditable;
+    };
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         onOpenChange(!open);
+        return;
+      }
+      // Global "?" opens keyboard shortcuts. Only when nothing else owns the keyboard.
+      if (!open && !isTyping(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
+        e.preventDefault();
+        router.push('/app/help/keys');
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onOpenChange]);
+  }, [open, onOpenChange, router]);
 
   const go = (href: string) => {
     onOpenChange(false);
@@ -113,6 +125,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     { label: 'Approvals', icon: ClipboardCheck, href: '/app/approvals', words: 'approve leave requests corrections', show: !!approvals.data?.canApprove },
     { label: 'My profile', icon: UserCircle2, href: '/app/profile', words: 'photo bio password account' },
     { label: 'Settings', icon: Settings, href: '/app/settings', words: 'preferences theme notifications security' },
+    { label: 'Keyboard shortcuts', icon: Keyboard, href: '/app/help/keys', words: 'keys shortcuts help hotkeys' },
     { label: 'Admin portal', icon: ShieldCheck, href: '/admin', words: 'administration manage', show: isAdmin },
     { label: 'System settings', icon: SlidersHorizontal, href: '/admin/settings', words: 'company organization configuration', show: can(PERMISSIONS.SETTINGS_MANAGE) },
     {

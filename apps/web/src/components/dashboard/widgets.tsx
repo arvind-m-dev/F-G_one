@@ -1,6 +1,6 @@
 'use client';
 import { PERMISSIONS, presenceMeta, type WidgetKey } from '@fg/shared';
-import { Award, Building2, Cake, Check, CircleCheckBig, X, CalendarDays, Megaphone, MessageSquarePlus, MessagesSquare, Pin, Search, Sparkles, UserPlus, Users } from 'lucide-react';
+import { Award, Building2, Cake, Check, CircleCheckBig, X, CalendarDays, Megaphone, MessageSquarePlus, MessagesSquare, Pin, Search, Sparkles, TreePalm, UserPlus, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -40,6 +40,13 @@ export interface DashboardData {
   celebrations: { type: 'birthday' | 'anniversary'; inDays: number; years?: number; person: Person }[];
   recentChats: ChannelSummary[];
   unreadTotal: number;
+  outToday: {
+    id: string;
+    person: Person;
+    endDate: string;
+    halfDay: 'NONE' | 'FIRST_HALF' | 'SECOND_HALF';
+    type: { name: string; color: string };
+  }[];
   orgStats: { headcount: number; departments: number; joinersThisMonth: number; onlineNow: number };
   onboarding: { sentMessage: boolean; profileComplete: boolean; statusSet: boolean };
 }
@@ -516,6 +523,51 @@ function CelebrationsWidget({ data }: WidgetProps) {
   );
 }
 
+function OutTodayWidget({ data }: WidgetProps) {
+  const openDm = useOpenDm();
+  const me = useSession();
+  const items = data.outToday ?? [];
+  const fmt = (ymd: string) => {
+    const d = parseDateOnly(ymd);
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+  const halfLabel = (h: 'NONE' | 'FIRST_HALF' | 'SECOND_HALF') => (h === 'FIRST_HALF' ? ' (morning)' : h === 'SECOND_HALF' ? ' (afternoon)' : '');
+  return (
+    <section>
+      <SectionTitle icon={<TreePalm />}>Out today</SectionTitle>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted">Everyone in your team is around today.</p>
+      ) : (
+        <ul className="space-y-1">
+          {items.map((o) => (
+            <li key={o.id} className="flex items-center gap-3 py-1.5">
+              <UserAvatar person={o.person} size="sm" showPresence={false} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium">{o.person.name}</span>
+                <span className="flex items-center gap-1.5 text-xs text-muted">
+                  <span className="inline-block size-1.5 shrink-0 rounded-full" style={{ background: o.type.color }} aria-hidden />
+                  <span className="truncate">
+                    {o.type.name}
+                    {halfLabel(o.halfDay)} · back {fmt(o.endDate)}
+                  </span>
+                </span>
+              </span>
+              {o.person.id !== me.user.id && (
+                <button
+                  onClick={() => openDm(o.person.id, '')}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-primary transition hover:bg-primary-soft"
+                >
+                  Message
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function OrgStatsWidget({ data }: WidgetProps) {
   const me = useSession();
   const items = [
@@ -616,6 +668,7 @@ export const WIDGETS: Record<WidgetKey, { component: React.ComponentType<WidgetP
   recentChats: { component: RecentChatsWidget, column: 'main' },
   announcements: { component: AnnouncementsWidget, column: 'main' },
   team: { component: TeamWidget, column: 'side' },
+  outToday: { component: OutTodayWidget, column: 'side' },
   holidays: { component: HolidaysWidget, column: 'side' },
   celebrations: { component: CelebrationsWidget, column: 'side' },
   orgStats: { component: OrgStatsWidget, column: 'side' },

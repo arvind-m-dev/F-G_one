@@ -42,7 +42,7 @@ export class DashboardController {
       { managerId: auth.userId },
     ];
 
-    const [team, announcements, holidays, people, headcount, departments, joinersThisMonth, channels] = await Promise.all([
+    const [team, announcements, holidays, people, headcount, departments, joinersThisMonth, channels, teamLeaveToday] = await Promise.all([
       this.prisma.user.findMany({
         where: { organizationId: auth.organizationId, status: 'ACTIVE', id: { not: auth.userId }, OR: teamFilter },
         select: personSelect,
@@ -73,6 +73,25 @@ export class DashboardController {
         where: { organizationId: auth.organizationId, status: 'ACTIVE', joinedAt: { gte: new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)) } },
       }),
       this.chat.listMine(auth),
+      this.prisma.leaveRequest.findMany({
+        where: {
+          organizationId: auth.organizationId,
+          status: 'APPROVED',
+          startDate: { lte: today },
+          endDate: { gte: today },
+          userId: { not: auth.userId },
+          user: { status: 'ACTIVE', OR: teamFilter },
+        },
+        select: {
+          id: true,
+          endDate: true,
+          halfDay: true,
+          type: { select: { name: true, color: true } },
+          user: { select: personSelect },
+        },
+        orderBy: [{ endDate: 'asc' }, { user: { firstName: 'asc' } }],
+        take: 20,
+      }),
     ]);
 
     const celebrations: { type: 'birthday' | 'anniversary'; inDays: number; years?: number; person: ReturnType<typeof toPerson> }[] = [];
@@ -102,6 +121,13 @@ export class DashboardController {
       celebrations: celebrations.slice(0, 8),
       recentChats: channels.slice(0, 6),
       unreadTotal: channels.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0),
+      outToday: teamLeaveToday.map((l) => ({
+        id: l.id,
+        person: toPerson(l.user, onlineIds.has(l.user.id)),
+        endDate: fmtDateOnly(l.endDate),
+        halfDay: l.halfDay,
+        type: { name: l.type.name, color: l.type.color },
+      })),
       orgStats: { headcount, departments, joinersThisMonth, onlineNow: people.filter((p) => onlineIds.has(p.id)).length },
       onboarding: {
         sentMessage: myMessages > 0,
