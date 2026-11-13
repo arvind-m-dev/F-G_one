@@ -1,0 +1,18 @@
+/* Work hub: patterns that tokens alone cannot express. Colours come from currentColor so they follow the theme. */
+
+/* Diagonal stripes: work that does not fit (overload, the late part of a bar). */
+.work-hatch {
+  background-image: repeating-linear-gradient(135deg, currentColor 0 3px, color-mix(in oklab, currentColor 30%, transparent) 3px 6px);
+}
+
+/* Days nobody works (weekends) on plan lanes and the timeline. */
+.work-dayoff {
+  background-image: repeating-linear-gradient(135deg, color-mix(in oklab, var(--border-strong) 55%, transparent) 0 1px, transparent 1px 5px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-anim {
+    transition: none !important;
+    animation: none !important;
+  }
+}

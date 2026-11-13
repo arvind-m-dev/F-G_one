@@ -11,10 +11,12 @@ import { Dialog } from '@/components/ui/dialog';
 import { Field, Textarea } from '@/components/ui/input';
 import { EmptyState, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
+import { WorkRequestsSection } from '@/components/work/requests-section';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDays, fmtRange, useApprovalsCount, useCorrections, useLeaveRequests } from '@/lib/hooks';
 import type { Person } from '@/lib/types';
-import { timeAgo } from '@/lib/utils';
+import { useClock } from '@/lib/session';
+import { fmtDate, timeAgo } from '@/lib/utils';
 
 type Decision = { kind: 'leave' | 'correction'; id: string; who: string; decision: 'APPROVED' | 'REJECTED' };
 
@@ -45,6 +47,7 @@ function Row({ person, title, detail, reason, at, onDecide }: { person: Person; 
 export default function ApprovalsPage() {
   const qc = useQueryClient();
   const count = useApprovalsCount();
+  const { hm } = useClock();
   const can = count.data?.canApprove ?? false;
   const leave = useLeaveRequests('approvals', 'PENDING', can);
   const corrections = useCorrections('approvals', can);
@@ -74,9 +77,20 @@ export default function ApprovalsPage() {
 
   return (
     <div className="mx-auto max-w-[900px] px-6 pt-8 pb-14 sm:px-10">
-      <PageHeader className="px-0 pt-0 sm:px-0" title="Approvals" description="Leave requests and attendance corrections from your team that need a decision." />
+      <PageHeader className="px-0 pt-0 sm:px-0" title="Approvals" description="Leave, attendance corrections and work requests from your team that need a decision." />
       {count.isPending ? (
         <Skeleton className="h-40" />
+      ) : count.isError && !count.data ? (
+        <EmptyState
+          icon={<ClipboardCheck />}
+          title="Approvals couldn't be loaded"
+          description={errorMessage(count.error)}
+          action={
+            <Button variant="outline" loading={count.isFetching} onClick={() => void count.refetch()}>
+              Try again
+            </Button>
+          }
+        />
       ) : !can ? (
         <EmptyState icon={<ClipboardCheck />} title="Nothing to approve" description="Requests from people who report to you will appear here." />
       ) : (
@@ -86,7 +100,7 @@ export default function ApprovalsPage() {
             {leave.isPending ? (
               <Skeleton className="h-24" />
             ) : leave.isError ? (
-              <p role="alert" className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-danger">{errorMessage(leave.error)}</p>
+              <EmptyState className="rounded-xl border border-dashed" title="Leave requests couldn't be loaded" description={errorMessage(leave.error)} action={<Button variant="outline" onClick={() => void leave.refetch()}>Try again</Button>} />
             ) : !leave.data?.length ? (
               <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted">No leave waiting for you.</p>
             ) : (
@@ -110,7 +124,7 @@ export default function ApprovalsPage() {
             {corrections.isPending ? (
               <Skeleton className="h-24" />
             ) : corrections.isError ? (
-              <p role="alert" className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-danger">{errorMessage(corrections.error)}</p>
+              <EmptyState className="rounded-xl border border-dashed" title="Corrections couldn't be loaded" description={errorMessage(corrections.error)} action={<Button variant="outline" onClick={() => void corrections.refetch()}>Try again</Button>} />
             ) : !corrections.data?.length ? (
               <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted">No corrections waiting for you.</p>
             ) : (
@@ -120,8 +134,8 @@ export default function ApprovalsPage() {
                     key={c.id}
                     person={c.person!}
                     at={c.createdAt}
-                    title={`Fix ${new Date(`${c.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}`}
-                    detail={`${c.checkIn} – ${c.checkOut ?? 'no check-out'} · ${LOCATION_LABEL[c.location]}`}
+                    title={`Correction for ${fmtDate(c.date, { weekday: 'long', day: 'numeric', month: 'short' })}`}
+                    detail={`${hm(c.checkIn)} – ${c.checkOut ? hm(c.checkOut) : 'no check-out'} · ${LOCATION_LABEL[c.location]}`}
                     reason={c.reason}
                     onDecide={(decision) => setPending({ kind: 'correction', id: c.id, who: c.person!.firstName, decision })}
                   />
@@ -129,15 +143,16 @@ export default function ApprovalsPage() {
               </ul>
             )}
           </section>
+          <WorkRequestsSection />
         </div>
       )}
-      <Dialog open={!!pending} onOpenChange={(o) => !o && close()} title={pending?.decision === 'APPROVED' ? 'Approve request?' : 'Decline request?'} description={`${pending?.who} will get a notification with your note.`} className="max-w-md">
+      <Dialog open={!!pending} onOpenChange={(o) => !o && close()} title={pending?.decision === 'APPROVED' ? 'Approve request?' : 'Decline request?'} description={`${pending?.who ?? 'They'} will be notified${note.trim() ? ' and will see your note' : ''}.`} className="max-w-md">
         <Field label="Note (optional)" htmlFor="d-note">
           <Textarea id="d-note" rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder={pending?.decision === 'APPROVED' ? 'e.g. Enjoy your break' : 'e.g. Release week — can we move it?'} />
         </Field>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={close}>
-            Back
+            Cancel
           </Button>
           <Button variant={pending?.decision === 'APPROVED' ? 'primary' : 'danger'} loading={decide.isPending} onClick={() => pending && decide.mutate(pending)}>
             {pending?.decision === 'APPROVED' ? 'Approve' : 'Decline'}

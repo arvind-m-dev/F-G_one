@@ -30,7 +30,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   campaigns: 'Campaigns & noticeboard',
   events: 'Events calendar',
   polls: 'Polls & surveys',
-  tasks: 'Tasks',
+  tasks: 'Work (projects and tasks)',
   recognition: 'Recognition & celebrations',
   ai: 'Ask FG One (AI)',
 };
@@ -45,6 +45,7 @@ export const WIDGET_KEYS = [
   'recentChats',
   'announcements',
   'team',
+  'outToday',
   'holidays',
   'celebrations',
   'orgStats',
@@ -57,6 +58,7 @@ export const WIDGET_LABELS: Record<WidgetKey, string> = {
   attendance: 'Attendance (check in / out)',
   clock: 'Day timeline',
   team: 'Team pulse',
+  outToday: 'Out today',
   announcements: 'Announcements',
   holidays: 'Upcoming holidays',
   celebrations: 'Celebrations',
@@ -197,6 +199,7 @@ export const userPreferencesSchema = z.object({
       threads: z.boolean().optional(),
       announcements: z.boolean().optional(),
       requests: z.boolean().optional(),
+      work: z.boolean().optional(),
     })
     .optional(),
 });

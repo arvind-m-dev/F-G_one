@@ -49,6 +49,11 @@ model Organization {
   corrections         AttendanceCorrection[]
   permissionOverrides UserPermissionOverride[]
   superAdminInvites   SuperAdminInvitation[]
+  projects            Project[]
+  tasks               Task[]
+  taskComments        TaskComment[]
+  taskActivity        TaskActivity[]
+  workRequests        WorkRequest[]
 }
 
 model Department {
@@ -203,6 +208,16 @@ model User {
   superAdminInvites     SuperAdminInvitation[]   @relation("SuperAdminNominee")
   superAdminInvitesSent SuperAdminInvitation[]   @relation("SuperAdminInviter")
   permissionOverrides   UserPermissionOverride[]
+  projectsLed           Project[]                @relation("ProjectLead")
+  projectsCreated       Project[]                @relation("ProjectCreator")
+  projectMemberships    ProjectMember[]
+  tasksAssigned         Task[]                   @relation("TaskAssignee")
+  tasksCreated          Task[]                   @relation("TaskCreator")
+  taskComments          TaskComment[]            @relation("TaskCommentAuthor")
+  taskActivity          TaskActivity[]           @relation("TaskActivityActor")
+  workRequests          WorkRequest[]            @relation("WorkRequester")
+  workRequestsProposed  WorkRequest[]            @relation("WorkRequestProposedAssignee")
+  workRequestsDecided   WorkRequest[]            @relation("WorkRequestDecider")
 
   @@unique([organizationId, employeeCode])
   @@index([organizationId, status])
@@ -696,4 +711,196 @@ model SuperAdminInvitation {
 
   @@index([organizationId])
   @@index([userId])
+}
+
+// ───────────────────────────── Work (projects, tasks, timeline requests) ─────────────────────────────
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Short code shown before task numbers (WEB in WEB-12). Unique per organization.
+  key            String
+  name           String
+  description    String?
+  color          String        @default("#6366f1")
+  status         ProjectStatus @default(ACTIVE)
+  leadId         String?
+  lead           User?         @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  startDate      DateTime?     @db.Date
+  targetDate     DateTime?     @db.Date
+  /// Last task number handed out in this project
+  taskSeq        Int           @default(0)
+  createdById    String?
+  createdBy      User?         @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  members ProjectMember[]
+  tasks   Task[]
+
+  @@unique([organizationId, key])
+  @@index([organizationId, status])
+}
+
+model ProjectMember {
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([projectId, userId])
+  @@index([userId])
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskKind {
+  TASK
+  BUG
+  ENHANCEMENT
+}
+
+/// Effort estimate. Working days per size are defined in @fg/shared (TASK_SIZE_DAYS).
+enum TaskSize {
+  XS
+  S
+  M
+  L
+  XL
+}
+
+model Task {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Null for a personal task that belongs to no project
+  projectId      String?
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Number within the project (the 12 in WEB-12); null for personal tasks
+  number         Int?
+  title          String
+  description    String?
+  kind           TaskKind     @default(TASK)
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  size           TaskSize     @default(M)
+  assigneeId     String?
+  assignee       User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdById    String?
+  createdBy      User?        @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  startDate      DateTime?    @db.Date
+  dueDate        DateTime?    @db.Date
+  completedAt    DateTime?
+  /// Order within a board column (lower comes first)
+  position       Float        @default(0)
+  /// [{ label, url }], validated by taskLinkSchema in @fg/shared (pull requests, designs, documents)
+  links          Json         @default("[]")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  comments TaskComment[]
+  activity TaskActivity[]
+  requests WorkRequest[]
+
+  @@unique([projectId, number])
+  @@index([organizationId, assigneeId, status])
+  @@index([organizationId, projectId, status])
+  @@index([organizationId, dueDate])
+}
+
+model TaskComment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId       String?
+  author         User?        @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+/// History of a task: created, status, assignee, dates, requests. Also feeds the daily report.
+model TaskActivity {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId        String?
+  actor          User?        @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// created | status | assignee | due | start | size | priority | request | request_decided
+  kind           String
+  data           Json         @default("{}")
+  createdAt      DateTime     @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+enum WorkRequestKind {
+  MOVE_DATE
+  REASSIGN
+}
+
+enum WorkRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
+/// "I can't finish this on time": the assignee asks for a later date or for someone else to take the task.
+model WorkRequest {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId             String
+  task               Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  requesterId        String
+  requester          User              @relation("WorkRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  kind               WorkRequestKind
+  reason             String
+  /// Due date when the request was made (kept for the record)
+  previousDueDate    DateTime?         @db.Date
+  proposedDueDate    DateTime?         @db.Date
+  proposedAssigneeId String?
+  proposedAssignee   User?             @relation("WorkRequestProposedAssignee", fields: [proposedAssigneeId], references: [id], onDelete: SetNull)
+  /// What the planner worked out, in a plain sentence shown to the person deciding
+  rationale          String?
+  status             WorkRequestStatus @default(PENDING)
+  deciderId          String?
+  decider            User?             @relation("WorkRequestDecider", fields: [deciderId], references: [id], onDelete: SetNull)
+  decisionNote       String?
+  decidedAt          DateTime?
+  createdAt          DateTime          @default(now())
+
+  @@index([organizationId, status])
+  @@index([taskId])
+  @@index([requesterId])
 }

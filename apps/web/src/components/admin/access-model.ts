@@ -12,6 +12,7 @@ import {
   type GrantMap,
   type Scope,
 } from '@fg/shared';
+import { isLiveCatalogPermission } from '@/lib/live-modules';
 import type { AccessValue, Me, Role } from '@/lib/types';
 
 /**
@@ -42,11 +43,14 @@ export interface PreviewItem {
   sources: string[];
 }
 
-/** What they will be able to do, grouped by module, plus what is blocked for them. */
+/**
+ * What they will be able to do, grouped by module, plus what is blocked for them.
+ * Permissions for features that do not exist yet are left out (`grants` still holds everything).
+ */
 export function accessPreview(roles: Role[], v: AccessValue) {
   const grants = effectiveAccess(roles, v);
   const assigned = assignedRoles(roles, v).filter((r) => !r.archivedAt);
-  const items: PreviewItem[] = PERMISSION_CATALOG.filter((e) => grants[e.key]).map((entry) => {
+  const items: PreviewItem[] = PERMISSION_CATALOG.filter((e) => grants[e.key] && isLiveCatalogPermission(e.key)).map((entry) => {
     const sources = assigned.filter((r) => r.grants.some((g) => g.permission === entry.key)).map((r) => `${r.name} role`);
     if (v.overrides.some((o) => o.permission === entry.key && o.effect === 'ALLOW')) sources.push('an exception for this person');
     return { entry, scope: grants[entry.key]!, sources };

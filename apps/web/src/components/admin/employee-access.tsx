@@ -1,14 +1,14 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Info, RotateCcw, RotateCw, Save } from 'lucide-react';
+import { Info, RotateCcw, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AccessEditor } from '@/components/admin/access-editor';
 import { accessProblem, actorFromMe, sameAccess } from '@/components/admin/access-model';
 import { isCancelled, useReauth } from '@/components/security/reauth';
+import { LoadError } from '@/components/admin/page-header';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { Skeleton } from '@/components/ui/misc';
 import { api, errorMessage } from '@/lib/api';
 import { useRoles } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
@@ -32,7 +32,7 @@ const toValue = (a: AccessResponse): AccessValue => ({ roleId: a.roleId, extraRo
  * The Access section of the employee page: main role, extra roles and exceptions, with a live preview.
  * Saving replaces their access in one request; it applies on their next action, no sign-out needed.
  */
-export function EmployeeAccess({ userId, firstName }: { userId: string; firstName: string }) {
+export function EmployeeAccess({ userId, firstName, onDirtyChange }: { userId: string; firstName: string; onDirtyChange?: (dirty: boolean) => void }) {
   const me = useSession();
   const qc = useQueryClient();
   const reauth = useReauth();
@@ -42,6 +42,13 @@ export function EmployeeAccess({ userId, firstName }: { userId: string; firstNam
   useEffect(() => {
     if (q.data) setDraft(toValue(q.data));
   }, [q.data]);
+
+  // Tell the page when there are unsaved changes, so it can ask before they are lost.
+  const unsaved = !!q.data && !!draft && q.data.editable && !sameAccess(toValue(q.data), draft);
+  useEffect(() => {
+    onDirtyChange?.(unsaved);
+  }, [unsaved, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const save = useMutation({
     mutationFn: (v: AccessValue) => reauth.run(() => api<AccessResponse>(`/employees/${userId}/access`, { method: 'PUT', body: v })),
@@ -65,20 +72,7 @@ export function EmployeeAccess({ userId, firstName }: { userId: string; firstNam
     );
   }
   if (q.isError || roles.isError) {
-    return (
-      <Card>
-        <EmptyState
-          icon={<AlertTriangle />}
-          title="Couldn't load their access"
-          description={errorMessage(q.error ?? roles.error)}
-          action={
-            <Button variant="outline" onClick={() => void Promise.all([q.refetch(), roles.refetch()])}>
-              <RotateCw /> Try again
-            </Button>
-          }
-        />
-      </Card>
-    );
+    return <LoadError what="their access" error={q.error ?? roles.error} onRetry={() => void Promise.all([q.refetch(), roles.refetch()])} />;
   }
 
   const data = q.data;

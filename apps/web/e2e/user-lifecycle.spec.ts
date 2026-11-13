@@ -114,7 +114,7 @@ test('HR creates a person with an exception; admin suspends, unsuspends, deactiv
 
   await admin.goto(`/admin/employees?q=${last}`);
   await expect(admin.getByText('No employees match')).toBeVisible();
-  await admin.getByRole('button', { name: 'Archived', exact: true }).click();
+  await admin.getByRole('radio', { name: 'Archived', exact: true }).click();
   await expect(admin).toHaveURL(/status=ARCHIVED/);
   await expect(admin.getByRole('link', { name: new RegExp(email) })).toBeVisible();
 

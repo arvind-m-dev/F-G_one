@@ -11,7 +11,7 @@ import { PresenceIcon } from './presence';
 import { Button } from './ui/button';
 import { Input, Select } from './ui/input';
 
-const SUGGESTIONS = ['Working on QA', 'In a meeting', 'Focus time', 'On a break', 'Out of office'];
+const SUGGESTIONS = ['Working on QA', 'In a client call', 'On a deadline', 'Back in 10 minutes', 'Out of office'];
 
 /** Presence picker. Only changes availability — attendance is never modified here. */
 export function StatusPicker({
@@ -27,6 +27,12 @@ export function StatusPicker({
   const [presence, setPresence] = useState<PresenceKey>((current.presence as PresenceKey) ?? 'available');
   const [text, setText] = useState(current.statusText ?? '');
   const [expiry, setExpiry] = useState<StatusExpiry>('never');
+  // Whether the message was typed or picked just now (as opposed to the one already saved).
+  const [edited, setEdited] = useState(false);
+  const write = (v: string) => {
+    setText(v);
+    setEdited(true);
+  };
 
   const save = useMutation({
     mutationFn: (body: { presence: PresenceKey; emoji: null; text: string | null; expiry: StatusExpiry }) => api<{ statusExpiresAt: string | null }>('/me/status', { method: 'PUT', body }),
@@ -39,35 +45,42 @@ export function StatusPicker({
     onError: (e) => toast.error(errorMessage(e)),
   });
 
-  // A preset replaces any custom message (type a message below to customise).
+  // Choosing a preset saves straight away. A message written just now goes with it; an older saved
+  // message is replaced, so the status never shows yesterday's note next to today's availability.
   const quick = (key: PresenceKey) => {
+    const message = edited ? text.trim() || null : null;
     setPresence(key);
-    setText('');
-    save.mutate({ presence: key, emoji: null, text: null, expiry });
+    if (!message) setText('');
+    save.mutate({ presence: key, emoji: null, text: message, expiry });
   };
+  const expiryLabel = (o: (typeof STATUS_EXPIRY_OPTIONS)[number]) => (o.value === 'never' ? "Don't clear automatically" : o.value === 'today' ? 'Clear at the end of today' : `Clear after ${o.label}`);
 
   return (
-    <div className="w-[340px]">
+    // Fits a phone: never wider than the dialog or popover it sits in.
+    <div className="w-[min(340px,calc(100vw-5rem))]">
       <div className="mb-3">
         <div className="relative">
           <PresenceIcon presence={presence} className="absolute top-1/2 left-3 -translate-y-1/2" />
-          <Input value={text} onChange={(e) => setText(e.target.value)} maxLength={100} placeholder="What are you working on?" aria-label="Status message" className="pr-8 pl-9" />
+          <Input value={text} onChange={(e) => write(e.target.value)} maxLength={100} placeholder="What are you working on?" aria-label="Status message" className="pr-8 pl-9" />
           {text && (
-            <button onClick={() => setText('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-subtle hover:text-foreground" aria-label="Clear message">
+            <button onClick={() => write('')} className="absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded text-subtle hover:text-foreground" aria-label="Clear message">
               <X className="size-3.5" />
             </button>
           )}
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {SUGGESTIONS.map((s) => (
-            <button key={s} onClick={() => setText(s)} className="rounded-md border px-2 py-0.5 text-[11px] text-muted transition hover:border-border-strong hover:text-foreground">
+            <button key={s} onClick={() => write(s)} className="rounded-md border px-2 py-0.5 text-[11px] text-muted transition hover:border-border-strong hover:text-foreground">
               {s}
             </button>
           ))}
         </div>
       </div>
 
-      <p className="mb-1 px-1 text-[11px] font-medium tracking-wide text-subtle uppercase">Availability</p>
+      <p className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 px-1 text-[11px] text-subtle">
+        <span className="font-medium">Availability</span>
+        <span>Pick one to set it straight away</span>
+      </p>
       <div className="grid grid-cols-2 gap-0.5" role="listbox" aria-label="Quick status">
         {PRESENCE_PRESETS.map((p) => (
           <button
@@ -88,7 +101,7 @@ export function StatusPicker({
         <Select value={expiry} onChange={(e) => setExpiry(e.target.value as StatusExpiry)} aria-label="Clear after" className="h-8 text-[13px]">
           {STATUS_EXPIRY_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
-              Clear: {o.label}
+              {expiryLabel(o)}
             </option>
           ))}
         </Select>

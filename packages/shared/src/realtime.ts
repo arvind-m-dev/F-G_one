@@ -12,6 +12,7 @@ export const RT = {
   NOTIFICATION_NEW: 'notification:new',
   ATTENDANCE_CHANGED: 'attendance:changed',
   ANNOUNCEMENTS_CHANGED: 'announcements:changed',
+  WORK_CHANGED: 'work:changed',
 } as const;
 
 export interface TypingEvent {

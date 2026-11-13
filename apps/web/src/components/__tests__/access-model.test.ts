@@ -62,6 +62,14 @@ describe('access model (mirrors the API escalation rules)', () => {
     expect(p.blocked.map((e) => e.key)).toEqual(['ai.use']);
   });
 
+  it('leaves features that do not exist yet out of the preview', () => {
+    // The Employee role carries "Use the AI assistant", which is not built.
+    const p = accessPreview(roles, { roleId: 'employee', extraRoleIds: [], overrides: [] });
+    expect(p.grants['ai.use']).toBe('ORG');
+    expect(p.modules.map((m) => m.key)).not.toContain('ai');
+    expect(p.count).toBe(p.modules.reduce((n, m) => n + m.items.length, 0));
+  });
+
   it('compares values ignoring order', () => {
     const a = { roleId: 'employee', extraRoleIds: ['manager', 'x'], overrides: [{ permission: 'a', effect: 'DENY' as const, scope: null }, { permission: 'b', effect: 'ALLOW' as const, scope: 'ORG' }] };
     expect(sameAccess(a, { ...a, extraRoleIds: ['x', 'manager'], overrides: [...a.overrides].reverse() })).toBe(true);

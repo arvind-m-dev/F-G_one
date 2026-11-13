@@ -10,6 +10,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         primary: 'bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(0_0_0/0.12)] hover:bg-[color-mix(in_oklab,var(--primary)_90%,black)]',
+        // Same as `primary`; kept because pages outside the admin portal still pass it. Use `primary` in new code.
         gradient: 'bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(0_0_0/0.12)] hover:bg-[color-mix(in_oklab,var(--primary)_90%,black)]',
         secondary: 'bg-surface-2 text-foreground hover:bg-[color-mix(in_oklab,var(--surface-2)_80%,var(--foreground)_6%)]',
         outline: 'border border-border-strong bg-surface text-foreground shadow-sm hover:bg-surface-2',

@@ -6,12 +6,13 @@ import { Suspense, useEffect, useState } from 'react';
 import { MessageButton } from '@/components/message-button';
 import { PageHeader } from '@/components/shell/page';
 import { Button } from '@/components/ui/button';
-import { EmptyState, Skeleton } from '@/components/ui/misc';
+import { EmptyState, Skeleton, Tooltip } from '@/components/ui/misc';
+import { errorMessage } from '@/lib/api';
 import { StatusLine, UserAvatar } from '@/components/user-avatar';
 import { useDepartments, useEmployeeList } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { useUrlState } from '@/lib/url-state';
-import { cn } from '@/lib/utils';
+import { cn, plural } from '@/lib/utils';
 
 function Directory() {
   const me = useSession();
@@ -19,7 +20,7 @@ function Directory() {
   const [q, setQ] = useState(get('q'));
   const debounced = get('q');
   const dept = get('dept');
-  const view = get('view') as 'list' | 'grid';
+  const view: 'list' | 'grid' = get('view') === 'grid' ? 'grid' : 'list';
   const page = Number(get('page')) || 1;
   const setDept = (v: string) => set({ dept: v, page: null });
   const setView = (v: 'list' | 'grid') => set({ view: v });
@@ -36,7 +37,7 @@ function Directory() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-6 pt-8 pb-14 sm:px-10">
-      <PageHeader className="px-0 pt-0 sm:px-0" title="Directory" description={list.data ? `${list.data.total} people at ${me.organization.name}` : 'Everyone at your company'} />
+      <PageHeader className="px-0 pt-0 sm:px-0" title="Directory" description={list.data ? `${plural(list.data.total, 'person', 'people')} at ${me.organization.name}` : 'Everyone at your company'} />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -44,19 +45,21 @@ function Directory() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name, email or designation"
+            placeholder="Search by name, email or job title"
             aria-label="Search people"
             className="h-9 w-full rounded-lg bg-surface-2 pr-3 pl-9 text-sm outline-none placeholder:text-subtle focus:ring-2 focus:ring-primary-soft"
           />
         </div>
         <div className="inline-flex shrink-0 rounded-lg bg-surface-2 p-0.5" role="radiogroup" aria-label="Layout">
           {([
-            ['list', Rows3],
-            ['grid', LayoutGrid],
-          ] as const).map(([v, Icon]) => (
-            <button key={v} role="radio" aria-checked={view === v} onClick={() => setView(v)} className={cn('grid size-8 place-items-center rounded-md transition', view === v ? 'bg-canvas text-foreground shadow-sm' : 'text-muted')} aria-label={`${v} view`}>
-              <Icon className="size-4" />
-            </button>
+            ['list', Rows3, 'List view'],
+            ['grid', LayoutGrid, 'Grid view'],
+          ] as const).map(([v, Icon, label]) => (
+            <Tooltip key={v} content={label} side="bottom">
+              <button role="radio" aria-checked={view === v} onClick={() => setView(v)} className={cn('grid size-8 place-items-center rounded-md transition', view === v ? 'bg-canvas text-foreground shadow-sm' : 'text-muted hover:text-foreground')} aria-label={label}>
+                <Icon className="size-4" />
+              </button>
+            </Tooltip>
           ))}
         </div>
       </div>
@@ -82,8 +85,36 @@ function Directory() {
             <Skeleton key={i} className="h-14" />
           ))}
         </div>
+      ) : list.isError && !list.data ? (
+        <EmptyState
+          icon={<Users />}
+          title="The directory couldn't be loaded"
+          description={errorMessage(list.error)}
+          action={
+            <Button variant="outline" loading={list.isFetching} onClick={() => void list.refetch()}>
+              Try again
+            </Button>
+          }
+        />
       ) : list.data?.items.length === 0 ? (
-        <EmptyState icon={<Users />} title="No one found" description="Try another name or department." />
+        <EmptyState
+          icon={<Users />}
+          title="No one found"
+          description={debounced || dept ? 'Try another name, or look in every department.' : 'People appear here once HR adds them.'}
+          action={
+            debounced || dept ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setQ('');
+                  set({ q: null, dept: null, page: null });
+                }}
+              >
+                Clear search and filters
+              </Button>
+            ) : undefined
+          }
+        />
       ) : view === 'list' ? (
         <div className="overflow-hidden rounded-xl border">
           <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_88px] gap-4 border-b bg-surface-2/50 px-4 py-2 text-[11px] font-medium text-muted lg:grid">
@@ -117,7 +148,7 @@ function Directory() {
                 <span className="hidden truncate text-[13px] text-muted lg:block">{p.email}</span>
                 <span className="hidden truncate text-[13px] text-muted lg:block">{p.manager ? `${p.manager.firstName} ${p.manager.lastName}` : '—'}</span>
                 <span className="relative z-10 flex justify-end">
-                  {p.id !== me.user.id && <MessageButton userId={p.id} size="sm" variant="ghost" label="Message" className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100" />}
+                  {p.id !== me.user.id && <MessageButton userId={p.id} size="sm" variant="ghost" label="Message" className="opacity-100 focus-visible:opacity-100 lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100" />}
                 </span>
               </li>
             ))}

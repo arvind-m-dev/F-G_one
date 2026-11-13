@@ -1,9 +1,12 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Download, Users } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { LoadError } from '@/components/admin/page-header';
 import { Button } from '@/components/ui/button';
+import { FilterChips } from '@/components/ui/filter-chips';
 import { Input } from '@/components/ui/input';
 import { Badge, EmptyState, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
@@ -12,7 +15,6 @@ import { fmtDuration } from '@/lib/hooks';
 import { useClock, useOrgToday } from '@/lib/session';
 import type { AttendanceBoard as Board, AttendanceRecord } from '@/lib/types';
 import { useUrlState } from '@/lib/url-state';
-import { cn } from '@/lib/utils';
 import { LOCATION_ICON, LOCATION_LABEL } from './attendance-panel';
 
 const FILTERS = [
@@ -43,8 +45,11 @@ function StateBadge({ r, leave }: { r: AttendanceRecord | null; leave?: { type: 
   return <Badge tone="success">Working</Badge>;
 }
 
-/** Live attendance board for a day. Used by managers (their team) and HR/Admin (everyone). */
-export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
+/**
+ * Live attendance board for a day. Used by managers (their team) and HR/Admin (everyone).
+ * `personHref` makes each name a link (the admin portal opens the person's attendance).
+ */
+export function AttendanceBoard({ canExport, personHref }: { canExport?: boolean; personHref?: (personId: string) => string }) {
   const { time: clockTime } = useClock();
   const [get, set] = useUrlState({ date: '', show: 'all', q: '' });
   const orgToday = useOrgToday().today();
@@ -120,30 +125,18 @@ export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
         )}
         <Input value={q} onChange={(e) => { setQ(e.target.value); set({ q: e.target.value }); }} placeholder="Find a person" className="h-9 w-full sm:w-52" aria-label="Find a person" />
         {canExport && (
-          <Button variant="outline" className="sm:ml-auto" loading={exporting} onClick={exportCsv} disabled={!d}>
-            <Download /> Export CSV
+          <Button variant="outline" className="sm:ml-auto" loading={exporting} onClick={exportCsv} disabled={!d} title="A spreadsheet file (CSV) with the 30 days up to the date shown">
+            <Download /> Export last 30 days
           </Button>
         )}
       </div>
 
-      <div className="scrollbar-thin -mx-1 mb-5 flex gap-1.5 overflow-x-auto px-1 pb-1" role="radiogroup" aria-label="Show">
-        {FILTERS.map(([k, label]) => (
-          <button
-            key={k}
-            role="radio"
-            aria-checked={show === k}
-            onClick={() => set({ show: k })}
-            className={cn('flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] transition', show === k ? 'border-foreground/20 bg-foreground text-canvas' : 'text-muted hover:border-border-strong hover:text-foreground')}
-          >
-            {label} <span className="tabular-nums opacity-60">{d ? counts[k] : '–'}</span>
-          </button>
-        ))}
-      </div>
+      <FilterChips label="Show" className="mb-4" value={show} onChange={(k) => set({ show: k })} options={FILTERS.map(([k, label]) => ({ value: k, label, count: d ? counts[k] : null }))} />
 
       {board.isPending ? (
         <Skeleton className="h-72" />
-      ) : board.isError ? (
-        <p className="text-sm text-danger">{errorMessage(board.error)}</p>
+      ) : board.isError && !d ? (
+        <LoadError what="attendance" error={board.error} onRetry={() => board.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState icon={<Users />} title="No one matches" description="Try another filter or date." />
       ) : (
@@ -164,7 +157,13 @@ export function AttendanceBoard({ canExport }: { canExport?: boolean }) {
                   <span className="flex min-w-0 items-center gap-3">
                     <UserAvatar person={person} size="sm" />
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium">{person.name}</span>
+                      {personHref ? (
+                        <Link href={personHref(person.id)} className="block truncate rounded text-[13px] font-medium hover:underline">
+                          {person.name}
+                        </Link>
+                      ) : (
+                        <span className="block truncate text-[13px] font-medium">{person.name}</span>
+                      )}
                       <span className="block truncate text-xs text-muted">{person.designation ?? person.department?.name ?? ''}</span>
                     </span>
                   </span>

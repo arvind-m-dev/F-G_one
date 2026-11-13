@@ -20,7 +20,7 @@ async function passwordStep(page: Page, email: string) {
   await page.goto('/login');
   await page.getByRole('button', { name: new RegExp(email) }).first().click();
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 }
 
 test('two-step verification: turn on, sign in with a code or recovery code, see devices, turn off', async ({ page }) => {

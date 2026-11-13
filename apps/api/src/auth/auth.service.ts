@@ -405,6 +405,37 @@ export class AuthService {
     return { count };
   }
 
+  /** The caller's own sign-in and sign-out events, plus MFA failures and session revocations. */
+  async loginHistory(auth: AuthContext) {
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        organizationId: auth.organizationId,
+        actorId: auth.userId,
+        action: {
+          in: [
+            'auth.login',
+            'auth.demo_login',
+            'auth.logout',
+            'auth.locked',
+            'auth.mfa_failed',
+            'auth.password_reset',
+            'auth.password_reset_requested',
+            'auth.password_changed',
+            'auth.reauthenticated',
+            'auth.reauth_failed',
+            'auth.session_revoked',
+            'auth.sessions_revoked',
+            'auth.invitation_accepted',
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { id: true, action: true, createdAt: true, ip: true, metadata: true },
+    });
+    return rows;
+  }
+
   // ───────── invitations ─────────
 
   private async findValidInvitation(token: string) {

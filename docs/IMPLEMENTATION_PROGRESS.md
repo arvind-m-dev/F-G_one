@@ -15,8 +15,10 @@
 | 3 Nov 2026 | **Super Admin Phase 2c, MFA, re-auth and devices:** TOTP with recovery codes, half-signed-in sessions, `@RequireRecentAuth`, device list and sign-out (self and admin), socket disconnect on revoke, dormant Super Admin authority without MFA, Settings → Security and the sign-in code step | 65 API e2e + 17 API unit, 7 web unit, 18 Playwright |
 | 4 Nov 2026 | **Admin-managed access and QA hardening:** no invitations, admin-only passwords (switchable), employee page with full data, admin email change, Phase 2d bootstrap and recovery commands, richer seed, a QA pass by area with about 75 fixes | 189 API, 10 web unit, 54 Playwright |
 | 4 Nov 2026 | **Super Admin Phase 3, user management:** Super Admins page and acceptance, access and security overview, suspend/archive, per-person access with ceiling rules, add-employee wizard | 204 API, 15 web unit, 57 Playwright |
+| 12 Nov 2026 | **Work hub (PRD Phase 5, first part):** projects, tasks, board, planned timeline, workload planner, "ask for more time" requests, team load with rebalancing suggestions, daily report. **UI audit:** 85 findings across the employee portal, admin portal and sign-in pages, fixed on `fix/ui-audit` | 235 API, 47 web unit, Playwright (see CHANGELOG) |
 
 ## Next
+0. Work hub follow-ups, in this order: (a) MCP connector with personal access tokens so each person's Claude can read tasks, write reports and propose plans with that person's permissions; (b) GitHub App: pull requests and issues linked to tasks, status from merges; (c) Gmail (needs a Google Cloud OAuth client); (d) message-to-task from chat, calendar view.
 1. Run `db:reset-org` on Neon before go-live (K-3). The script is ready.
 2. Super Admin Phase 4: roles editor and Permission Studio (Phase 3 is done)
 3. A shift model: night-shift people are flagged late, and corrections cannot describe a shift that ends the next morning

@@ -17,7 +17,18 @@ import { api, errorMessage } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
-const COLORS = ['#6366f1', '#0ea5e9', '#14b8a6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#0f172a'];
+// Stored on the profile as the colour value; the names are what people (and screen readers) see.
+const COLORS = [
+  { value: '#6366f1', label: 'Indigo' },
+  { value: '#0ea5e9', label: 'Sky blue' },
+  { value: '#14b8a6', label: 'Teal' },
+  { value: '#22c55e', label: 'Green' },
+  { value: '#f59e0b', label: 'Amber' },
+  { value: '#ef4444', label: 'Red' },
+  { value: '#ec4899', label: 'Pink' },
+  { value: '#8b5cf6', label: 'Violet' },
+  { value: '#0f172a', label: 'Charcoal' },
+];
 const TIMEZONES = ['Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles', 'Australia/Sydney', 'UTC'];
 
 function ProfileForm() {
@@ -51,6 +62,8 @@ function ProfileForm() {
         body: { ...v, displayName: v.displayName || null, phone: v.phone || null, bio: v.bio || null, pronouns: v.pronouns || null, avatarUrl: v.avatarUrl || null, birthday: v.birthday || null },
       });
       await qc.invalidateQueries({ queryKey: ['me'] });
+      // What was just saved is the new starting point, so Save switches off until something changes again.
+      form.reset(v);
       toast.success('Profile saved');
     } catch (e) {
       toast.error(errorMessage(e));
@@ -68,11 +81,20 @@ function ProfileForm() {
               <p className="mb-1.5 text-sm font-medium">Avatar colour</p>
               <div className="flex flex-wrap gap-2">
                 {COLORS.map((c) => (
-                  <button type="button" key={c} onClick={() => form.setValue('avatarColor', c, { shouldDirty: true })} className={cn('size-7 rounded-full transition hover:scale-110', color === c && 'ring-2 ring-primary ring-offset-2 ring-offset-surface')} style={{ background: c }} aria-label={`Avatar colour ${c}`} />
+                  <button
+                    type="button"
+                    key={c.value}
+                    onClick={() => form.setValue('avatarColor', c.value, { shouldDirty: true })}
+                    className={cn('size-7 rounded-full transition hover:scale-110', color === c.value && 'ring-2 ring-primary ring-offset-2 ring-offset-surface')}
+                    style={{ background: c.value }}
+                    aria-label={c.label}
+                    aria-pressed={color === c.value}
+                    title={c.label}
+                  />
                 ))}
               </div>
             </div>
-            <Field label="Photo URL (optional)" htmlFor="avatarUrl" error={err.avatarUrl?.message} hint="Paste an https:// image link. Uploads arrive with document storage.">
+            <Field label="Photo URL (optional)" htmlFor="avatarUrl" error={err.avatarUrl?.message} hint="Paste a link to a photo. It must start with https://">
               <Input id="avatarUrl" placeholder="https://…" {...form.register('avatarUrl', { setValueAs: (v) => v || null })} />
             </Field>
           </div>
@@ -84,7 +106,7 @@ function ProfileForm() {
           <Field label="Last name" htmlFor="lastName" error={err.lastName?.message}>
             <Input id="lastName" {...form.register('lastName')} />
           </Field>
-          <Field label="Display name" htmlFor="displayName" hint="Optional — shown instead of your full name">
+          <Field label="Display name" htmlFor="displayName" hint="Optional. Shown instead of your full name.">
             <Input id="displayName" {...form.register('displayName')} />
           </Field>
           <Field label="Pronouns" htmlFor="pronouns">
@@ -106,11 +128,11 @@ function ProfileForm() {
           <div className="flex items-end pb-2">
             <label className="flex items-center gap-3 text-sm">
               <Switch checked={form.watch('showBirthday')} onCheckedChange={(v) => form.setValue('showBirthday', v, { shouldDirty: true })} />
-              Show my birthday (month & day) to colleagues
+              Show my birthday (day and month only) to colleagues
             </label>
           </div>
         </div>
-        <Field label="Bio" htmlFor="bio" hint="280 characters max">
+        <Field label="Bio" htmlFor="bio" hint={`${(form.watch('bio') ?? '').length} of 280 characters`}>
           <Textarea id="bio" rows={3} maxLength={280} {...form.register('bio')} />
         </Field>
         <div className="flex justify-end">
@@ -124,7 +146,7 @@ function ProfileForm() {
 }
 
 const pwSchema = z
-  .object({ currentPassword: z.string().min(1, 'Required'), newPassword: passwordSchema, confirm: z.string() })
+  .object({ currentPassword: z.string().min(1, 'Enter your current password'), newPassword: passwordSchema, confirm: z.string() })
   .refine((v) => v.newPassword === v.confirm, { path: ['confirm'], message: 'Passwords do not match' });
 
 function Security() {
@@ -149,7 +171,7 @@ function Security() {
         <Field label="Current password" htmlFor="cur" error={err.currentPassword?.message}>
           <Input id="cur" type="password" autoComplete="current-password" {...form.register('currentPassword')} />
         </Field>
-        <Field label="New password" htmlFor="new" error={err.newPassword?.message} hint="10+ characters with upper, lower case and a number">
+        <Field label="New password" htmlFor="new" error={err.newPassword?.message} hint="At least 10 characters, with an uppercase letter, a lowercase letter and a number.">
           <Input id="new" type="password" autoComplete="new-password" {...form.register('newPassword')} />
         </Field>
         <Field label="Confirm new password" htmlFor="confirm" error={err.confirm?.message}>

@@ -34,6 +34,7 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
     if (!['/login', '/forgot-password', '/reset-password'].includes(here) && !here.startsWith('/invite')) {
       try {
         window.sessionStorage.removeItem('fg.cache'); // never restore another session's data
+        window.sessionStorage.removeItem('fg.drafts');
       } catch {
         /* ignore */
       }

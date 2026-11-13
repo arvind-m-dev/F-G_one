@@ -81,6 +81,17 @@ describe('authentication', () => {
   const selfService = (on: boolean) =>
     prisma.organization.update({ where: { id: fg.org.id }, data: { settings: { auth: { allowedEmailDomains: ['futuristglobal.com'], selfServicePassword: on } } } });
 
+  it('public branding tells the sign-in pages whether people reset their own password, and nothing about accounts', async () => {
+    await selfService(false);
+    const off = await request(app.getHttpServer()).get('/api/public/branding').expect(200);
+    expect(off.body.selfServicePassword).toBe(false);
+    await selfService(true);
+    const on = await request(app.getHttpServer()).get('/api/public/branding').expect(200);
+    expect(on.body.selfServicePassword).toBe(true);
+    expect(Object.keys(on.body).sort()).toEqual(['defaultTheme', 'logoUrl', 'name', 'primaryColor', 'secondaryColor', 'selfServicePassword', 'tagline']);
+    await selfService(false);
+  });
+
   it('with admin-managed passwords (default) there is no self-service reset, and older links stop working', async () => {
     await selfService(true);
     mail.testOutbox.length = 0;

@@ -12,7 +12,7 @@ export const useEmployeeList = (q: { q?: string; departmentId?: string; status?:
 /** Display name for a channel row (DMs use participant names). */
 export function channelLabel(c: Pick<ChannelSummary, 'type' | 'name' | 'participants'>) {
   if (c.type !== 'DIRECT') return c.name ?? 'channel';
-  if (!c.participants.length) return 'Just you';
+  if (!c.participants.length) return 'Notes to self';
   return c.participants.map((p) => (c.participants.length > 1 ? p.firstName : p.name)).join(', ');
 }
 
@@ -44,7 +44,7 @@ export const useLeaveBalances = (userId?: string, enabled = true, at?: string) =
 export const useLeaveRequests = (scope: 'mine' | 'approvals' | 'all', status = 'ALL', enabled = true) =>
   useQuery({ queryKey: ['leave-requests', scope, status], queryFn: () => api<LeaveRequest[]>('/leave/requests', { query: { scope, status } }), enabled, placeholderData: (p) => p });
 export const useHolidays = (year: number) => useQuery({ queryKey: ['holidays', year], queryFn: () => api<{ year: number; items: Holiday[] }>('/holidays', { query: { year } }), placeholderData: (p) => p });
-export const useApprovalsCount = () => useQuery({ queryKey: ['approvals-count'], queryFn: () => api<{ canApprove: boolean; leave: number; corrections: number; total: number }>('/approvals/count'), refetchInterval: 120_000 });
+export const useApprovalsCount = () => useQuery({ queryKey: ['approvals-count'], queryFn: () => api<{ canApprove: boolean; leave: number; corrections: number; work: number; total: number }>('/approvals/count'), refetchInterval: 120_000 });
 export const useCorrections = (scope: 'mine' | 'approvals', enabled = true) => useQuery({ queryKey: ['corrections', scope], queryFn: () => api<Correction[]>('/attendance/corrections', { query: { scope } }), enabled });
 
 export const fmtDays = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} day${n === 1 ? '' : 's'}`;

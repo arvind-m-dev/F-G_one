@@ -13,6 +13,7 @@ import { api, errorMessage } from '@/lib/api';
 import { forgetAccount, readRecentAccounts, rememberAccount, type RecentAccount } from '@/lib/recent-accounts';
 import { safeNext } from '@/lib/safe-next';
 import type { Me } from '@/lib/types';
+import { usePageTitle } from '@/lib/use-title';
 import { cn, initials } from '@/lib/utils';
 
 type Step = 'choose' | 'email' | 'password' | 'code' | 'demo';
@@ -35,6 +36,7 @@ function LoginFlow() {
   // Demo only (removed at go-live): populated when DEMO_PASSWORDLESS_LOGIN is on server-side.
   const [demoAccounts, setDemoAccounts] = useState<DemoAccount[] | null>(null);
   const pwRef = useRef<HTMLInputElement>(null);
+  usePageTitle(step === 'code' ? 'Two-step verification' : 'Sign in');
 
   useEffect(() => {
     const list = readRecentAccounts();
@@ -142,7 +144,7 @@ function LoginFlow() {
               {recent.map((a) => (
                 <li key={a.email} className="group relative">
                   <button onClick={() => pick(a.email)} className="flex w-full items-center gap-3 rounded-xl border bg-surface px-3 py-2.5 pr-10 text-left transition hover:border-border-strong hover:shadow-sm">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold" style={{ background: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 16%, var(--surface))`, color: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 80%, var(--foreground))` }}>
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold" style={{ background: `color-mix(in oklab, ${a.avatarColor ?? 'var(--brand)'} 16%, var(--surface))`, color: `color-mix(in oklab, ${a.avatarColor ?? 'var(--brand)'} 80%, var(--foreground))` }}>
                       {initials(a.name ?? a.email)}
                     </span>
                     <span className="min-w-0">
@@ -157,7 +159,7 @@ function LoginFlow() {
                       setRecent(left);
                       if (!left.length) setStep('email');
                     }}
-                    className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-md p-1 text-subtle opacity-0 transition group-hover:opacity-100 hover:bg-surface-2 hover:text-foreground focus:opacity-100"
+                    className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-md p-1 text-subtle transition hover:bg-surface-2 hover:text-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                     aria-label={`Remove ${a.email} from this device`}
                   >
                     <X className="size-4" />
@@ -215,7 +217,7 @@ function LoginFlow() {
                 </div>
               </Field>
               {error && (
-                <p role="alert" className="rounded-lg bg-rose-500/8 px-3 py-2 text-[13px] text-danger">
+                <p role="alert" className="rounded-lg bg-danger/8 px-3 py-2 text-[13px] text-danger">
                   {error}
                 </p>
               )}
@@ -260,7 +262,7 @@ function LoginFlow() {
                 />
               </Field>
               {error && (
-                <p role="alert" className="rounded-lg bg-rose-500/8 px-3 py-2 text-[13px] text-danger">
+                <p role="alert" className="rounded-lg bg-danger/8 px-3 py-2 text-[13px] text-danger">
                   {error}
                 </p>
               )}
@@ -307,7 +309,7 @@ function LoginFlow() {
                     onClick={() => demoLogin(a.email)}
                     className="flex w-full items-center gap-3 rounded-xl border bg-surface px-3 py-2.5 text-left transition hover:border-border-strong hover:shadow-sm disabled:opacity-60"
                   >
-                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold" style={{ background: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 16%, var(--surface))`, color: `color-mix(in oklab, ${a.avatarColor ?? '#6366f1'} 80%, var(--foreground))` }}>
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold" style={{ background: `color-mix(in oklab, ${a.avatarColor ?? 'var(--brand)'} 16%, var(--surface))`, color: `color-mix(in oklab, ${a.avatarColor ?? 'var(--brand)'} 80%, var(--foreground))` }}>
                       {initials(a.name || a.email)}
                     </span>
                     <span className="min-w-0">
@@ -319,7 +321,7 @@ function LoginFlow() {
               ))}
             </ul>
             {error && (
-              <p role="alert" className="mt-4 rounded-lg bg-rose-500/8 px-3 py-2 text-[13px] text-danger">
+              <p role="alert" className="mt-4 rounded-lg bg-danger/8 px-3 py-2 text-[13px] text-danger">
                 {error}
               </p>
             )}

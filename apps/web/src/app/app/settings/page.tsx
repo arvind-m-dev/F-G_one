@@ -126,7 +126,7 @@ export default function SettingsPage() {
             ]}
           />
         </Row>
-        <Row title="Collapse the sidebar" description="Show icons only in the navigation rail.">
+        <Row title="Collapse the sidebar" description="Show icons only in the navigation on the left. Smaller screens always use the compact version.">
           <Switch checked={!!p.sidebarCollapsed} onCheckedChange={(v) => set({ sidebarCollapsed: v })} aria-label="Collapse the sidebar" />
         </Row>
       </Section>
@@ -160,6 +160,7 @@ export default function SettingsPage() {
             ['threads', 'Replies to your messages', 'When someone replies to you in a thread.'],
             ['announcements', 'Announcements', 'When a new announcement is published for you.'],
             ['requests', 'Leave and attendance requests', 'Approvals, decisions and corrections that involve you.'],
+            ['work', 'Tasks and projects', 'New tasks for you, date changes, comments and decisions on your requests.'],
           ] as const).map(([k, title, description]) => (
             <Row key={k} title={title} description={description}>
               <Switch
@@ -184,7 +185,7 @@ export default function SettingsPage() {
             ]}
           />
         </Row>
-        <Row title="Time zone" description={`Organization time zone is used for attendance and holidays.`}>
+        <Row title="Time zone" description="Attendance, leave and holidays always follow the organization's time zone.">
           <span className="text-sm text-muted">
             {me.user.timezone} ·{' '}
             <Link href="/app/profile" className="text-primary hover:underline">
@@ -204,10 +205,8 @@ export default function SettingsPage() {
         </Row>
       </Section>
       <Section title="Help">
-        <Row title="Getting started checklist" description="Show the step-by-step checklist on Home again.">
-          <button onClick={() => set({ onboardingDismissed: false })} className="text-sm font-medium text-primary hover:underline">
-            Show on Home
-          </button>
+        <Row title="Getting started checklist" description="Show the step-by-step checklist at the top of Home. It hides itself once every step is done.">
+          <Switch checked={!p.onboardingDismissed} onCheckedChange={(v) => set({ onboardingDismissed: !v })} aria-label="Show the getting started checklist on Home" />
         </Row>
       </Section>
     </div>

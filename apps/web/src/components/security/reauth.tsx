@@ -92,7 +92,7 @@ function ReauthDialog({ open, needsCode, onCancel, onConfirmed }: { open: boolea
           </Field>
         )}
         {error && (
-          <p role="alert" className="rounded-lg bg-rose-500/8 px-3 py-2 text-[13px] text-danger">
+          <p role="alert" className="rounded-lg bg-danger/8 px-3 py-2 text-[13px] text-danger">
             {error}
           </p>
         )}

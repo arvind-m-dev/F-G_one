@@ -4,6 +4,7 @@ import { useId, useState } from 'react';
 import { PERMISSION_CATALOG, PERMISSION_MODULES, SCOPE_LABELS, scopeCovers, widestScope, type CatalogEntry, type Scope } from '@fg/shared';
 import { Select } from '@/components/ui/input';
 import { Badge } from '@/components/ui/misc';
+import { isLiveCatalogPermission } from '@/lib/live-modules';
 import { useSession } from '@/lib/session';
 import type { AccessOverride, AccessValue, Role } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -125,7 +126,8 @@ export function AccessEditor({
           {showExceptions && (
             <div id={`${ids}-exc-list`} className="mt-3 space-y-4">
               {Object.entries(PERMISSION_MODULES).map(([mod, label]) => {
-                const entries = PERMISSION_CATALOG.filter((e) => e.module === mod);
+                // Only features that exist today, plus any exception this person already has.
+                const entries = PERMISSION_CATALOG.filter((e) => e.module === mod && (isLiveCatalogPermission(e.key) || value.overrides.some((o) => o.permission === e.key)));
                 if (!entries.length) return null;
                 return (
                   <div key={mod}>
@@ -204,7 +206,7 @@ function ExceptionRow({
                 onClick={() => onChange(o.v === 'NONE' ? null : o.v === 'DENY' ? { permission: entry.key, effect: 'DENY', scope: null } : { permission: entry.key, effect: 'ALLOW', scope: defaultScope() })}
                 className={cn(
                   'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:size-3.5',
-                  mode === o.v ? (o.v === 'DENY' ? 'bg-surface text-rose-700 shadow-sm dark:text-rose-300' : o.v === 'ALLOW' ? 'bg-surface text-emerald-700 shadow-sm dark:text-emerald-300' : 'bg-surface shadow-sm') : 'text-muted hover:text-foreground',
+                  mode === o.v ? (o.v === 'DENY' ? 'bg-surface text-danger shadow-sm' : o.v === 'ALLOW' ? 'bg-surface text-success shadow-sm' : 'bg-surface shadow-sm') : 'text-muted hover:text-foreground',
                 )}
               >
                 <o.icon aria-hidden /> {o.label}
@@ -253,7 +255,7 @@ export function AccessPreview({ roles, value, problem, superAdmin }: { roles: Ro
           {superAdmin ? 'Super Admins can do everything, whatever their roles say.' : `Everyone can use their own profile, attendance, leave and chat. On top of that, ${p.count ? `${p.count} permission${p.count === 1 ? '' : 's'}:` : 'nothing else.'}`}
         </p>
         {problem && (
-          <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-rose-500/8 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+          <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg bg-danger/8 px-3 py-2 text-xs text-danger">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden /> {problem}
           </p>
         )}
@@ -279,7 +281,7 @@ export function AccessPreview({ roles, value, problem, superAdmin }: { roles: Ro
             <p className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">Blocked for them</p>
             <ul className="space-y-1">
               {p.blocked.map((e) => (
-                <li key={e.key} className="flex items-center gap-1.5 text-[13px] text-rose-700 dark:text-rose-300">
+                <li key={e.key} className="flex items-center gap-1.5 text-[13px] text-danger">
                   <CircleSlash className="size-3.5" aria-hidden /> {e.label}
                 </li>
               ))}

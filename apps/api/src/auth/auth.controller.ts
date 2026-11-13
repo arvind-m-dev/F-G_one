@@ -248,6 +248,12 @@ export class AuthController {
     return { ok: true };
   }
 
+  @ClientAllowed()
+  @Get('login-history')
+  loginHistory(@Auth() auth: AuthContext) {
+    return this.auth.loginHistory(auth);
+  }
+
   @Public()
   @Get('invitations/:token')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
