@@ -8,6 +8,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Badge, Skeleton } from '@/components/ui/misc';
 import { UserAvatar } from '@/components/user-avatar';
 import { api, errorMessage } from '@/lib/api';
+import { miniMarkdown } from '@/lib/mini-md';
 import type { Announcement } from '@/lib/types';
 
 export const categoryLabel = (k: string) => ANNOUNCEMENT_CATEGORIES.find((c) => c.key === k)?.label ?? k;
@@ -71,7 +72,11 @@ export function AnnouncementReader({ id, onClose }: { id: string | null; onClose
               </div>
             </div>
           )}
-          <div className="mt-5 text-[15px] leading-[1.7] break-words whitespace-pre-wrap text-foreground/90">{a.body}</div>
+          {/* Body is light-Markdown. miniMarkdown escapes raw HTML and only emits a fixed tag set. */}
+          <div
+            className="announcement-body mt-5 text-[15px] leading-[1.7] break-words text-foreground/90 [&_a]:text-primary [&_a]:underline [&_code]:rounded [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[13px] [&_li]:mb-1 [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul_ul]:mt-1 [&_ul_ul]:mb-0"
+            dangerouslySetInnerHTML={{ __html: miniMarkdown(a.body) }}
+          />
           {a.expiresAt && <p className="mt-6 text-xs text-subtle">Visible until {new Date(a.expiresAt).toLocaleDateString()}</p>}
           {a.requireAck && (
             <div className="mt-8 rounded-xl border bg-surface-2/60 p-4">

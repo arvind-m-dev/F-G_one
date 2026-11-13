@@ -1,7 +1,7 @@
 'use client';
 import { PROJECT_STATUS_LABELS, TASK_STATUS_LABELS, type TaskStatus } from '@fg/shared';
 import { useMutation } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Ellipsis, FolderX, ListTodo, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Ellipsis, FolderX, Link2, ListTodo, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Suspense, useMemo, useState } from 'react';
@@ -133,6 +133,14 @@ function ProjectPage() {
         description={p.description ?? undefined}
         actions={
           <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void navigator.clipboard.writeText(window.location.href).then(() => toast.success('Link copied'), () => toast.error("Couldn't copy"))}
+              aria-label="Copy a link to this project"
+            >
+              <Link2 /> Copy link
+            </Button>
             {p.can.manage && (
               <DropdownMenu>
                 <DropdownTrigger asChild>

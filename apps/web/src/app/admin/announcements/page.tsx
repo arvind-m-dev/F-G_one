@@ -68,7 +68,7 @@ function Composer({ editing, open, onOpenChange }: { editing: Announcement | nul
         <Field label="Title" htmlFor="a-title" error={err.title?.message}>
           <Input id="a-title" autoFocus placeholder="e.g. Office closed on Friday" {...form.register('title')} />
         </Field>
-        <Field label="Message" htmlFor="a-body" error={err.body?.message} hint="Plain text. Line breaks are kept.">
+        <Field label="Message" htmlFor="a-body" error={err.body?.message} hint="Light formatting is supported: **bold**, `code`, lists starting with `- ` and [links](https://…).">
           <Textarea id="a-body" rows={8} {...form.register('body')} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">

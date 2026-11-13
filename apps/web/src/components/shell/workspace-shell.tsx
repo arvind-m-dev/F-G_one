@@ -2,7 +2,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { PERMISSIONS, presenceMeta, type Permission } from '@fg/shared';
-import { ArrowLeftRight, Bell, Building2, CalendarDays, ChartNoAxesCombined, Check, ChevronDown, ClipboardCheck, Clock, Crown, House, KeyRound, ListTodo, LogOut, Megaphone, Menu, MessageSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ScrollText, Search, Settings, ShieldCheck, SlidersHorizontal, Sun, TreePalm, type LucideIcon, UserRound, Users } from 'lucide-react';
+import { ArrowLeftRight, Bell, Building2, CalendarDays, ChartNoAxesCombined, Check, ChevronDown, ClipboardCheck, Clock, Crown, House, Keyboard, KeyRound, ListTodo, LogOut, Megaphone, Menu, MessageSquare, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ScrollText, Search, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, TreePalm, type LucideIcon, UserRound, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -22,6 +22,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { ADMIN_PERMS } from '@/lib/admin-perms';
 import { api } from '@/lib/api';
 import { clearDrafts } from '@/lib/drafts';
+import { useFaviconBadge } from '@/lib/favicon-badge';
 import { useApprovalsCount, useChannels } from '@/lib/hooks';
 import { useModKey } from '@/lib/platform';
 import { useLivePerson } from '@/lib/presence-store';
@@ -239,6 +240,12 @@ function UserMenu({ portal }: { portal: Portal }) {
           <DropdownItem onSelect={() => router.push('/app/settings')}>
             <Settings /> Settings
           </DropdownItem>
+          <DropdownItem onSelect={() => router.push('/app/help/keys')}>
+            <Keyboard /> Keyboard shortcuts
+          </DropdownItem>
+          <DropdownItem onSelect={() => router.push('/app/help/changelog')}>
+            <Sparkles /> What&apos;s new
+          </DropdownItem>
           {portal === 'admin' ? (
             <DropdownItem onSelect={() => router.push('/app/home')}>
               <ArrowLeftRight /> Back to workspace
@@ -399,6 +406,12 @@ export function WorkspaceShell({ portal, children }: { portal: Portal; children:
   // Read straight from the saved preference, so the switch in Settings and the rail's own button stay in step.
   const collapsed = me.preferences.sidebarCollapsed ?? me.organization.settings.navigation.sidebarCollapsedByDefault;
   const approvals = useApprovalsCount();
+  // Unread chat messages, used for the favicon badge. The channels query is also what the
+  // sidebar reads, so this doesn't fire an extra request.
+  const mod = useModule();
+  const chatChannels = useChannels(portal === 'app' && mod('chat'));
+  const unreadMessages = (chatChannels.data ?? []).reduce((n, c) => n + (c.muted ? 0 : c.unread), 0);
+  useFaviconBadge(portal === 'app' ? unreadMessages : 0);
   // On phones Approvals lives in the drawer, so the menu button carries its count.
   const waiting = portal === 'app' && approvals.data?.canApprove ? approvals.data.total : 0;
   const [drawer, setDrawer] = useState(false);
